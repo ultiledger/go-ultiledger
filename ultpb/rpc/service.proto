@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+package rpc;
+
+service ULTNode {
+  rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse) {}
+}
+
+message HealthCheckRequest {}
+
+message HealthCheckResponse {}
+

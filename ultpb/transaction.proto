@@ -1,0 +1,48 @@
+syntax = "proto3";
+
+package ultpb;
+
+import "asset.proto";
+
+// every operation is related to a specific account and 
+// each transaction could contain one or more operations
+enum OpTypeEnum {
+  CREATE_ACCOUNT = 0;
+  PAYMENT = 1;
+}
+
+// transaction
+message Tx {
+  OpTypeEnum OpType = 1;
+  bytes Data = 2;
+  string Signer = 3;
+}
+
+// list of transactions
+message TxList {
+  repeated Tx Txs = 1;
+  string Signer = 2;  
+}
+
+// create a new account by sending asset to it
+message CreateAccountOp {
+  string AccountID = 1;
+  // the source account for sending asset to the new account
+  string SrcAccountID = 2;
+  // the initial asset and balance
+  Asset.AssetTypeEnum AssetType = 3;
+  int64 Balance = 4;
+  string Signer = 5; 
+}
+
+// peer to peer payment
+message PaymentOp {
+  // destination account of the payment
+  string AccountID = 1;
+  // source account for sending asset to the new account
+  string SrcAccountID = 2;
+  // asset type of payment
+  Asset.AssetTypeEnum AssetType = 3;
+  // amount of payment in specified asset type
+  int64 Amount = 4;
+}

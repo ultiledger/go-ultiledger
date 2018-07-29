@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package ultpb;
+
+message Asset {
+  // enumerable asset types
+  enum AssetTypeEnum {
+    NATIVE = 0;
+    CUSTOM = 1;
+  }
+  AssetTypeEnum AssetType = 1;
+  // user defined asset name, name length should not be more than 4
+  string AssetName = 2;
+  // signer of this asset
+  string Signer = 3; 
+}

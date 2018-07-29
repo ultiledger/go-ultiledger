@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package ultpb;
+
+message LedgerHeader {
+  // version of pb message, each time we update the pb message definition, the
+  // version number will incremented. The specific version number to use is 
+  // hard coded and changed each time we do some changes.  
+  uint32 Version = 1;
+  // hash of the previous ledger
+  string PrevLedgerHash = 2;
+  // hash of the transaction list in this ledger
+  string TxListHash = 3;
+  // sequence number of this ledger
+  uint64 SequenceNumber = 4;
+
+  // TODO(bobonovski): define fields to represents the information of consensus
+  // which lead to this ledger
+
+  // TODO(bobonovski): define global fields to represents the overall configuration
+  // of the blockchain, such as total tokens, operation fees, etc.
+}
