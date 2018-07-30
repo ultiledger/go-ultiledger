@@ -4,6 +4,15 @@ import (
 	"github.com/golang/protobuf/proto"
 )
 
+// encode Transaction to pb message
+func EncodeTransaction(tx *Transaction) ([]byte, error) {
+	b, err := proto.Marshal(tx)
+	if err != nil {
+		return nil, err
+	}
+	return b, nil
+}
+
 // decode pb message to Transaction
 func DecodeTransaction(b []byte) (*Transaction, error) {
 	tx := &Transaction{}
