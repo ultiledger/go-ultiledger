@@ -5,23 +5,21 @@ import (
 	"net"
 	"time"
 
-	"github.com/spf13/viper"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 
 	p "github.com/ultiledger/go-ultiledger/peer"
-	ults "github.com/ultiledger/go-ultiledger/server"
 	"github.com/ultiledger/go-ultiledger/ultpb/rpc"
 )
 
 // ultNode is the central controller for ultiledger
 type ultNode struct {
 	// config viper
-	cv *viper.Viper
+	config *ultNodeConfig
 	// zap logger
 	logger *zap.SugaredLogger
 	// ULTNode server
-	server *ults.ULTNodeServer
+	server *ULTNodeServer
 
 	// IP address of this node
 	IP string
@@ -35,7 +33,7 @@ type ultNode struct {
 }
 
 // NewULTNode creates a ultNode which controls all the sub tasks
-func NewULTNode(v *viper.Viper) *ultNode {
+func NewULTNode(conf *ultNodeConfig) *ultNode {
 	// initialize logger
 	l, err := zap.NewProduction()
 	if err != nil {
@@ -51,9 +49,9 @@ func NewULTNode(v *viper.Viper) *ultNode {
 	addr := conn.LocalAddr().(*net.UDPAddr)
 
 	node := &ultNode{
-		cv:        v,
+		config:    conf,
 		logger:    l.Sugar(),
-		server:    &ults.ULTNodeServer{},
+		server:    &ULTNodeServer{},
 		IP:        addr.String(),
 		StartTime: time.Now().Unix(),
 		stopChan:  make(chan struct{}),
@@ -67,8 +65,8 @@ func NewULTNode(v *viper.Viper) *ultNode {
 func (u *ultNode) Start() error {
 	// TODO(bobonovski) check the validity of config in viper
 
-	go u.serveULTNode(u.cv.GetString("port"))
-
+	go u.serveULTNode()
+	select {}
 	return nil
 }
 
@@ -80,9 +78,9 @@ func (u *ultNode) Restart() error {
 }
 
 // serve starts a listener on the port and starts to accept request
-func (u *ultNode) serveULTNode(port string) {
+func (u *ultNode) serveULTNode() {
 	// register rpc service and start the ULTNode server
-	listener, err := net.Listen("tcp", u.cv.GetString("port"))
+	listener, err := net.Listen("tcp", u.config.Port)
 	if err != nil {
 		u.logger.Fatal(err)
 	}
@@ -90,7 +88,7 @@ func (u *ultNode) serveULTNode(port string) {
 	s := grpc.NewServer()
 	rpc.RegisterULTNodeServer(s, u.server)
 
-	u.logger.Infof("start to serve gRPC requests on %s", port)
+	u.logger.Infof("start to serve gRPC requests on %s", u.config.Port)
 	go s.Serve(listener)
 
 	for {
