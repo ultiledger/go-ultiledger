@@ -3,7 +3,7 @@ package ledger
 import (
 	"time"
 
-	"github.com/ultiledger/go-ultiledger/ultpb"
+	pb "github.com/ultiledger/go-ultiledger/ultpb"
 )
 
 // ledger manager is responsible for all the operations on ledgers
@@ -17,7 +17,10 @@ type ledgerManager struct {
 	// approximate number of ledgers under management
 	approxLedgerCount int64
 	// lastest ledger header (for convenience)
-	latestLedgerHeader *ultpb.LedgerHeader
+	latestLedgerHeader *pb.LedgerHeader
+
+	// channel for appending new ledger
+	appendChan chan *pb.LedgerHeader
 }
 
 func NewLedgerManager() *ledgerManager {

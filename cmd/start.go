@@ -43,8 +43,13 @@ to quickly create a Cobra application.`,
 		if err := v.ReadInConfig(); err != nil {
 			log.Fatal(err)
 		}
+		// init node config from viper
+		c, err := api.NewULTNodeConfig(v)
+		if err != nil {
+			log.Fatal(err)
+		}
 		// bootstrap a new ULTNode
-		n := api.NewULTNode(v)
+		n := api.NewULTNode(c)
 		n.Start()
 	},
 }
