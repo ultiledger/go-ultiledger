@@ -11,38 +11,37 @@ enum OpTypeEnum {
   PAYMENT = 1;
 }
 
-// transaction
-message Tx {
+// operation
+message Op {
+  // operation type of this transaction
   OpTypeEnum OpType = 1;
+  // operation details in wire format
   bytes Data = 2;
-  string Signer = 3;
 }
 
 // list of transactions
-message TxList {
-  repeated Tx Txs = 1;
-  string Signer = 2;  
+message Transaction {
+  // the source account for sending asset to the new account
+  string AccountID = 1;
+  repeated Op OpList = 2;
 }
 
 // create a new account by sending asset to it
 message CreateAccountOp {
+  // destination account
   string AccountID = 1;
-  // the source account for sending asset to the new account
-  string SrcAccountID = 2;
   // the initial asset and balance
-  Asset.AssetTypeEnum AssetType = 3;
-  int64 Balance = 4;
-  string Signer = 5; 
+  Asset.AssetTypeEnum AssetType = 2;
+  int64 Balance = 3;
+  string Signer = 4; 
 }
 
 // peer to peer payment
 message PaymentOp {
   // destination account of the payment
   string AccountID = 1;
-  // source account for sending asset to the new account
-  string SrcAccountID = 2;
   // asset type of payment
-  Asset.AssetTypeEnum AssetType = 3;
+  Asset.AssetTypeEnum AssetType = 2;
   // amount of payment in specified asset type
-  int64 Amount = 4;
+  int64 Amount = 3;
 }

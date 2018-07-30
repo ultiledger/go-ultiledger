@@ -4,9 +4,33 @@ package rpc;
 
 service ULTNode {
   rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse) {}
+  rpc SubmitTransaction(SubmitTransactionRequest) returns (SubmitTransactionResponse) {}
 }
 
 message HealthCheckRequest {}
-
 message HealthCheckResponse {}
 
+enum TransactionStatusEnum {
+  REJECTED = 0;  // rejected because of some errors
+  ACCEPTED = 1;  // transaction accepted but not yet confirmed by consensus
+  CONFIRMED = 2; // transaction is valid and confirmed by consensus
+}
+
+message SubmitTransactionRequest {
+  // source accountID
+  string AccountID = 1;
+  // transaction data in pb format
+  bytes Data = 2;
+  // digital signature of the data signed by 
+  // the source account private key
+  string Signature = 3;
+}
+
+message SubmitTransactionResponse {
+  TransactionStatusEnum TransactionStatus = 1;
+  // the transaction hash is only valid when the response
+  // status is ACCEPTED or CONFIRMED 
+  string TransactionHash = 2;
+  // error message for REJECTED transaction
+  string ErrorMessage = 3;
+}

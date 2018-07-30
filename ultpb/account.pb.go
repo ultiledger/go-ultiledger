@@ -14,8 +14,8 @@ It has these top-level messages:
 	Account
 	Asset
 	LedgerHeader
-	Tx
-	TxList
+	Op
+	Transaction
 	CreateAccountOp
 	PaymentOp
 */
