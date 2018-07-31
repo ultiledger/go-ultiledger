@@ -68,7 +68,7 @@ func (u *ultNode) Start() error {
 	go u.serveULTNode()
 
 	// start peer manager
-	u.pm.Start(u.stopChan)
+	go u.pm.Start(u.stopChan)
 
 	select {}
 	return nil
