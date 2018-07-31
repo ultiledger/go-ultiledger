@@ -17,8 +17,12 @@ func NewULTNodeConfig(v *viper.Viper) (*ultNodeConfig, error) {
 	if v.GetString("port") == "" {
 		return nil, errors.New("network port is missing")
 	}
+	if len(v.GetStringSlice("peers")) == 0 {
+		return nil, errors.New("initial peers is empty")
+	}
 	u := ultNodeConfig{
-		Port: v.GetString("port"),
+		Port:  v.GetString("port"),
+		Peers: v.GetStringSlice("peers"),
 	}
 	return &u, nil
 }
