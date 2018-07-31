@@ -14,19 +14,19 @@ import (
 
 // ultNode is the central controller for ultiledger
 type ultNode struct {
+	// IP address of this node
+	IP string
+	// start time of the node
+	StartTime int64
+
 	// config viper
 	config *ultNodeConfig
 	// zap logger
 	logger *zap.SugaredLogger
 	// ULTNode server
 	server *ULTNodeServer
-
-	// IP address of this node
-	IP string
-	// start time of the node
-	StartTime int64
-	// list of connected peers
-	Peers []*p.Peer
+	// peer manager
+	pm *p.PeerManager
 
 	// stop channel
 	stopChan chan struct{}
@@ -51,7 +51,8 @@ func NewULTNode(conf *ultNodeConfig) *ultNode {
 	node := &ultNode{
 		config:    conf,
 		logger:    l.Sugar(),
-		server:    &ULTNodeServer{},
+		server:    NewULTNodeServer(addr.String()),
+		pm:        p.NewPeerManager(l.Sugar(), conf.Peers),
 		IP:        addr.String(),
 		StartTime: time.Now().Unix(),
 		stopChan:  make(chan struct{}),
@@ -63,9 +64,12 @@ func NewULTNode(conf *ultNodeConfig) *ultNode {
 // Start checks the provided configurations, if the config is valid,
 // it will trigger sub goroutines to do the sub tasks.
 func (u *ultNode) Start() error {
-	// TODO(bobonovski) check the validity of config in viper
-
+	// start node server
 	go u.serveULTNode()
+
+	// start peer manager
+	u.pm.Start(u.stopChan)
+
 	select {}
 	return nil
 }
