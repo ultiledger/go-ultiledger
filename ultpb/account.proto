@@ -11,4 +11,8 @@ message Account {
   repeated Asset Balances = 2;
   // public key of the signer of this account
   string Signer = 3;
+  // latest transaction sequence number
+  uint64 SequenceNumber = 4;
+  // hashes of transactions belongs to this account
+  repeated string TxHashList = 5;  
 }

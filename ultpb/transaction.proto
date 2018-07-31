@@ -23,7 +23,12 @@ message Op {
 message Transaction {
   // the source account for sending asset to the new account
   string AccountID = 1;
-  repeated Op OpList = 2;
+  // fee to pay
+  uint64 Fee = 2;
+  // extra note about the transaction
+  string Note = 3;
+  // list of operations
+  repeated Op OpList = 4;
 }
 
 // create a new account by sending asset to it
@@ -33,7 +38,6 @@ message CreateAccountOp {
   // the initial asset and balance
   Asset.AssetTypeEnum AssetType = 2;
   int64 Balance = 3;
-  string Signer = 4; 
 }
 
 // peer to peer payment
