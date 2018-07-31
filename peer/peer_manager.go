@@ -38,7 +38,13 @@ type PeerManager struct {
 }
 
 func NewPeerManager(l *zap.SugaredLogger, ps []string) *PeerManager {
-	return &PeerManager{initPeers: ps}
+	return &PeerManager{
+		logger:        l,
+		initPeers:     ps,
+		retryPeers:    make(map[string]int),
+		livePeers:     make(map[string]*Peer),
+		retryStopChan: make(chan struct{}),
+	}
 }
 
 func (pm *PeerManager) Start(stopChan chan struct{}) {
@@ -46,7 +52,7 @@ func (pm *PeerManager) Start(stopChan chan struct{}) {
 	for _, addr := range pm.initPeers {
 		p, err := pm.connectPeer(addr)
 		if err != nil {
-			pm.logger.Errorw("failed to connect to peer", "addr", addr)
+			pm.logger.Warnw("failed to connect to peer", "addr", addr)
 			pm.retryPeers[addr] = 3 // retry three times and no need lock here
 			continue
 		}
@@ -60,7 +66,7 @@ func (pm *PeerManager) Start(stopChan chan struct{}) {
 		case addr := <-pm.addChan:
 			p, err := pm.connectPeer(addr)
 			if err != nil {
-				pm.logger.Errorw("failed to connect to peer", "addr", addr)
+				pm.logger.Warnw("failed to connect to peer", "addr", addr)
 				pm.retryLock.Lock()
 				pm.retryPeers[addr] = 3
 				pm.retryLock.Unlock()
@@ -77,7 +83,7 @@ func (pm *PeerManager) Start(stopChan chan struct{}) {
 			pm.liveLock.Unlock()
 			continue
 		case <-stopChan:
-			pm.retryStopChan <- struct{}{} // stop retry first
+			close(pm.retryStopChan) // stop retry first
 			pm.retryPeers = nil
 			pm.liveLock.Lock()
 			for _, p := range pm.livePeers {
@@ -92,7 +98,7 @@ func (pm *PeerManager) Start(stopChan chan struct{}) {
 
 // ConnectPeer connects the remote peer with provided network address
 func (pm *PeerManager) connectPeer(addr string) (*Peer, error) {
-	conn, err := grpc.Dial(addr, grpc.WithInsecure(), grpc.WithBlock(), grpc.WithTimeout(3*time.Second))
+	conn, err := grpc.Dial(addr, grpc.WithInsecure(), grpc.WithBlock(), grpc.WithTimeout(1*time.Second))
 	if err != nil {
 		return nil, err
 	}
@@ -114,6 +120,7 @@ func (pm *PeerManager) retryConnect() {
 					}
 					p, err := pm.connectPeer(addr)
 					if err != nil {
+						pm.logger.Warnw("failed to connect to peer", "addr", addr)
 						count -= 1
 						pm.retryPeers[addr] = count
 						continue
