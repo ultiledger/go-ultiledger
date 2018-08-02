@@ -8,19 +8,19 @@ import (
 )
 
 // compute md5 checksum (16 bytes)
-func MD5Hash(key string) string {
-	v := md5.Sum([]byte(key))
+func MD5Hash(b []byte) string {
+	v := md5.Sum(b)
 	return fmt.Sprintf("%x", v)
 }
 
 // compute sha1 checksum (20 bytes)
-func SHA1Hash(key string) string {
-	v := sha1.Sum([]byte(key))
+func SHA1Hash(b []byte) string {
+	v := sha1.Sum(b)
 	return fmt.Sprintf("%x", v)
 }
 
 // compute sha256 checksum (32 bytes)
-func SHA256Hash(key string) string {
-	v := sha256.Sum256([]byte(key))
+func SHA256Hash(b []byte) string {
+	v := sha256.Sum256(b)
 	return fmt.Sprintf("%x", v)
 }

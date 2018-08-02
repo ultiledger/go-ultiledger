@@ -5,13 +5,19 @@ import (
 )
 
 // Federated Byzantine Agreement
-type FBA struct{}
+type fba struct {
+	txChan <-chan *pb.Tx
+}
+
+func NewFBA(txChan *pb.Tx) {
+	return &fba{txChan: txChan}
+}
 
 // watch for incoming Transaction
-func (f *FBA) watchTx(txChan <-chan *pb.Transaction) {
+func (f *FBA) watchTx() {
 	for {
 		select {
-		case tx := <-txChan:
+		case tx := <-f.txChan:
 			return
 		}
 	}
