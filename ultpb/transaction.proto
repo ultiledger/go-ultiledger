@@ -19,16 +19,25 @@ message Op {
   bytes Data = 2;
 }
 
-// list of transactions
-message Transaction {
+// transaction
+message Tx {
   // the source account for sending asset to the new account
   string AccountID = 1;
   // fee to pay
   uint64 Fee = 2;
   // extra note about the transaction
   string Note = 3;
+  // unique transaction sequence number
+  uint64 SequenceNumber = 4;
   // list of operations
-  repeated Op OpList = 4;
+  repeated Op OpList = 5;
+}
+
+message TxList {
+  // hash of previous closed ledger header
+  string PrevLedgerHash = 1;
+  // list of transactions
+  repeated Tx Txs = 2;  
 }
 
 // create a new account by sending asset to it

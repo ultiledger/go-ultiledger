@@ -17,13 +17,11 @@ enum TransactionStatusEnum {
 }
 
 message SubmitTransactionRequest {
-  // source accountID
-  string AccountID = 1;
   // transaction data in pb format
-  bytes Data = 2;
+  bytes Data = 1;
   // digital signature of the data signed by 
   // the source account private key
-  string Signature = 3;
+  string Signature = 2;
 }
 
 message SubmitTransactionResponse {

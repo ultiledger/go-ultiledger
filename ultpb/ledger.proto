@@ -12,7 +12,7 @@ message LedgerHeader {
   // hash of the transaction list in this ledger
   string TxListHash = 3;
   // sequence number of this ledger
-  uint64 SequenceNumber = 4;
+  uint64 SeqNum = 4;
 
   // TODO(bobonovski): define fields to represents the information of consensus
   // which lead to this ledger

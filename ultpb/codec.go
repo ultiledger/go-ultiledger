@@ -13,9 +13,9 @@ func Encode(msg proto.Message) ([]byte, error) {
 	return b, nil
 }
 
-// decode pb message to Transaction
-func DecodeTransaction(b []byte) (*Transaction, error) {
-	tx := &Transaction{}
+// decode pb message to Tx
+func DecodeTx(b []byte) (*Tx, error) {
+	tx := &Tx{}
 	if err := proto.Unmarshal(b, tx); err != nil {
 		return nil, err
 	}
