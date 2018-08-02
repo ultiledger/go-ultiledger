@@ -8,12 +8,12 @@ import (
 )
 
 type ULTNodeServer struct {
-	IP     string               // ip address of this node
-	txChan chan *pb.Transaction // transaction submittion channel
+	IP     string      // ip address of this node
+	txChan chan *pb.Tx // transaction submission channel
 }
 
 func NewULTNodeServer(ip string) *ULTNodeServer {
-	s := &ULTNodeServer{IP: ip, txChan: make(chan *pb.Transaction)}
+	s := &ULTNodeServer{IP: ip, txChan: make(chan *pb.Tx)}
 	return s
 }
 

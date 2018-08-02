@@ -7,6 +7,8 @@ import (
 )
 
 type ultNodeConfig struct {
+	// network ID
+	NetworkID string
 	// listen port of server
 	Port string
 	// addresses of initial peers
@@ -14,6 +16,9 @@ type ultNodeConfig struct {
 }
 
 func NewULTNodeConfig(v *viper.Viper) (*ultNodeConfig, error) {
+	if v.GetString("network_id") == "" {
+		return nil, errors.New("network ID is missing")
+	}
 	if v.GetString("port") == "" {
 		return nil, errors.New("network port is missing")
 	}
@@ -21,8 +26,9 @@ func NewULTNodeConfig(v *viper.Viper) (*ultNodeConfig, error) {
 		return nil, errors.New("initial peers is empty")
 	}
 	u := ultNodeConfig{
-		Port:  v.GetString("port"),
-		Peers: v.GetStringSlice("peers"),
+		NetworkID: v.GetString("network_id"),
+		Port:      v.GetString("port"),
+		Peers:     v.GetStringSlice("peers"),
 	}
 	return &u, nil
 }
