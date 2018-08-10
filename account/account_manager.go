@@ -4,18 +4,28 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/ultiledger/go-ultiledger/crypto"
+	"github.com/ultiledger/go-ultiledger/db"
 	pb "github.com/ultiledger/go-ultiledger/ultpb"
 )
 
 // AccountManager manages the creation of accounts
 type accountManager struct {
+	store  db.DB
+	bucket string
+
 	logger *zap.SugaredLogger
+
 	// master account
 	master *pb.Account
 }
 
-func NewAccountManager(l *zap.SugaredLogger) *accountManager {
-	return &accountManager{logger: l}
+func NewAccountManager(d db.DB, l *zap.SugaredLogger) *accountManager {
+	am := &accountManager{store: d, bucket: "ACCOUNTS", logger: l}
+	err := am.store.CreateBucket(am.bucket)
+	if err != nil {
+		am.logger.Fatal(err)
+	}
+	return am
 }
 
 // Create master account with native asset (ULT) and initial balances
