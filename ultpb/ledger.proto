@@ -11,12 +11,14 @@ message LedgerHeader {
   string PrevLedgerHash = 2;
   // hash of the transaction list in this ledger
   string TxListHash = 3;
+  // maximun number of transactions allowed in a transaction list
+  uint32 MaxTxListSize = 4;
   // sequence number of this ledger
-  uint64 SeqNum = 4;
-
-  // TODO(bobonovski): define fields to represents the information of consensus
-  // which lead to this ledger
-
-  // TODO(bobonovski): define global fields to represents the overall configuration
-  // of the blockchain, such as total tokens, operation fees, etc.
+  uint64 SeqNum = 5;
+  // total number of tokens in existence
+  uint64 TotalTokens = 6;
+  // base fee per operation
+  uint64 BaseFee = 7;
+  // base reserver for an account
+  uint64 BaseReserve = 8;
 }
