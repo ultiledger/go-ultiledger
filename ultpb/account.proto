@@ -7,8 +7,8 @@ import "asset.proto";
 message Account {
   // public key of this account
   string AccountID = 1;
-  // account balance for different assets
-  repeated Asset Balances = 2;
+  // different assets
+  repeated Asset Assets = 2;
   // public key of the signer of this account
   string Signer = 3;
   // latest transaction sequence number

@@ -12,5 +12,7 @@ message Asset {
   // user defined asset name, name length should not be more than 4
   string AssetName = 2;
   // signer of this asset
-  string Signer = 3; 
+  string Signer = 3;
+  // balance of this asset
+  uint64 Balance = 4; 
 }
