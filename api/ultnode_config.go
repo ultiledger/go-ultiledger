@@ -1,14 +1,15 @@
 package api
 
 import (
+	"crypto/sha256"
 	"errors"
 
 	"github.com/spf13/viper"
 )
 
 type ultNodeConfig struct {
-	// network ID
-	NetworkID string
+	// network ID hash
+	NetworkID [32]byte
 	// listen port of server
 	Port string
 	// addresses of initial peers
@@ -26,7 +27,7 @@ func NewULTNodeConfig(v *viper.Viper) (*ultNodeConfig, error) {
 		return nil, errors.New("initial peers is empty")
 	}
 	u := ultNodeConfig{
-		NetworkID: v.GetString("network_id"),
+		NetworkID: sha256.Sum256([]byte(v.GetString("network_id"))),
 		Port:      v.GetString("port"),
 		Peers:     v.GetStringSlice("peers"),
 	}
