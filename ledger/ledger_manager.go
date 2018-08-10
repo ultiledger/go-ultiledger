@@ -17,6 +17,15 @@ const (
 	SYNCED
 )
 
+var (
+	GenesisVersion       = uint32(1)
+	GenesisMaxTxListSize = uint32(100)
+	GenesisSeqNum        = uint64(1)
+	GenesisTotalTokens   = uint64(4500000000000000000)
+	GenesisBaseFee       = uint64(1000)
+	GenesisBaseReserve   = uint64(1000000000)
+)
+
 // ledger manager is responsible for all the operations on ledgers
 type ledgerManager struct {
 	// db store and corresponding bucket
@@ -57,12 +66,12 @@ func NewLedgerManager(d db.DB, l *zap.SugaredLogger) *ledgerManager {
 // Start the genesis ledger and initialize master account
 func (lm *ledgerManager) CreateGenesisLedger() error {
 	genesis := &pb.LedgerHeader{
-		Version:       uint32(1),
-		MaxTxListSize: uint32(100),
-		SeqNum:        uint64(1),
-		TotalTokens:   uint64(4500000000000000000),
-		BaseFee:       uint64(1000),
-		BaseReserve:   uint64(1000000000),
+		Version:       GenesisVersion,
+		MaxTxListSize: GenesisMaxTxListSize,
+		SeqNum:        GenesisSeqNum,
+		TotalTokens:   GenesisTotalTokens,
+		BaseFee:       GenesisBaseFee,
+		BaseReserve:   GenesisBaseReserve,
 		CloseTime:     time.Now().Unix(),
 	}
 	// compute hash of the ledger and save to db
