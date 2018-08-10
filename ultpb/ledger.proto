@@ -21,4 +21,6 @@ message LedgerHeader {
   uint64 BaseFee = 7;
   // base reserver for an account
   uint64 BaseReserve = 8;
+  // close time
+  int64 CloseTime = 9;
 }
