@@ -3,6 +3,7 @@ package crypto
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 
@@ -50,6 +51,20 @@ func GenerateKeypair() (string, string, error) {
 		return "", "", err
 	}
 	return publicKey, seed, err
+}
+
+func GenerateKeypairFromSeed(seed []byte) (string, string, error) {
+	if len(seed) != 32 {
+		return "", "", errors.New("Invalid seed, byte length is not 32")
+	}
+	privateKey := ed25519.NewKeyFromSeed(seed[:])
+	publicKey := privateKey.Public()
+
+	pubKeyStr := fmt.Sprintf("%x", publicKey)
+	seedStr := fmt.Sprintf("%x", seed)
+
+	return pubKeyStr, seedStr, nil
+
 }
 
 // sign the data with provided seed (equivalent private key)
