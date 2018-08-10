@@ -39,14 +39,32 @@ func NewBoltDB(path string) db.DB {
 	return &boltdbWrapper{internalDB: b}
 }
 
+func (bw *boltdbWrapper) CreateBucket(name string) error {
+	if bw.internalDB == nil {
+		log.Fatal(errors.New("database is not initialized"))
+	}
+	if name == "" {
+		log.Fatal(errors.New("database bucket name is empty"))
+	}
+
+	bw.internalDB.Update(func(tx *bolt.Tx) error {
+		_, err := tx.CreateBucketIfNotExists([]byte(name))
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+	return nil
+}
+
 // Set writes the key/value pairs to database.
-func (bw *boltdbWrapper) Set(key []byte, val []byte) error {
+func (bw *boltdbWrapper) Set(bucket string, key []byte, val []byte) error {
 	if bw.internalDB == nil {
 		log.Fatal(errors.New("database is not initialized"))
 	}
 
 	bw.internalDB.Update(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte("ULTDB"))
+		b := tx.Bucket([]byte(bucket))
 		err := b.Put(key, val)
 		return err
 	})
@@ -54,14 +72,14 @@ func (bw *boltdbWrapper) Set(key []byte, val []byte) error {
 }
 
 // Get retrieves the value of the key from database.
-func (bw *boltdbWrapper) Get(key []byte) ([]byte, bool) {
+func (bw *boltdbWrapper) Get(bucket string, key []byte) ([]byte, bool) {
 	if bw.internalDB == nil {
 		log.Fatal(errors.New("database is not initialized"))
 	}
 
 	var val []byte
 	bw.internalDB.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte("ULTDB"))
+		b := tx.Bucket([]byte(bucket))
 		val = b.Get(key)
 		return nil
 	})

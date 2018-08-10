@@ -1,23 +1,30 @@
 package ledger
 
 import (
+	"crypto/sha256"
 	"time"
 
 	"go.uber.org/zap"
 
+	"github.com/ultiledger/go-ultiledger/db"
 	pb "github.com/ultiledger/go-ultiledger/ultpb"
 )
 
 type LedgerState uint8
 
 const (
-	BOOTING LedgerState = iota
+	NOTSYNCED LedgerState = iota
 	SYNCED
 )
 
 // ledger manager is responsible for all the operations on ledgers
 type ledgerManager struct {
+	// db store and corresponding bucket
+	store  db.DB
+	bucket string
+
 	logger *zap.SugaredLogger
+
 	// ledger state
 	ledgerState LedgerState
 	// start timestamp of the manager
@@ -28,13 +35,51 @@ type ledgerManager struct {
 	approxLedgerCount int64
 	// prev committed ledger header (for convenience)
 	prevLedgerHeader *pb.LedgerHeader
+	// current ledger header
+	currLedgerHeader *pb.LedgerHeader
 }
 
-func NewLedgerManager() *ledgerManager {
-	return &ledgerManager{startTime: time.Now().Unix()}
+func NewLedgerManager(d db.DB, l *zap.SugaredLogger) *ledgerManager {
+	lm := &ledgerManager{
+		store:       d,
+		bucket:      "LEDGERS",
+		logger:      l,
+		ledgerState: NOTSYNCED,
+		startTime:   time.Now().Unix(),
+	}
+	err := lm.store.CreateBucket(lm.bucket)
+	if err != nil {
+		lm.logger.Fatal(err)
+	}
+	return lm
 }
 
-// Append the committed transaction list to current ledger
+// Start the genesis ledger and initialize master account
+func (lm *ledgerManager) CreateGenesisLedger() error {
+	genesis := &pb.LedgerHeader{
+		Version:       uint32(1),
+		MaxTxListSize: uint32(100),
+		SeqNum:        uint64(1),
+		TotalTokens:   uint64(4500000000000000000),
+		BaseFee:       uint64(1000),
+		BaseReserve:   uint64(1000000000),
+		CloseTime:     time.Now().Unix(),
+	}
+	// compute hash of the ledger and save to db
+	b, err := pb.Encode(genesis)
+	if err != nil {
+		return err
+	}
+	h := sha256.Sum256(b)
+	lm.store.Set(lm.bucket, h[:], b)
+
+	lm.currLedgerHeader = genesis
+
+	return nil
+}
+
+// Append the committed transaction list to current ledger, the operation
+// is only valid when the ledger manager in synced state.
 func (lm *ledgerManager) AppendTxList(seq uint64, prevHash string, txHash string) {
 	if lm.ledgerState != SYNCED {
 		return
@@ -44,8 +89,6 @@ func (lm *ledgerManager) AppendTxList(seq uint64, prevHash string, txHash string
 		lm.logger.Warnw("ledger sequence number invalid", "prevSeqNum", lm.prevLedgerHeader.SeqNum, "currSeqNum", seq)
 		return
 	}
-
-	// TODO(bobonovski) deal with older or newer ledger
 
 	// check whether the supplied prev tx list hash is identical
 	// to the previous committed tx list hash

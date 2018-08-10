@@ -8,8 +8,9 @@ var constructors = make(map[string]DBCtor)
 
 // generic database operation interface
 type DB interface {
-	Set(key []byte, val []byte) error
-	Get(key []byte) ([]byte, bool)
+	CreateBucket(name string) error
+	Set(bucket string, key []byte, val []byte) error
+	Get(bucket string, key []byte) ([]byte, bool)
 	Close()
 }
 
