@@ -1,11 +1,11 @@
 package ledger
 
 import (
-	"crypto/sha256"
 	"time"
 
 	"go.uber.org/zap"
 
+	"github.com/ultiledger/go-ultiledger/crypto"
 	"github.com/ultiledger/go-ultiledger/db"
 	pb "github.com/ultiledger/go-ultiledger/ultpb"
 )
@@ -47,7 +47,7 @@ type ledgerManager struct {
 	// current ledger header
 	currLedgerHeader *pb.LedgerHeader
 	// current ledger hash
-	currLedgerHash [32]byte
+	currLedgerHash string
 }
 
 func NewLedgerManager(d db.DB, l *zap.SugaredLogger) *ledgerManager {
@@ -81,8 +81,8 @@ func (lm *ledgerManager) CreateGenesisLedger() error {
 	if err != nil {
 		return err
 	}
-	h := sha256.Sum256(b)
-	lm.store.Set(lm.bucket, h[:], b)
+	h := crypto.SHA256Hash(b)
+	lm.store.Set(lm.bucket, []byte(h), b)
 
 	lm.currLedgerHeader = genesis
 	lm.currLedgerHash = h
