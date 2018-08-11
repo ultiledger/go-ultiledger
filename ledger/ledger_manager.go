@@ -46,6 +46,8 @@ type ledgerManager struct {
 	prevLedgerHeader *pb.LedgerHeader
 	// current ledger header
 	currLedgerHeader *pb.LedgerHeader
+	// current ledger hash
+	currLedgerHash [32]byte
 }
 
 func NewLedgerManager(d db.DB, l *zap.SugaredLogger) *ledgerManager {
@@ -83,6 +85,7 @@ func (lm *ledgerManager) CreateGenesisLedger() error {
 	lm.store.Set(lm.bucket, h[:], b)
 
 	lm.currLedgerHeader = genesis
+	lm.currLedgerHash = h
 
 	return nil
 }
