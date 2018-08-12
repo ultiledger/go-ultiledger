@@ -33,7 +33,7 @@ var OpTypeEnum_value = map[string]int32{
 func (x OpTypeEnum) String() string {
 	return proto.EnumName(OpTypeEnum_name, int32(x))
 }
-func (OpTypeEnum) EnumDescriptor() ([]byte, []int) { return fileDescriptor3, []int{0} }
+func (OpTypeEnum) EnumDescriptor() ([]byte, []int) { return fileDescriptor4, []int{0} }
 
 // operation
 type Op struct {
@@ -46,7 +46,7 @@ type Op struct {
 func (m *Op) Reset()                    { *m = Op{} }
 func (m *Op) String() string            { return proto.CompactTextString(m) }
 func (*Op) ProtoMessage()               {}
-func (*Op) Descriptor() ([]byte, []int) { return fileDescriptor3, []int{0} }
+func (*Op) Descriptor() ([]byte, []int) { return fileDescriptor4, []int{0} }
 
 func (m *Op) GetOpType() OpTypeEnum {
 	if m != nil {
@@ -79,7 +79,7 @@ type Tx struct {
 func (m *Tx) Reset()                    { *m = Tx{} }
 func (m *Tx) String() string            { return proto.CompactTextString(m) }
 func (*Tx) ProtoMessage()               {}
-func (*Tx) Descriptor() ([]byte, []int) { return fileDescriptor3, []int{1} }
+func (*Tx) Descriptor() ([]byte, []int) { return fileDescriptor4, []int{1} }
 
 func (m *Tx) GetAccountID() string {
 	if m != nil {
@@ -126,7 +126,7 @@ type TxList struct {
 func (m *TxList) Reset()                    { *m = TxList{} }
 func (m *TxList) String() string            { return proto.CompactTextString(m) }
 func (*TxList) ProtoMessage()               {}
-func (*TxList) Descriptor() ([]byte, []int) { return fileDescriptor3, []int{2} }
+func (*TxList) Descriptor() ([]byte, []int) { return fileDescriptor4, []int{2} }
 
 func (m *TxList) GetPrevLedgerHash() string {
 	if m != nil {
@@ -154,7 +154,7 @@ type CreateAccountOp struct {
 func (m *CreateAccountOp) Reset()                    { *m = CreateAccountOp{} }
 func (m *CreateAccountOp) String() string            { return proto.CompactTextString(m) }
 func (*CreateAccountOp) ProtoMessage()               {}
-func (*CreateAccountOp) Descriptor() ([]byte, []int) { return fileDescriptor3, []int{3} }
+func (*CreateAccountOp) Descriptor() ([]byte, []int) { return fileDescriptor4, []int{3} }
 
 func (m *CreateAccountOp) GetAccountID() string {
 	if m != nil {
@@ -190,7 +190,7 @@ type PaymentOp struct {
 func (m *PaymentOp) Reset()                    { *m = PaymentOp{} }
 func (m *PaymentOp) String() string            { return proto.CompactTextString(m) }
 func (*PaymentOp) ProtoMessage()               {}
-func (*PaymentOp) Descriptor() ([]byte, []int) { return fileDescriptor3, []int{4} }
+func (*PaymentOp) Descriptor() ([]byte, []int) { return fileDescriptor4, []int{4} }
 
 func (m *PaymentOp) GetAccountID() string {
 	if m != nil {
@@ -222,9 +222,9 @@ func init() {
 	proto.RegisterEnum("ultpb.OpTypeEnum", OpTypeEnum_name, OpTypeEnum_value)
 }
 
-func init() { proto.RegisterFile("transaction.proto", fileDescriptor3) }
+func init() { proto.RegisterFile("transaction.proto", fileDescriptor4) }
 
-var fileDescriptor3 = []byte{
+var fileDescriptor4 = []byte{
 	// 363 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xb4, 0x52, 0x3d, 0x4f, 0xe3, 0x40,
 	0x10, 0x3d, 0xdb, 0x89, 0x23, 0x4f, 0x4e, 0xb9, 0x64, 0x8b, 0x93, 0x95, 0xbb, 0x22, 0xe7, 0xe2,

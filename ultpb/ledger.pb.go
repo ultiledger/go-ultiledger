@@ -38,7 +38,7 @@ type LedgerHeader struct {
 func (m *LedgerHeader) Reset()                    { *m = LedgerHeader{} }
 func (m *LedgerHeader) String() string            { return proto.CompactTextString(m) }
 func (*LedgerHeader) ProtoMessage()               {}
-func (*LedgerHeader) Descriptor() ([]byte, []int) { return fileDescriptor2, []int{0} }
+func (*LedgerHeader) Descriptor() ([]byte, []int) { return fileDescriptor3, []int{0} }
 
 func (m *LedgerHeader) GetVersion() uint32 {
 	if m != nil {
@@ -107,9 +107,9 @@ func init() {
 	proto.RegisterType((*LedgerHeader)(nil), "ultpb.LedgerHeader")
 }
 
-func init() { proto.RegisterFile("ledger.proto", fileDescriptor2) }
+func init() { proto.RegisterFile("ledger.proto", fileDescriptor3) }
 
-var fileDescriptor2 = []byte{
+var fileDescriptor3 = []byte{
 	// 232 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x5c, 0xd0, 0xcf, 0x4a, 0x03, 0x31,
 	0x10, 0x06, 0x70, 0xd2, 0x3f, 0x5b, 0x77, 0x6c, 0x3d, 0xcc, 0x41, 0xe6, 0x20, 0x12, 0x44, 0x64,

@@ -7,12 +7,14 @@ Package ultpb is a generated protocol buffer package.
 It is generated from these files:
 	account.proto
 	asset.proto
+	consensus.proto
 	ledger.proto
 	transaction.proto
 
 It has these top-level messages:
 	Account
 	Asset
+	ConsensusValue
 	LedgerHeader
 	Op
 	Tx

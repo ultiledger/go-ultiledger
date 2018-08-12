@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+package ultpb;
+
+// ConsensusValue is used for reaching consensus in 
+// Federated Byzantine Agreement
+message ConsensusValue {
+  // hash of the transaction list
+  string TxListHash = 1;
+  // close time
+  int64 CloseTime = 2;
+}
