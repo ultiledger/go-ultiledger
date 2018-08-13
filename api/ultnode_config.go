@@ -14,6 +14,8 @@ type ultNodeConfig struct {
 	Port string
 	// addresses of initial peers
 	Peers []string
+	// node ID (public key derived from seed)
+	NodeID string
 }
 
 func NewULTNodeConfig(v *viper.Viper) (*ultNodeConfig, error) {
