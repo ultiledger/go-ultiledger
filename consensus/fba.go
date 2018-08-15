@@ -16,7 +16,12 @@ type fba struct {
 
 	logger *zap.SugaredLogger
 
+	// consensus quorum
+	quorum *pb.Quorum
+
+	// transactions waiting to be include in the ledger
 	txSet  mapset.Set
+	txList []*pb.Tx
 	txChan <-chan *pb.Tx
 }
 
@@ -50,6 +55,7 @@ func (f *fba) watchTx() {
 				continue
 			}
 			f.txSet.Add(h)
+			f.txList = append(f.txList, tx)
 		}
 	}
 }

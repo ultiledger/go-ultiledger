@@ -15,6 +15,7 @@ It has these top-level messages:
 	Account
 	Asset
 	ConsensusValue
+	Quorum
 	LedgerHeader
 	Op
 	Tx

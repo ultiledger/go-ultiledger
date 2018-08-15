@@ -54,7 +54,7 @@ func GenerateKeypair() (string, string, error) {
 }
 
 func GenerateKeypairFromSeed(seed []byte) (string, string, error) {
-	if (seed) != 32 {
+	if len(seed) != 32 {
 		return "", "", errors.New("Invalid seed, byte length is not 32")
 	}
 	privateKey := ed25519.NewKeyFromSeed(seed[:])

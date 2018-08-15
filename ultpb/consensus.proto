@@ -10,3 +10,12 @@ message ConsensusValue {
   // close time
   int64 CloseTime = 2;
 }
+
+// Each ULTNode is associated with a quorum, every message
+// related to FBA consensus should contain the quorum of 
+// the node
+message Quorum {
+  uint32 Threshold = 1;
+  string Validators = 2;
+  repeated Quorum NestQuorums = 3;
+}
