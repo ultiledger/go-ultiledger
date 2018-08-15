@@ -32,7 +32,7 @@ type ULTKey struct {
 
 // decode base58 encoded key string to ULTKey
 func DecodeKey(key string) (*ULTKey, error) {
-	if len(key) == 0 {
+	if key == "" {
 		return nil, ErrInvalidKey
 	}
 

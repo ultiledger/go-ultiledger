@@ -32,7 +32,7 @@ func ed25519Keypair() (string, string, error) {
 // be only used in situations where you need to sign the data so
 // the authenticity can be verified by the corresponding public key.
 func getPrivateKey(seed string) (ed25519.PrivateKey, error) {
-	if len(seed) == 0 {
+	if seed == "" {
 		return nil, fmt.Errorf("empty seed")
 	}
 	b, err := hex.DecodeString(seed)
@@ -54,7 +54,7 @@ func GenerateKeypair() (string, string, error) {
 }
 
 func GenerateKeypairFromSeed(seed []byte) (string, string, error) {
-	if len(seed) != 32 {
+	if (seed) != 32 {
 		return "", "", errors.New("Invalid seed, byte length is not 32")
 	}
 	privateKey := ed25519.NewKeyFromSeed(seed[:])
