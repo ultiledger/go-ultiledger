@@ -10,7 +10,7 @@ import (
 )
 
 // Federated Byzantine Agreement
-type fba struct {
+type FBA struct {
 	store  db.DB
 	bucket string
 
@@ -19,19 +19,26 @@ type fba struct {
 	// consensus quorum
 	quorum *pb.Quorum
 
+	// latest voted slot
+	latestSlotIdx uint64
+
+	// vote round
+	roundNum uint32
+
 	// transactions waiting to be include in the ledger
 	txSet  mapset.Set
 	txList []*pb.Tx
 	txChan <-chan *pb.Tx
 }
 
-func NewFBA(d db.DB, l *zap.SugaredLogger, txChan <-chan *pb.Tx) *fba {
-	f := &fba{
-		store:  d,
-		bucket: "FBA",
-		logger: l,
-		txSet:  mapset.NewSet(),
-		txChan: txChan,
+func NewFBA(d db.DB, l *zap.SugaredLogger, txChan <-chan *pb.Tx) *FBA {
+	f := &FBA{
+		store:         d,
+		bucket:        "FBA",
+		logger:        l,
+		latestSlotIdx: uint64(0),
+		txSet:         mapset.NewSet(),
+		txChan:        txChan,
 	}
 	err := f.store.CreateBucket(f.bucket)
 	if err != nil {
@@ -41,7 +48,7 @@ func NewFBA(d db.DB, l *zap.SugaredLogger, txChan <-chan *pb.Tx) *fba {
 }
 
 // watch for incoming Transaction
-func (f *fba) watchTx() {
+func (f *FBA) watchTx() {
 	for {
 		select {
 		case tx := <-f.txChan:
@@ -58,4 +65,14 @@ func (f *fba) watchTx() {
 			f.txList = append(f.txList, tx)
 		}
 	}
+}
+
+// Nominate computes a new nomination value based on hashes
+// of previous and current transaction list.
+func (f *FBA) Nominate(prevHash string, currHash string) (string, error) {
+	f.roundNum += 1
+
+	// TODO(bobonovski) prioritize validators for nomination
+
+	return currHash, nil
 }

@@ -8,6 +8,8 @@ import (
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 
+	c "github.com/ultiledger/go-ultiledger/consensus"
+	m "github.com/ultiledger/go-ultiledger/message"
 	p "github.com/ultiledger/go-ultiledger/peer"
 	"github.com/ultiledger/go-ultiledger/ultpb/rpc"
 )
@@ -28,7 +30,12 @@ type ultNode struct {
 	// peer manager
 	pm *p.PeerManager
 
-	// stop channel
+	// instance of FBA
+	fba *c.FBA
+
+	// channel for transfering nomination message
+	nominateChan chan *m.NominateMsg
+	// channel for stopping all the subroutines
 	stopChan chan struct{}
 }
 
@@ -79,6 +86,25 @@ func (u *ultNode) Start() error {
 func (u *ultNode) Restart() error {
 	log.Println("restart called")
 	return nil
+}
+
+// event loop for dealing with various internal events
+func (u *ultNode) eventLoop() {
+	for {
+		select {
+		case msg := <-u.nominateChan:
+			_, err := u.fba.Nominate(msg.PrevTxListHash, msg.CurrTxListHash)
+			if err != nil {
+				u.logger.Warnw("failed to generate nomination value",
+					"prevTxListHash", msg.PrevTxListHash, "currTxListHash", msg.CurrTxListHash)
+				continue
+			}
+			// TODO(bobonovski) broadcast the nomination value
+		case <-u.stopChan:
+			u.logger.Infof("shutdown event loop")
+			return
+		}
+	}
 }
 
 // serve starts a listener on the port and starts to accept request
