@@ -19,3 +19,27 @@ message Quorum {
   string Validators = 2;
   repeated Quorum NestQuorums = 3;
 }
+
+// Nomination is used to find a candidate value for
+// later federated voting
+message Nomination {
+  repeated string VoteList = 1;
+  repeated string AcceptList = 2;
+  string QuorumHash = 3;
+}
+
+// Statement is an abstractive value for nodes to vote 
+// and reach consensus. Each statement type has its 
+// corresponding data encoded in pb and saved in Data field.
+message Statement {
+  enum StatementTypeEnum {
+    NOMINATE = 0;
+    PREPARE = 1;
+    CONFIRM = 2;
+    EXTERNALIZE = 3;
+  }
+  StatementTypeEnum StatementType = 1;
+  string NodeID = 2;
+  uint64 SlotIndex = 3;
+  bytes Data = 4; 
+}

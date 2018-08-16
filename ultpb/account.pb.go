@@ -16,6 +16,8 @@ It has these top-level messages:
 	Asset
 	ConsensusValue
 	Quorum
+	Nomination
+	Statement
 	LedgerHeader
 	Op
 	Tx
