@@ -1,7 +1,6 @@
 package peer
 
 import (
-	"sync"
 	"time"
 
 	"go.uber.org/zap"
@@ -21,7 +20,6 @@ type PeerManager struct {
 
 	// connected peers
 	livePeers map[string]*Peer
-	liveLock  sync.RWMutex
 
 	// peers need to retry to connect other peers, at most three
 	// times. If the left retry count is zero, it means this peer
@@ -29,12 +27,12 @@ type PeerManager struct {
 	// If in some situation, we get request from this peer then the
 	// retry will start again.
 	retryPeers    map[string]int
-	retryLock     sync.Mutex
 	retryStopChan chan struct{}
+	retryChan     chan string
 
 	// channel for managing peers
-	addChan    chan string
-	deleteChan chan string
+	addChan    chan *Peer
+	deleteChan chan *Peer
 }
 
 func NewPeerManager(l *zap.SugaredLogger, ps []string) *PeerManager {
@@ -53,44 +51,29 @@ func (pm *PeerManager) Start(stopChan chan struct{}) {
 		p, err := pm.connectPeer(addr)
 		if err != nil {
 			pm.logger.Warnw("failed to connect to peer", "addr", addr)
-			pm.retryPeers[addr] = 3 // retry three times and no need lock here
+			pm.retryPeers[addr] = 3
 			continue
 		}
-		pm.livePeers[addr] = p // no need lock here
+		pm.livePeers[addr] = p
 	}
 
 	go pm.retryConnect()
 
 	for {
 		select {
-		case addr := <-pm.addChan:
-			p, err := pm.connectPeer(addr)
-			if err != nil {
-				pm.logger.Warnw("failed to connect to peer", "addr", addr)
-				pm.retryLock.Lock()
-				pm.retryPeers[addr] = 3
-				pm.retryLock.Unlock()
-				continue
+		case p := <-pm.addChan:
+			pm.livePeers[p.Addr] = p
+		case p := <-pm.deleteChan: // only delete connected peers
+			if _, ok := pm.livePeers[p.Addr]; ok {
+				delete(pm.livePeers, p.Addr)
 			}
-			pm.liveLock.Lock()
-			pm.livePeers[addr] = p
-			pm.liveLock.Unlock()
-		case addr := <-pm.deleteChan: // only delete connected peers
-			pm.liveLock.Lock()
-			if _, ok := pm.livePeers[addr]; ok {
-				delete(pm.livePeers, addr)
-			}
-			pm.liveLock.Unlock()
-			continue
 		case <-stopChan:
 			close(pm.retryStopChan) // stop retry first
 			pm.retryPeers = nil
-			pm.liveLock.Lock()
 			for _, p := range pm.livePeers {
 				p.Close()
 			}
 			pm.livePeers = nil
-			pm.liveLock.Unlock()
 			return
 		}
 	}
@@ -112,25 +95,34 @@ func (pm *PeerManager) retryConnect() {
 	for {
 		select {
 		case <-ticker.C:
-			if len(pm.retryPeers) > 0 {
-				pm.retryLock.Lock()
-				for addr, count := range pm.retryPeers {
-					if count == 0 {
-						continue
-					}
-					p, err := pm.connectPeer(addr)
-					if err != nil {
-						pm.logger.Warnw("failed to connect to peer", "addr", addr)
-						count -= 1
-						pm.retryPeers[addr] = count
-						continue
-					}
-					pm.liveLock.Lock()
-					pm.livePeers[addr] = p
-					pm.liveLock.Unlock()
-				}
-				pm.retryLock.Unlock()
+			if len(pm.retryPeers) == 0 {
+				continue
 			}
+			for addr, count := range pm.retryPeers {
+				if count == 0 {
+					delete(pm.retryPeers, addr)
+					continue
+				}
+				p, err := pm.connectPeer(addr)
+				if err != nil {
+					pm.logger.Warnw("failed to connect to peer", "addr", addr)
+					count -= 1
+					pm.retryPeers[addr] = count
+					continue
+				}
+				delete(pm.retryPeers, addr)
+
+				select {
+				case pm.addChan <- p:
+				case <-pm.retryStopChan:
+					return
+				}
+			}
+		case addr := <-pm.retryChan:
+			if _, ok := pm.retryPeers[addr]; ok {
+				continue
+			}
+			pm.retryPeers[addr] = 3
 		case <-pm.retryStopChan:
 			return
 		}
