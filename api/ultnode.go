@@ -18,6 +18,8 @@ import (
 type ultNode struct {
 	// IP address of this node
 	IP string
+	// NodeID of this node
+	NodeID string
 	// start time of the node
 	StartTime int64
 
@@ -55,12 +57,16 @@ func NewULTNode(conf *ultNodeConfig) *ultNode {
 	defer conn.Close()
 	addr := conn.LocalAddr().(*net.UDPAddr)
 
+	ip := addr.String()
+	nodeID := conf.NodeID
+
 	node := &ultNode{
 		config:    conf,
 		logger:    l.Sugar(),
-		server:    NewULTNodeServer(addr.String()),
-		pm:        p.NewPeerManager(l.Sugar(), conf.Peers),
-		IP:        addr.String(),
+		server:    NewULTNodeServer(ip),
+		pm:        p.NewPeerManager(l.Sugar(), conf.Peers, ip, nodeID),
+		IP:        ip,
+		NodeID:    nodeID,
 		StartTime: time.Now().Unix(),
 		stopChan:  make(chan struct{}),
 	}

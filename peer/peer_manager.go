@@ -12,6 +12,13 @@ import (
 // PeerManager manages the CRUD of peers
 type PeerManager struct {
 	logger *zap.SugaredLogger
+
+	// IP of the node
+	IP string
+
+	// NodeID of the node
+	NodeID string
+
 	// initial peer addresses
 	initPeers []string
 
@@ -35,9 +42,11 @@ type PeerManager struct {
 	deleteChan chan *Peer
 }
 
-func NewPeerManager(l *zap.SugaredLogger, ps []string) *PeerManager {
+func NewPeerManager(l *zap.SugaredLogger, ps []string, ip string, nodeID string) *PeerManager {
 	return &PeerManager{
 		logger:        l,
+		IP:            ip,
+		NodeID:        nodeID,
 		initPeers:     ps,
 		retryPeers:    make(map[string]int),
 		livePeers:     make(map[string]*Peer),
@@ -110,6 +119,16 @@ func (pm *PeerManager) retryConnect() {
 					pm.retryPeers[addr] = count
 					continue
 				}
+				// healthcheck the peer and save the nodeID
+				ip, nodeID, err := p.HealthCheck(pm.IP, pm.NodeID)
+				if err != nil {
+					pm.logger.Warnw("peer is not health", "peerIP", p.Addr)
+					p.Close()
+					continue
+				}
+				p.Addr = ip // TODO(bobonovski) check whether the dial IP is the same as the response IP?
+				p.NodeID = nodeID
+
 				delete(pm.retryPeers, addr)
 
 				select {
