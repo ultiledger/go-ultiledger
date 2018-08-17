@@ -9,8 +9,8 @@ import (
 	"google.golang.org/grpc"
 
 	c "github.com/ultiledger/go-ultiledger/consensus"
-	m "github.com/ultiledger/go-ultiledger/message"
-	p "github.com/ultiledger/go-ultiledger/peer"
+	"github.com/ultiledger/go-ultiledger/ledger"
+	"github.com/ultiledger/go-ultiledger/peer"
 	"github.com/ultiledger/go-ultiledger/ultpb/rpc"
 )
 
@@ -30,13 +30,15 @@ type ultNode struct {
 	// ULTNode server
 	server *ULTNodeServer
 	// peer manager
-	pm *p.PeerManager
+	pm *peer.PeerManager
+	// ledger manager
+	lm *ledger.LedgerManager
 
-	// instance of FBA
-	fba *c.FBA
+	// engine of consensus
+	engine *c.Engine
 
-	// channel for transfering nomination message
-	nominateChan chan *m.NominateMsg
+	// channel for triggering nomination
+	nominateChan chan struct{}
 	// channel for stopping all the subroutines
 	stopChan chan struct{}
 }
@@ -64,7 +66,7 @@ func NewULTNode(conf *ultNodeConfig) *ultNode {
 		config:    conf,
 		logger:    l.Sugar(),
 		server:    NewULTNodeServer(ip),
-		pm:        p.NewPeerManager(l.Sugar(), conf.Peers, ip, nodeID),
+		pm:        peer.NewPeerManager(l.Sugar(), conf.Peers, ip, nodeID),
 		IP:        ip,
 		NodeID:    nodeID,
 		StartTime: time.Now().Unix(),
@@ -98,14 +100,8 @@ func (u *ultNode) Restart() error {
 func (u *ultNode) eventLoop() {
 	for {
 		select {
-		case msg := <-u.nominateChan:
-			_, err := u.fba.Nominate(msg.PrevTxListHash, msg.CurrTxListHash)
-			if err != nil {
-				u.logger.Warnw("failed to generate nomination value",
-					"prevTxListHash", msg.PrevTxListHash, "currTxListHash", msg.CurrTxListHash)
-				continue
-			}
-			// TODO(bobonovski) broadcast the nomination value
+		case <-u.nominateChan:
+			// TODO
 		case <-u.stopChan:
 			u.logger.Infof("shutdown event loop")
 			return

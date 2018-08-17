@@ -1,6 +1,7 @@
 package ledger
 
 import (
+	"errors"
 	"time"
 
 	"go.uber.org/zap"
@@ -18,6 +19,11 @@ const (
 )
 
 var (
+	ErrLedgerNotSynced  = errors.New("ledger is not in synced state")
+	ErrLedgerSeqInvalid = errors.New("ledger sequence number incompatible")
+)
+
+var (
 	GenesisVersion       = uint32(1)
 	GenesisMaxTxListSize = uint32(100)
 	GenesisSeqNum        = uint64(1)
@@ -27,7 +33,7 @@ var (
 )
 
 // ledger manager is responsible for all the operations on ledgers
-type ledgerManager struct {
+type LedgerManager struct {
 	// db store and corresponding bucket
 	store  db.DB
 	bucket string
@@ -36,22 +42,28 @@ type ledgerManager struct {
 
 	// ledger state
 	ledgerState LedgerState
+
 	// start timestamp of the manager
 	startTime int64
 	// timestamp of last ledger update
 	lastUpdateTime int64
-	// approximate number of ledgers under management
-	approxLedgerCount int64
-	// prev committed ledger header (for convenience)
+
+	// the number of ledgers processed
+	ledgerHeaderCount int64
+
+	// previous committed ledger header
 	prevLedgerHeader *pb.LedgerHeader
-	// current ledger header
+	// hash of previous committed ledger header
+	prevLedgerHeaderHash string
+
+	// current latest committed ledger header
 	currLedgerHeader *pb.LedgerHeader
-	// current ledger hash
-	currLedgerHash string
+	// hash of current latest committed ledger header
+	currLedgerHeaderHash string
 }
 
-func NewLedgerManager(d db.DB, l *zap.SugaredLogger) *ledgerManager {
-	lm := &ledgerManager{
+func NewLedgerManager(d db.DB, l *zap.SugaredLogger) *LedgerManager {
+	lm := &LedgerManager{
 		store:       d,
 		bucket:      "LEDGERS",
 		logger:      l,
@@ -66,7 +78,7 @@ func NewLedgerManager(d db.DB, l *zap.SugaredLogger) *ledgerManager {
 }
 
 // Start the genesis ledger and initialize master account
-func (lm *ledgerManager) CreateGenesisLedger() error {
+func (lm *LedgerManager) CreateGenesisLedger() error {
 	genesis := &pb.LedgerHeader{
 		Version:       GenesisVersion,
 		MaxTxListSize: GenesisMaxTxListSize,
@@ -85,30 +97,83 @@ func (lm *ledgerManager) CreateGenesisLedger() error {
 	lm.store.Set(lm.bucket, []byte(h), b)
 
 	lm.currLedgerHeader = genesis
-	lm.currLedgerHash = h
+	lm.currLedgerHeaderHash = h
+
+	lm.ledgerHeaderCount += 1
 
 	return nil
 }
 
+// Get the current latest ledger header
+func (lm *LedgerManager) CurrLedgerHeader() *pb.LedgerHeader {
+	// current ledger header should always exist
+	if lm.currLedgerHeader == nil {
+		lm.logger.Fatal(errors.New("current ledger header is nil"))
+	}
+	return lm.currLedgerHeader
+}
+
+// Get the hash of current latest ledger header
+func (lm *LedgerManager) CurrLedgerHeaderHash() string {
+	// current ledger header hash should always exist
+	if lm.currLedgerHeaderHash == "" {
+		lm.logger.Fatal(errors.New("current ledger header hash is empty string"))
+	}
+	return lm.currLedgerHeaderHash
+}
+
+// Get the sequence number of next ledger header
+func (lm *LedgerManager) NextLedgerHeaderSeq() uint64 {
+	// current ledger header should always exist
+	if lm.currLedgerHeader == nil {
+		lm.logger.Fatal(errors.New("current ledger header is nil"))
+	}
+	return lm.currLedgerHeader.SeqNum + 1
+}
+
 // Append the committed transaction list to current ledger, the operation
 // is only valid when the ledger manager in synced state.
-func (lm *ledgerManager) AppendTxList(seq uint64, prevHash string, txHash string) {
+func (lm *LedgerManager) AppendTxList(seq uint64, prevHeaderHash string, txHash string) error {
 	if lm.ledgerState != SYNCED {
-		return
+		return ErrLedgerNotSynced
 	}
-	// check whether the sequence number is valid
-	if lm.prevLedgerHeader.SeqNum-1 != seq {
-		lm.logger.Warnw("ledger sequence number invalid", "prevSeqNum", lm.prevLedgerHeader.SeqNum, "currSeqNum", seq)
-		return
-	}
-
-	// check whether the supplied prev tx list hash is identical
-	// to the previous committed tx list hash
-	if lm.prevLedgerHeader.TxListHash != prevHash {
-		lm.logger.Fatalw("ledger prev tx hash mismatch", "committed", lm.prevLedgerHeader.TxListHash, "supplied", prevHash)
+	// Check whether the sequence number is valid
+	if lm.currLedgerHeader.SeqNum+1 != seq {
+		lm.logger.Warnw("ledger sequence number invalid", "currSeqNum", lm.currLedgerHeader.SeqNum, "newSeqNum", seq)
+		return ErrLedgerSeqInvalid
 	}
 
-	// TODO(bobonovski) save new ledger info
-	h := &pb.LedgerHeader{SeqNum: seq, PrevLedgerHash: prevHash, TxListHash: txHash}
-	lm.prevLedgerHeader = h
+	// Check whether the supplied prev ledger header hash is identical
+	// to the current ledger header hash. It should never happen that
+	// these two values are not identical which means some fork happened.
+	if lm.currLedgerHeaderHash != prevHeaderHash {
+		lm.logger.Fatalw("ledger prev tx hash mismatch", "currHeaderHash", lm.currLedgerHeaderHash, "newPrevHeaderHash", prevHeaderHash)
+	}
+
+	header := &pb.LedgerHeader{
+		SeqNum:         seq,
+		PrevLedgerHash: prevHeaderHash,
+		TxListHash:     txHash,
+		// global configs blow
+		Version:       GenesisVersion,
+		MaxTxListSize: GenesisMaxTxListSize,
+		TotalTokens:   GenesisTotalTokens,
+		BaseFee:       GenesisBaseFee,
+		BaseReserve:   GenesisBaseReserve,
+		CloseTime:     time.Now().Unix(),
+	}
+	b, err := pb.Encode(header)
+	if err != nil {
+		return err
+	}
+	h := crypto.SHA256Hash(b)
+	lm.store.Set(lm.bucket, []byte(h), b)
+
+	// advance current ledger header
+	lm.prevLedgerHeader = lm.currLedgerHeader
+	lm.prevLedgerHeaderHash = lm.currLedgerHeaderHash
+	lm.currLedgerHeader = header
+	lm.currLedgerHeaderHash = h
+
+	return nil
 }
