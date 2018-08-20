@@ -22,6 +22,15 @@ func DecodeTx(b []byte) (*Tx, error) {
 	return tx, nil
 }
 
+// decode pb message to nomination
+func DecodeNomination(b []byte) (*Nomination, error) {
+	nom := &Nomination{}
+	if err := proto.Unmarshal(b, nom); err != nil {
+		return nil, err
+	}
+	return nom, nil
+}
+
 // decode pb message to CreateAccountOp
 func DecodeCreateAccountOp(b []byte) (*CreateAccountOp, error) {
 	op := &CreateAccountOp{}

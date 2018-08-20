@@ -15,7 +15,7 @@ message ConsensusValue {
 // related to FBA consensus should contain the quorum of 
 // the node
 message Quorum {
-  uint32 Threshold = 1;
+  double Threshold = 1;
   string Validators = 2;
   repeated Quorum NestQuorums = 3;
 }
