@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package cmd
+package app
 
 import (
 	"errors"
@@ -24,10 +24,15 @@ import (
 	"github.com/ultiledger/go-ultiledger/api"
 )
 
-var startCmd = &cobra.Command{
-	Use:   "start",
-	Short: "Start a new network",
-	Long:  `Bootstrap a new network with all the subsystems initialized`,
+var restartCmd = &cobra.Command{
+	Use:   "restart",
+	Short: "A brief description of your command",
+	Long: `A longer description that spans multiple lines and likely contains examples
+and usage of using your command. For example:
+
+Cobra is a CLI library for Go that empowers applications.
+This application is a tool to generate the needed files
+to quickly create a Cobra application.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		// read in config file
 		if cfgFile == "" {
@@ -43,16 +48,14 @@ var startCmd = &cobra.Command{
 		if err != nil {
 			log.Fatal(err)
 		}
-		// bootstrap a new ULTNode
+		// Restart an existing ULTNode
 		n := api.NewULTNode(c)
-		n.Start()
+		n.Restart()
 	},
 }
 
-var cfgFile string
-
 func init() {
-	startCmd.Flags().StringVarP(&cfgFile, "config", "c", "", "Help message for toggle")
-	startCmd.MarkFlagRequired("config")
-	rootCmd.AddCommand(startCmd)
+	restartCmd.Flags().StringVarP(&cfgFile, "config", "c", "", "Help message for toggle")
+	restartCmd.MarkFlagRequired("config")
+	rootCmd.AddCommand(restartCmd)
 }

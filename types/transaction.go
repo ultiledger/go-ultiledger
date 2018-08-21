@@ -1,7 +1,7 @@
 package types
 
 import (
-	"github.com/ultiledger/go-ultiledger/ultpb"
+	pb "github.com/ultiledger/go-ultiledger/ultpb"
 )
 
 type TxHistory struct {

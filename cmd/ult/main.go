@@ -14,8 +14,8 @@
 
 package main
 
-import "github.com/ultiledger/go-ultiledger/cmd"
+import "github.com/ultiledger/go-ultiledger/cmd/ult/app"
 
 func main() {
-	cmd.Execute()
+	app.Execute()
 }
