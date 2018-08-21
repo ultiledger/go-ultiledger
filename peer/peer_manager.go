@@ -32,14 +32,13 @@ type PeerManager struct {
 	// connected peers
 	livePeers map[string]*Peer
 
-	// peers need to retry to connect other peers, at most three
-	// times. If the left retry count is zero, it means this peer
-	// is bad and temporarily no need to try to connect it again.
-	// If in some situation, we get request from this peer then the
-	// retry will start again.
-	retryPeers    map[string]int
-	retryStopChan chan struct{}
-	retryChan     chan string
+	// peers waiting to be connected, each peer has three
+	// chances to be connected.
+	pendingPeers map[string]int
+	connectChan  chan string
+
+	// channel for stopping pending peers connection
+	stopChan chan struct{}
 
 	// channel for managing peers
 	addChan    chan *Peer
@@ -48,14 +47,14 @@ type PeerManager struct {
 
 func NewPeerManager(l *zap.SugaredLogger, ps []string, ip string, nodeID string) *PeerManager {
 	return &PeerManager{
-		logger:        l,
-		IP:            ip,
-		NodeID:        nodeID,
-		metadata:      metadata.Pairs(ip, nodeID),
-		initPeers:     ps,
-		retryPeers:    make(map[string]int),
-		livePeers:     make(map[string]*Peer),
-		retryStopChan: make(chan struct{}),
+		logger:       l,
+		IP:           ip,
+		NodeID:       nodeID,
+		metadata:     metadata.Pairs(ip, nodeID),
+		initPeers:    ps,
+		pendingPeers: make(map[string]int),
+		livePeers:    make(map[string]*Peer),
+		stopChan:     make(chan struct{}),
 	}
 }
 
@@ -66,13 +65,13 @@ func (pm *PeerManager) Start(stopChan chan struct{}) {
 			p, err := pm.connectPeer(addr)
 			if err != nil {
 				pm.logger.Warnw("failed to connect to peer", "addr", addr)
-				pm.retryPeers[addr] = 3
+				pm.pendingPeers[addr] = 3
 				continue
 			}
 			pm.livePeers[addr] = p
 		}
 
-		go pm.retryConnect()
+		go pm.connect()
 
 		for {
 			select {
@@ -83,8 +82,8 @@ func (pm *PeerManager) Start(stopChan chan struct{}) {
 					delete(pm.livePeers, p.Addr)
 				}
 			case <-stopChan:
-				close(pm.retryStopChan) // stop retry first
-				pm.retryPeers = nil
+				close(pm.stopChan) // stop retry first
+				pm.pendingPeers = nil
 				for _, p := range pm.livePeers {
 					p.Close()
 				}
@@ -105,25 +104,25 @@ func (pm *PeerManager) connectPeer(addr string) (*Peer, error) {
 	return &Peer{Addr: addr, ConnTime: time.Now().Unix(), client: client, conn: conn}, nil
 }
 
-// retry to connect peer
-func (pm *PeerManager) retryConnect() {
+// try to connect to peers periodically
+func (pm *PeerManager) connect() {
 	ticker := time.NewTicker(1 * time.Second)
 	for {
 		select {
 		case <-ticker.C:
-			if len(pm.retryPeers) == 0 {
+			if len(pm.pendingPeers) == 0 {
 				continue
 			}
-			for addr, count := range pm.retryPeers {
+			for addr, count := range pm.pendingPeers {
 				if count == 0 {
-					delete(pm.retryPeers, addr)
+					delete(pm.pendingPeers, addr)
 					continue
 				}
 				p, err := pm.connectPeer(addr)
 				if err != nil {
 					pm.logger.Warnw("failed to connect to peer", "addr", addr)
 					count -= 1
-					pm.retryPeers[addr] = count
+					pm.pendingPeers[addr] = count
 					continue
 				}
 				// healthcheck the peer and save the nodeID
@@ -136,20 +135,23 @@ func (pm *PeerManager) retryConnect() {
 				p.Addr = ip // TODO(bobonovski) check whether the dial IP is the same as the response IP?
 				p.NodeID = nodeID
 
-				delete(pm.retryPeers, addr)
+				delete(pm.pendingPeers, addr)
 
 				select {
 				case pm.addChan <- p:
-				case <-pm.retryStopChan:
+				case <-pm.stopChan:
 					return
 				}
 			}
-		case addr := <-pm.retryChan:
-			if _, ok := pm.retryPeers[addr]; ok {
+		case addr := <-pm.connectChan:
+			if _, ok := pm.pendingPeers[addr]; ok {
 				continue
 			}
-			pm.retryPeers[addr] = 3
-		case <-pm.retryStopChan:
+			if _, ok := pm.livePeers[addr]; ok {
+				continue
+			}
+			pm.pendingPeers[addr] = 3
+		case <-pm.stopChan:
 			return
 		}
 	}
