@@ -55,37 +55,39 @@ func NewPeerManager(l *zap.SugaredLogger, ps []string, ip string, nodeID string)
 }
 
 func (pm *PeerManager) Start(stopChan chan struct{}) {
-	// connect to inital peers
-	for _, addr := range pm.initPeers {
-		p, err := pm.connectPeer(addr)
-		if err != nil {
-			pm.logger.Warnw("failed to connect to peer", "addr", addr)
-			pm.retryPeers[addr] = 3
-			continue
-		}
-		pm.livePeers[addr] = p
-	}
-
-	go pm.retryConnect()
-
-	for {
-		select {
-		case p := <-pm.addChan:
-			pm.livePeers[p.Addr] = p
-		case p := <-pm.deleteChan: // only delete connected peers
-			if _, ok := pm.livePeers[p.Addr]; ok {
-				delete(pm.livePeers, p.Addr)
+	go func() {
+		// connect to inital peers
+		for _, addr := range pm.initPeers {
+			p, err := pm.connectPeer(addr)
+			if err != nil {
+				pm.logger.Warnw("failed to connect to peer", "addr", addr)
+				pm.retryPeers[addr] = 3
+				continue
 			}
-		case <-stopChan:
-			close(pm.retryStopChan) // stop retry first
-			pm.retryPeers = nil
-			for _, p := range pm.livePeers {
-				p.Close()
-			}
-			pm.livePeers = nil
-			return
+			pm.livePeers[addr] = p
 		}
-	}
+
+		go pm.retryConnect()
+
+		for {
+			select {
+			case p := <-pm.addChan:
+				pm.livePeers[p.Addr] = p
+			case p := <-pm.deleteChan: // only delete connected peers
+				if _, ok := pm.livePeers[p.Addr]; ok {
+					delete(pm.livePeers, p.Addr)
+				}
+			case <-stopChan:
+				close(pm.retryStopChan) // stop retry first
+				pm.retryPeers = nil
+				for _, p := range pm.livePeers {
+					p.Close()
+				}
+				pm.livePeers = nil
+				return
+			}
+		}
+	}()
 }
 
 // ConnectPeer connects the remote peer with provided network address

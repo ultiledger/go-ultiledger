@@ -8,6 +8,7 @@ import (
 
 	"github.com/ultiledger/go-ultiledger/crypto"
 	"github.com/ultiledger/go-ultiledger/db"
+	"github.com/ultiledger/go-ultiledger/peer"
 	pb "github.com/ultiledger/go-ultiledger/ultpb"
 )
 
@@ -19,6 +20,9 @@ type Engine struct {
 
 	logger *zap.SugaredLogger
 
+	// peer manager for sending messages
+	pm *peer.PeerManager
+
 	// consensus quorum
 	quorum *pb.Quorum
 
@@ -28,17 +32,23 @@ type Engine struct {
 	// vote round
 	roundNum uint32
 
+	// consensus protocol
+	cp *ucp
+
 	// transactions waiting to be include in the ledger
 	txSet  mapset.Set
 	txList []*pb.Tx
+
+	nominateChan chan string
 }
 
 func NewEngine(d db.DB, l *zap.SugaredLogger) *Engine {
 	e := &Engine{
 		store:         d,
-		bucket:        "FBA",
+		bucket:        "ENGINE",
 		logger:        l,
 		latestSlotIdx: uint64(0),
+		cp:            newUCP(d, l),
 		txSet:         mapset.NewSet(),
 	}
 	err := e.store.CreateBucket(e.bucket)
@@ -46,6 +56,17 @@ func NewEngine(d db.DB, l *zap.SugaredLogger) *Engine {
 		e.logger.Fatal(err)
 	}
 	return e
+}
+
+func (e *Engine) Start(stopChan chan struct{}) {
+	go func() {
+		for {
+			select {
+			case <-stopChan:
+				return
+			}
+		}
+	}()
 }
 
 // Add transaction to internal pending set
