@@ -10,6 +10,7 @@ import (
 	"github.com/ultiledger/go-ultiledger/crypto"
 	"github.com/ultiledger/go-ultiledger/db"
 	"github.com/ultiledger/go-ultiledger/peer"
+	"github.com/ultiledger/go-ultiledger/types"
 	pb "github.com/ultiledger/go-ultiledger/ultpb"
 )
 
@@ -43,7 +44,7 @@ type Engine struct {
 	txSet mapset.Set
 
 	// accountID to txList map
-	txMap map[string][]*pb.Tx
+	txMap map[string]*types.TxHistory
 
 	nominateChan chan string
 }
@@ -58,6 +59,7 @@ func NewEngine(d db.DB, l *zap.SugaredLogger, pm *peer.Manager, am *account.Mana
 		latestSlotIdx: uint64(0),
 		cp:            newUCP(d, l),
 		txSet:         mapset.NewSet(),
+		txMap:         make(map[string]*types.TxHistory),
 	}
 	err := e.store.CreateBucket(e.bucket)
 	if err != nil {
@@ -87,9 +89,7 @@ func (e *Engine) AddTx(tx *pb.Tx) error {
 	if e.txSet.Contains(h) {
 		return errors.New("duplicate transaction")
 	}
-
 	e.txSet.Add(h)
-	e.txMap[tx.AccountID] = append(e.txMap[tx.AccountID], tx)
 
 	return nil
 }
