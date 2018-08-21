@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/metadata"
 
 	"github.com/ultiledger/go-ultiledger/ultpb/rpc"
 )
@@ -20,6 +21,9 @@ type Peer struct {
 	Role string
 	// connection time
 	ConnTime int64
+
+	// metadata for outgoing context
+	metadata metadata.MD
 
 	// grpc service client
 	client rpc.ULTNodeClient
@@ -42,7 +46,8 @@ func (p *Peer) Close() {
 // HealthCheck checks the health of remote peer and at the
 // same time exchanges nodeID (public key) between peers
 func (p *Peer) HealthCheck(ip string, nodeID string) (string, string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(1*time.Second))
+	ctx := metadata.NewOutgoingContext(context.Background(), p.metadata)
+	ctx, cancel := context.WithTimeout(ctx, time.Duration(1*time.Second))
 	defer cancel()
 
 	req := rpc.HealthCheckRequest{IP: ip, NodeID: nodeID}

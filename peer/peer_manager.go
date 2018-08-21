@@ -5,6 +5,7 @@ import (
 
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/metadata"
 
 	"github.com/ultiledger/go-ultiledger/ultpb/rpc"
 )
@@ -18,6 +19,9 @@ type PeerManager struct {
 
 	// NodeID of the node
 	NodeID string
+
+	// Metadata for gRPC context
+	metadata metadata.MD
 
 	// initial peer addresses
 	initPeers []string
@@ -47,6 +51,7 @@ func NewPeerManager(l *zap.SugaredLogger, ps []string, ip string, nodeID string)
 		logger:        l,
 		IP:            ip,
 		NodeID:        nodeID,
+		metadata:      metadata.Pairs(ip, nodeID),
 		initPeers:     ps,
 		retryPeers:    make(map[string]int),
 		livePeers:     make(map[string]*Peer),
