@@ -45,19 +45,21 @@ func (p *Peer) Close() {
 
 // HealthCheck checks the health of remote peer and at the
 // same time exchanges nodeID (public key) between peers
-func (p *Peer) HealthCheck(ip string, nodeID string) (string, string, error) {
+func (p *Peer) HealthCheck() (string, string, error) {
 	ctx := metadata.NewOutgoingContext(context.Background(), p.metadata)
 	ctx, cancel := context.WithTimeout(ctx, time.Duration(1*time.Second))
 	defer cancel()
 
-	req := rpc.HealthCheckRequest{IP: ip, NodeID: nodeID}
-	resp, err := p.client.HealthCheck(ctx, &req)
+	var header metadata.MD
+
+	req := rpc.HealthCheckRequest{}
+	_, err := p.client.HealthCheck(ctx, &req, grpc.Header(&header))
 	if err != nil {
 		return "", "", err
 	}
-	if resp.IP == "" || resp.NodeID == "" {
+	if len(header.Get("IP")) == 0 || len(header.Get("NodeID")) == 0 {
 		return "", "", errors.New("empty peer IP or NodeID")
 	}
 
-	return resp.IP, resp.NodeID, nil
+	return header.Get("IP")[0], header.Get("NodeID")[0], nil
 }

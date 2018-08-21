@@ -127,7 +127,7 @@ func (pm *PeerManager) retryConnect() {
 					continue
 				}
 				// healthcheck the peer and save the nodeID
-				ip, nodeID, err := p.HealthCheck(pm.IP, pm.NodeID)
+				ip, nodeID, err := p.HealthCheck()
 				if err != nil {
 					pm.logger.Warnw("peer is not health", "peerIP", p.Addr)
 					p.Close()
