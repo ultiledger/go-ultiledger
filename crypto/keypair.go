@@ -2,11 +2,11 @@ package crypto
 
 import (
 	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
 
+	b58 "github.com/mr-tron/base58/base58"
 	"golang.org/x/crypto/ed25519"
 )
 
@@ -20,10 +20,15 @@ func ed25519Keypair() (string, string, error) {
 		return "", "", err
 	}
 	privateKey := ed25519.NewKeyFromSeed(seed[:])
-	publicKey := privateKey.Public()
+	publicKey := privateKey.Public().(ed25519.PublicKey)
 
-	pubKeyStr := fmt.Sprintf("%x", publicKey)
-	seedStr := fmt.Sprintf("%x", seed)
+	var pk [32]byte
+	copy(pk[:], publicKey)
+	acc := &ULTKey{Code: KeyTypeAccountID, Hash: pk}
+	sd := &ULTKey{Code: KeyTypeSeed, Hash: seed}
+
+	pubKeyStr := EncodeKey(acc)
+	seedStr := EncodeKey(sd)
 
 	return pubKeyStr, seedStr, nil
 }
@@ -35,11 +40,11 @@ func getPrivateKey(seed string) (ed25519.PrivateKey, error) {
 	if seed == "" {
 		return nil, fmt.Errorf("empty seed")
 	}
-	b, err := hex.DecodeString(seed)
+	k, err := DecodeKey(seed)
 	if err != nil {
 		return nil, err
 	}
-	privateKey := ed25519.NewKeyFromSeed(b)
+	privateKey := ed25519.NewKeyFromSeed(k.Hash[:])
 	return privateKey, nil
 }
 
@@ -57,11 +62,19 @@ func GenerateKeypairFromSeed(seed []byte) (string, string, error) {
 	if len(seed) != 32 {
 		return "", "", errors.New("Invalid seed, byte length is not 32")
 	}
-	privateKey := ed25519.NewKeyFromSeed(seed[:])
-	publicKey := privateKey.Public()
+	privateKey := ed25519.NewKeyFromSeed(seed)
+	publicKey := privateKey.Public().(ed25519.PublicKey)
 
-	pubKeyStr := fmt.Sprintf("%x", publicKey)
-	seedStr := fmt.Sprintf("%x", seed)
+	var pk [32]byte
+	copy(pk[:], publicKey)
+	acc := &ULTKey{Code: KeyTypeAccountID, Hash: pk}
+
+	var sdk [32]byte
+	copy(sdk[:], seed)
+	sd := &ULTKey{Code: KeyTypeSeed, Hash: sdk}
+
+	pubKeyStr := EncodeKey(acc)
+	seedStr := EncodeKey(sd)
 
 	return pubKeyStr, seedStr, nil
 
@@ -73,20 +86,23 @@ func Sign(seed string, data []byte) (string, error) {
 	if err != nil {
 		return "", err
 	}
+
 	signature := ed25519.Sign(pk, data)
-	return hex.EncodeToString(signature), nil
+	signStr := b58.Encode(signature)
+
+	return signStr, nil
 }
 
 // verify the data signature
 func Verify(publicKey, signature string, data []byte) bool {
-	b, err := hex.DecodeString(publicKey)
+	pk, err := DecodeKey(publicKey)
 	if err != nil {
 		return false
 	}
-	s, err := hex.DecodeString(signature)
+	sn, err := b58.Decode(signature)
 	if err != nil {
 		return false
 	}
-	pub := ed25519.PublicKey(b)
-	return ed25519.Verify(pub, data, s)
+	pub := ed25519.PublicKey(pk.Hash[:])
+	return ed25519.Verify(pub, data, sn)
 }

@@ -8,10 +8,10 @@ import (
 )
 
 var (
-	testSeed       string = "3ac371907afa714b434af49b7a215fd1010d8561c22ef987a47e078549ef21a9"
-	testPublicKey  string = "9f6a604c5091f713584f2b9e48d0497106bc70335914f0d19c6df3b7b038e01b"
-	testPrivateKey string = "3ac371907afa714b434af49b7a215fd1010d8561c22ef987a47e078549ef21a99f6a604c5091f713584f2b9e48d0497106bc70335914f0d19c6df3b7b038e01b"
-	testSignature  string = "930a1a48958f2393e75a6844d4555a43244cedb321d86ad35c9342db8818fd1330e40f63555ed8c0e5cb1fb2a61cbb91ffb2fb9dd80f2229ef96373520d2940d"
+	testSeed       string = "rxQoxmefYtC3RmyZU11XgcYezNZsUA2Ayik5oeTWdfga"
+	testPublicKey  string = "PSJdZ8VqyEm1cX6fjiVBDsjrMqgn3NemV6bYDPnNuZQS"
+	testPrivateKey string = "e63e868ca423ed97006664b95e3d7f61f10fd61326b59c0c06d6e1c3e15e573f4d5c9132eade89cbba84cb6373198c51373b0ecbc09d069c84504f2bcfd0c7df"
+	testSignature  string = "25YcdK5GdEXLCbg3eB6R7HBhNAufZt6D8JABpW7j2tamxjcABuVema64VtsmWyCNEPWmQoBBkjsfe7RAmfsDss8K"
 	testData       string = "ultiledger is awesome!"
 )
 

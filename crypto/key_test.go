@@ -14,7 +14,7 @@ var (
 	testKeyAccountID   string = "MUVzSrCzNYTfGEZEwYSkn5zykhhd1MJNaXtezC8PuBat"
 	testKeySecretKey   string = "ehpMwdxbAbCRqKLfAid3yJoW1CLwkZNU4aqyr7ZAR8qA"
 	testKeyTransaction string = "ww8jSRiBxdwCQQ85PtoMAXc2FgzGVmSZYdoJi2yvw65S"
-	testKeySignature   string = "2FAT6wDTnkgfxyUuVd4yeMkQYWBdbEyWf2gkdZxQhT3Ki"
+	testKeySignature   string = "25YcdK5GdEXLCbg3eB6R7HBhNAufZt6D8JABpW7j2tamxjcABuVema64VtsmWyCNEPWmQoBBkjsfe7RAmfsDss8K"
 )
 
 // test validity of supplied key
@@ -22,7 +22,6 @@ func TestKeyValidity(t *testing.T) {
 	assert.Equal(t, true, IsValidKey(testKeyAccountID))
 	assert.Equal(t, true, IsValidKey(testKeySecretKey))
 	assert.Equal(t, true, IsValidKey(testKeyTransaction))
-	assert.Equal(t, true, IsValidKey(testKeySignature))
 
 	// test empty key string
 	assert.Equal(t, false, IsValidKey(""))
@@ -40,7 +39,7 @@ func TestKeyValidity(t *testing.T) {
 
 // test base58 encoding of AccountID key
 func TestKeyAccountID(t *testing.T) {
-	tk := ULTKey{Code: keyTypeAccountID}
+	tk := ULTKey{Code: KeyTypeAccountID}
 	copy(tk.Hash[:], testHash)
 
 	var buf bytes.Buffer
@@ -50,9 +49,9 @@ func TestKeyAccountID(t *testing.T) {
 	assert.Equal(t, testKeyAccountID, b58code)
 }
 
-// test base58 encoding of SecretKey key
-func TestKeySecretKey(t *testing.T) {
-	tk := ULTKey{Code: keyTypeSecretKey}
+// test base58 encoding of Seed key
+func TestKeySeed(t *testing.T) {
+	tk := ULTKey{Code: KeyTypeSeed}
 	copy(tk.Hash[:], testHash)
 
 	var buf bytes.Buffer
@@ -64,7 +63,7 @@ func TestKeySecretKey(t *testing.T) {
 
 // test base58 encoding of Transaction key
 func TestKeyTransaction(t *testing.T) {
-	tk := ULTKey{Code: keyTypeTransaction}
+	tk := ULTKey{Code: KeyTypeTransaction}
 	copy(tk.Hash[:], testHash)
 
 	var buf bytes.Buffer
@@ -72,16 +71,4 @@ func TestKeyTransaction(t *testing.T) {
 
 	b58code := b58.Encode(buf.Bytes())
 	assert.Equal(t, testKeyTransaction, b58code)
-}
-
-// test base58 encoding of Signature key
-func TestKeySignature(t *testing.T) {
-	tk := ULTKey{Code: keyTypeSignature}
-	copy(tk.Hash[:], testHash)
-
-	var buf bytes.Buffer
-	binary.Write(&buf, binary.BigEndian, tk)
-
-	b58code := b58.Encode(buf.Bytes())
-	assert.Equal(t, testKeySignature, b58code)
 }

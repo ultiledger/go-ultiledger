@@ -16,7 +16,6 @@ const (
 	KeyTypeAccountID
 	KeyTypeSeed
 	KeyTypeTransaction
-	KeyTypeSignature
 	KeyTypeNodeID
 )
 
@@ -55,8 +54,6 @@ func DecodeKey(key string) (*ULTKey, error) {
 	case KeyTypeSeed:
 		fallthrough
 	case KeyTypeTransaction:
-		fallthrough
-	case KeyTypeSignature:
 		fallthrough
 	case KeyTypeNodeID:
 		return &ultKey, nil
