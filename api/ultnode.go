@@ -11,6 +11,7 @@ import (
 	c "github.com/ultiledger/go-ultiledger/consensus"
 	"github.com/ultiledger/go-ultiledger/ledger"
 	"github.com/ultiledger/go-ultiledger/peer"
+	pb "github.com/ultiledger/go-ultiledger/ultpb"
 	"github.com/ultiledger/go-ultiledger/ultpb/rpc"
 )
 
@@ -37,8 +38,10 @@ type ultNode struct {
 	// engine of consensus
 	engine *c.Engine
 
-	// channel for triggering nomination
-	nominateChan chan struct{}
+	// channel for receiving nomination
+	nominateChan chan *pb.Statement
+	// channel for receiving transaction
+	txChan chan *pb.Tx
 	// channel for stopping all the subroutines
 	stopChan chan struct{}
 }
@@ -62,15 +65,20 @@ func NewULTNode(conf *ultNodeConfig) *ultNode {
 	ip := addr.String()
 	nodeID := conf.NodeID
 
+	txC := make(chan *pb.Tx)
+	nominateC := make(chan *pb.Statement)
+
 	node := &ultNode{
-		config:    conf,
-		logger:    l.Sugar(),
-		server:    NewULTNodeServer(ip),
-		pm:        peer.NewPeerManager(l.Sugar(), conf.Peers, ip, nodeID),
-		IP:        ip,
-		NodeID:    nodeID,
-		StartTime: time.Now().Unix(),
-		stopChan:  make(chan struct{}),
+		config:       conf,
+		logger:       l.Sugar(),
+		server:       NewULTNodeServer(ip, nodeID, txC, nominateC),
+		pm:           peer.NewPeerManager(l.Sugar(), conf.Peers, ip, nodeID),
+		IP:           ip,
+		NodeID:       nodeID,
+		StartTime:    time.Now().Unix(),
+		txChan:       txC,
+		nominateChan: nominateC,
+		stopChan:     make(chan struct{}),
 	}
 
 	return node
@@ -81,6 +89,9 @@ func NewULTNode(conf *ultNodeConfig) *ultNode {
 func (u *ultNode) Start() error {
 	// start node server
 	go u.serveULTNode()
+
+	// start node event loop
+	go u.eventLoop()
 
 	// start peer manager
 	u.pm.Start(u.stopChan)
@@ -101,6 +112,8 @@ func (u *ultNode) eventLoop() {
 	for {
 		select {
 		case <-u.nominateChan:
+			// TODO
+		case <-u.txChan:
 			// TODO
 		case <-u.stopChan:
 			u.logger.Infof("shutdown event loop")
