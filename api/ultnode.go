@@ -31,9 +31,9 @@ type ultNode struct {
 	// ULTNode server
 	server *ULTNodeServer
 	// peer manager
-	pm *peer.PeerManager
+	pm *peer.Manager
 	// ledger manager
-	lm *ledger.LedgerManager
+	lm *ledger.Manager
 
 	// engine of consensus
 	engine *c.Engine
@@ -72,7 +72,7 @@ func NewULTNode(conf *ultNodeConfig) *ultNode {
 		config:       conf,
 		logger:       l.Sugar(),
 		server:       NewULTNodeServer(ip, nodeID, txC, nominateC),
-		pm:           peer.NewPeerManager(l.Sugar(), conf.Peers, ip, nodeID),
+		pm:           peer.NewManager(l.Sugar(), conf.Peers, ip, nodeID),
 		IP:           ip,
 		NodeID:       nodeID,
 		StartTime:    time.Now().Unix(),

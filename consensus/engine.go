@@ -6,6 +6,7 @@ import (
 	"github.com/deckarep/golang-set"
 	"go.uber.org/zap"
 
+	"github.com/ultiledger/go-ultiledger/account"
 	"github.com/ultiledger/go-ultiledger/crypto"
 	"github.com/ultiledger/go-ultiledger/db"
 	"github.com/ultiledger/go-ultiledger/peer"
@@ -21,7 +22,10 @@ type Engine struct {
 	logger *zap.SugaredLogger
 
 	// peer manager for sending messages
-	pm *peer.PeerManager
+	pm *peer.Manager
+
+	// account manager for query account
+	am *account.Manager
 
 	// consensus quorum
 	quorum *pb.Quorum
@@ -36,17 +40,21 @@ type Engine struct {
 	cp *ucp
 
 	// transactions waiting to be include in the ledger
-	txSet  mapset.Set
-	txList []*pb.Tx
+	txSet mapset.Set
+
+	// accountID to txList map
+	txMap map[string][]*pb.Tx
 
 	nominateChan chan string
 }
 
-func NewEngine(d db.DB, l *zap.SugaredLogger) *Engine {
+func NewEngine(d db.DB, l *zap.SugaredLogger, pm *peer.Manager, am *account.Manager) *Engine {
 	e := &Engine{
 		store:         d,
 		bucket:        "ENGINE",
 		logger:        l,
+		pm:            pm,
+		am:            am,
 		latestSlotIdx: uint64(0),
 		cp:            newUCP(d, l),
 		txSet:         mapset.NewSet(),
@@ -81,7 +89,7 @@ func (e *Engine) AddTx(tx *pb.Tx) error {
 	}
 
 	e.txSet.Add(h)
-	e.txList = append(e.txList, tx)
+	e.txMap[tx.AccountID] = append(e.txMap[tx.AccountID], tx)
 
 	return nil
 }

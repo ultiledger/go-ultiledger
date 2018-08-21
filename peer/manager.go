@@ -10,8 +10,8 @@ import (
 	"github.com/ultiledger/go-ultiledger/ultpb/rpc"
 )
 
-// PeerManager manages the CRUD of peers
-type PeerManager struct {
+// Manager manages the CRUD of peers
+type Manager struct {
 	logger *zap.SugaredLogger
 
 	// IP of the node
@@ -45,8 +45,8 @@ type PeerManager struct {
 	deleteChan chan *Peer
 }
 
-func NewPeerManager(l *zap.SugaredLogger, ps []string, ip string, nodeID string) *PeerManager {
-	return &PeerManager{
+func NewManager(l *zap.SugaredLogger, ps []string, ip string, nodeID string) *Manager {
+	return &Manager{
 		logger:       l,
 		IP:           ip,
 		NodeID:       nodeID,
@@ -58,7 +58,7 @@ func NewPeerManager(l *zap.SugaredLogger, ps []string, ip string, nodeID string)
 	}
 }
 
-func (pm *PeerManager) Start(stopChan chan struct{}) {
+func (pm *Manager) Start(stopChan chan struct{}) {
 	go func() {
 		// connect to inital peers
 		for _, addr := range pm.initPeers {
@@ -95,7 +95,7 @@ func (pm *PeerManager) Start(stopChan chan struct{}) {
 }
 
 // ConnectPeer connects the remote peer with provided network address
-func (pm *PeerManager) connectPeer(addr string) (*Peer, error) {
+func (pm *Manager) connectPeer(addr string) (*Peer, error) {
 	conn, err := grpc.Dial(addr, grpc.WithInsecure(), grpc.WithBlock(), grpc.WithTimeout(1*time.Second))
 	if err != nil {
 		return nil, err
@@ -105,7 +105,7 @@ func (pm *PeerManager) connectPeer(addr string) (*Peer, error) {
 }
 
 // try to connect to peers periodically
-func (pm *PeerManager) connect() {
+func (pm *Manager) connect() {
 	ticker := time.NewTicker(1 * time.Second)
 	for {
 		select {

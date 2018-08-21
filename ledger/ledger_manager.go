@@ -33,7 +33,7 @@ var (
 )
 
 // ledger manager is responsible for all the operations on ledgers
-type LedgerManager struct {
+type Manager struct {
 	// db store and corresponding bucket
 	store  db.DB
 	bucket string
@@ -62,8 +62,8 @@ type LedgerManager struct {
 	currLedgerHeaderHash string
 }
 
-func NewLedgerManager(d db.DB, l *zap.SugaredLogger) *LedgerManager {
-	lm := &LedgerManager{
+func NewManager(d db.DB, l *zap.SugaredLogger) *Manager {
+	lm := &Manager{
 		store:       d,
 		bucket:      "LEDGERS",
 		logger:      l,
@@ -78,7 +78,7 @@ func NewLedgerManager(d db.DB, l *zap.SugaredLogger) *LedgerManager {
 }
 
 // Start the genesis ledger and initialize master account
-func (lm *LedgerManager) CreateGenesisLedger() error {
+func (lm *Manager) CreateGenesisLedger() error {
 	genesis := &pb.LedgerHeader{
 		Version:       GenesisVersion,
 		MaxTxListSize: GenesisMaxTxListSize,
@@ -105,7 +105,7 @@ func (lm *LedgerManager) CreateGenesisLedger() error {
 }
 
 // Get the current latest ledger header
-func (lm *LedgerManager) CurrLedgerHeader() *pb.LedgerHeader {
+func (lm *Manager) CurrLedgerHeader() *pb.LedgerHeader {
 	// current ledger header should always exist
 	if lm.currLedgerHeader == nil {
 		lm.logger.Fatal(errors.New("current ledger header is nil"))
@@ -114,7 +114,7 @@ func (lm *LedgerManager) CurrLedgerHeader() *pb.LedgerHeader {
 }
 
 // Get the hash of current latest ledger header
-func (lm *LedgerManager) CurrLedgerHeaderHash() string {
+func (lm *Manager) CurrLedgerHeaderHash() string {
 	// current ledger header hash should always exist
 	if lm.currLedgerHeaderHash == "" {
 		lm.logger.Fatal(errors.New("current ledger header hash is empty string"))
@@ -123,7 +123,7 @@ func (lm *LedgerManager) CurrLedgerHeaderHash() string {
 }
 
 // Get the sequence number of next ledger header
-func (lm *LedgerManager) NextLedgerHeaderSeq() uint64 {
+func (lm *Manager) NextLedgerHeaderSeq() uint64 {
 	// current ledger header should always exist
 	if lm.currLedgerHeader == nil {
 		lm.logger.Fatal(errors.New("current ledger header is nil"))
@@ -133,7 +133,7 @@ func (lm *LedgerManager) NextLedgerHeaderSeq() uint64 {
 
 // Append the committed transaction list to current ledger, the operation
 // is only valid when the ledger manager in synced state.
-func (lm *LedgerManager) AppendTxList(seq uint64, prevHeaderHash string, txHash string) error {
+func (lm *Manager) AppendTxList(seq uint64, prevHeaderHash string, txHash string) error {
 	if lm.ledgerState != SYNCED {
 		return ErrLedgerNotSynced
 	}
