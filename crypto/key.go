@@ -13,10 +13,11 @@ type KeyType uint8
 // enumeration of key type
 const (
 	_ KeyType = iota // skip zero
-	keyTypeAccountID
-	keyTypeSecretKey
-	keyTypeTransaction
-	keyTypeSignature
+	KeyTypeAccountID
+	KeyTypeSeed
+	KeyTypeTransaction
+	KeyTypeSignature
+	KeyTypeNodeID
 )
 
 var (
@@ -49,20 +50,22 @@ func DecodeKey(key string) (*ULTKey, error) {
 	}
 
 	switch ultKey.Code {
-	case keyTypeAccountID:
+	case KeyTypeAccountID:
 		fallthrough
-	case keyTypeSecretKey:
+	case KeyTypeSeed:
 		fallthrough
-	case keyTypeTransaction:
+	case KeyTypeTransaction:
 		fallthrough
-	case keyTypeSignature:
+	case KeyTypeSignature:
+		fallthrough
+	case KeyTypeNodeID:
 		return &ultKey, nil
 	}
 	return nil, ErrInvalidKey
 }
 
 // encode UTLKey to base58 encoded key string
-func EncodeToKey(ultKey *ULTKey) string {
+func EncodeKey(ultKey *ULTKey) string {
 	var buf bytes.Buffer
 	binary.Write(&buf, binary.BigEndian, ultKey)
 	return b58.Encode(buf.Bytes())
