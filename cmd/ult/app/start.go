@@ -39,12 +39,12 @@ var startCmd = &cobra.Command{
 			log.Fatal(err)
 		}
 		// init node config from viper
-		c, err := api.NewULTNodeConfig(v)
+		c, err := api.NewConfig(v)
 		if err != nil {
 			log.Fatal(err)
 		}
 		// bootstrap a new ULTNode
-		n := api.NewULTNode(c)
+		n := api.NewNode(c)
 		n.Start()
 	},
 }

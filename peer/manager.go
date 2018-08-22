@@ -100,7 +100,7 @@ func (pm *Manager) connectPeer(addr string) (*Peer, error) {
 	if err != nil {
 		return nil, err
 	}
-	client := rpc.NewULTNodeClient(conn)
+	client := rpc.NewNodeClient(conn)
 	p := &Peer{
 		Addr:     addr,
 		ConnTime: time.Now().Unix(),
@@ -133,7 +133,7 @@ func (pm *Manager) connect() {
 					continue
 				}
 				// healthcheck the peer and save the nodeID
-				ip, nodeID, err := p.HealthCheck()
+				ip, nodeID, err := p.Hello()
 				if err != nil {
 					pm.logger.Warnw("peer is not health", "peerIP", p.Addr)
 					p.Close()

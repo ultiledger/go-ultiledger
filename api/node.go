@@ -15,8 +15,8 @@ import (
 	"github.com/ultiledger/go-ultiledger/ultpb/rpc"
 )
 
-// ultNode is the central controller for ultiledger
-type ultNode struct {
+// Node is the central controller for ultiledger
+type Node struct {
 	// IP address of this node
 	IP string
 	// NodeID of this node
@@ -25,11 +25,11 @@ type ultNode struct {
 	StartTime int64
 
 	// config viper
-	config *ultNodeConfig
+	config *Config
 	// zap logger
 	logger *zap.SugaredLogger
 	// ULTNode server
-	server *ULTNodeServer
+	server *NodeServer
 	// peer manager
 	pm *peer.Manager
 	// ledger manager
@@ -46,8 +46,8 @@ type ultNode struct {
 	stopChan chan struct{}
 }
 
-// NewULTNode creates a ultNode which controls all the sub tasks
-func NewULTNode(conf *ultNodeConfig) *ultNode {
+// NewNode creates a Node which controls all the sub tasks
+func NewNode(conf *Config) *Node {
 	// initialize logger
 	l, err := zap.NewProduction()
 	if err != nil {
@@ -68,10 +68,10 @@ func NewULTNode(conf *ultNodeConfig) *ultNode {
 	txC := make(chan *pb.Tx)
 	nominateC := make(chan *pb.Statement)
 
-	node := &ultNode{
+	node := &Node{
 		config:       conf,
 		logger:       l.Sugar(),
-		server:       NewULTNodeServer(ip, nodeID, txC, nominateC),
+		server:       NewNodeServer(ip, nodeID, txC, nominateC),
 		pm:           peer.NewManager(l.Sugar(), conf.Peers, ip, nodeID),
 		IP:           ip,
 		NodeID:       nodeID,
@@ -86,9 +86,9 @@ func NewULTNode(conf *ultNodeConfig) *ultNode {
 
 // Start checks the provided configurations, if the config is valid,
 // it will trigger sub goroutines to do the sub tasks.
-func (u *ultNode) Start() error {
+func (u *Node) Start() error {
 	// start node server
-	go u.serveULTNode()
+	go u.serveNode()
 
 	// start node event loop
 	go u.eventLoop()
@@ -102,13 +102,13 @@ func (u *ultNode) Start() error {
 
 // Restart checks the provided configurations, if the config is valid,
 // it will trigger sub goroutines to do the sub tasks.
-func (u *ultNode) Restart() error {
+func (u *Node) Restart() error {
 	log.Println("restart called")
 	return nil
 }
 
 // event loop for dealing with various internal events
-func (u *ultNode) eventLoop() {
+func (u *Node) eventLoop() {
 	for {
 		select {
 		case <-u.nominateChan:
@@ -123,7 +123,7 @@ func (u *ultNode) eventLoop() {
 }
 
 // serve starts a listener on the port and starts to accept request
-func (u *ultNode) serveULTNode() {
+func (u *Node) serveNode() {
 	// register rpc service and start the ULTNode server
 	listener, err := net.Listen("tcp", u.config.Port)
 	if err != nil {
@@ -131,7 +131,7 @@ func (u *ultNode) serveULTNode() {
 	}
 
 	s := grpc.NewServer()
-	rpc.RegisterULTNodeServer(s, u.server)
+	rpc.RegisterNodeServer(s, u.server)
 
 	u.logger.Infof("start to serve gRPC requests on %s", u.config.Port)
 	go s.Serve(listener)

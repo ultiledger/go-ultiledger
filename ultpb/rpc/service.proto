@@ -2,22 +2,23 @@ syntax = "proto3";
 
 package rpc;
 
-service ULTNode {
-  rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse) {}
-  rpc SubmitTransaction(SubmitTransactionRequest) returns (SubmitTransactionResponse) {}
+service Node {
+  rpc Hello(HelloRequest) returns (HelloResponse) {}
+  rpc SubmitTx(SubmitTxRequest) returns (SubmitTxResponse) {}
 }
 
-message HealthCheckRequest {}
+message HelloRequest {}
 
-message HealthCheckResponse {}
+message HelloResponse {}
 
-enum TransactionStatusEnum {
-  REJECTED = 0;  // rejected because of some errors
+enum TxStatusEnum {
+  REJECTED = 0;  // rejected because of some immediate error checking
   ACCEPTED = 1;  // transaction accepted but not yet confirmed by consensus
   CONFIRMED = 2; // transaction is valid and confirmed by consensus
+  FAILED = 3;    // failed because of consensus 
 }
 
-message SubmitTransactionRequest {
+message SubmitTxRequest {
   // transaction data in pb format
   bytes Data = 1;
   // digital signature of the data signed by 
@@ -25,11 +26,11 @@ message SubmitTransactionRequest {
   string Signature = 2;
 }
 
-message SubmitTransactionResponse {
-  TransactionStatusEnum TransactionStatus = 1;
+message SubmitTxResponse {
+  TxStatusEnum TxStatus = 1;
   // the transaction hash is only valid when the response
   // status is ACCEPTED or CONFIRMED 
-  string TransactionHash = 2;
+  string TxHash = 2;
   // error message for REJECTED transaction
   string ErrorMessage = 3;
 }

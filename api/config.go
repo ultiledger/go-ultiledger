@@ -7,7 +7,7 @@ import (
 	"github.com/spf13/viper"
 )
 
-type ultNodeConfig struct {
+type Config struct {
 	// network ID hash
 	NetworkID [32]byte
 	// listen port of server
@@ -18,7 +18,7 @@ type ultNodeConfig struct {
 	NodeID string
 }
 
-func NewULTNodeConfig(v *viper.Viper) (*ultNodeConfig, error) {
+func NewConfig(v *viper.Viper) (*Config, error) {
 	if v.GetString("network_id") == "" {
 		return nil, errors.New("network ID is missing")
 	}
@@ -28,7 +28,7 @@ func NewULTNodeConfig(v *viper.Viper) (*ultNodeConfig, error) {
 	if len(v.GetStringSlice("peers")) == 0 {
 		return nil, errors.New("initial peers is empty")
 	}
-	u := ultNodeConfig{
+	u := Config{
 		NetworkID: sha256.Sum256([]byte(v.GetString("network_id"))),
 		Port:      v.GetString("port"),
 		Peers:     v.GetStringSlice("peers"),

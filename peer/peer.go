@@ -26,7 +26,7 @@ type Peer struct {
 	metadata metadata.MD
 
 	// grpc service client
-	client rpc.ULTNodeClient
+	client rpc.NodeClient
 	// underlying network connection
 	conn *grpc.ClientConn
 }
@@ -43,17 +43,17 @@ func (p *Peer) Close() {
 	}
 }
 
-// HealthCheck checks the health of remote peer and at the
+// Hello checks the health of remote peer and at the
 // same time exchanges nodeID (public key) between peers
-func (p *Peer) HealthCheck() (string, string, error) {
+func (p *Peer) Hello() (string, string, error) {
 	ctx := metadata.NewOutgoingContext(context.Background(), p.metadata)
 	ctx, cancel := context.WithTimeout(ctx, time.Duration(1*time.Second))
 	defer cancel()
 
 	var header metadata.MD
 
-	req := rpc.HealthCheckRequest{}
-	_, err := p.client.HealthCheck(ctx, &req, grpc.Header(&header))
+	req := rpc.HelloRequest{}
+	_, err := p.client.Hello(ctx, &req, grpc.Header(&header))
 	if err != nil {
 		return "", "", err
 	}

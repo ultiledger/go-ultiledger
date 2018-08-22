@@ -12,7 +12,7 @@ import (
 	"github.com/ultiledger/go-ultiledger/ultpb/rpc"
 )
 
-type ULTNodeServer struct {
+type NodeServer struct {
 	IP     string // ip address of this node
 	NodeID string // ID of this node (public key)
 
@@ -24,13 +24,13 @@ type ULTNodeServer struct {
 	nominateChan chan *pb.Statement // channel for nomination statement
 }
 
-func NewULTNodeServer(ip string, nodeID string, txC chan *pb.Tx, nominateC chan *pb.Statement) *ULTNodeServer {
-	s := &ULTNodeServer{IP: ip, txChan: txC, nominateChan: nominateC}
+func NewNodeServer(ip string, nodeID string, txC chan *pb.Tx, nominateC chan *pb.Statement) *NodeServer {
+	s := &NodeServer{IP: ip, txChan: txC, nominateChan: nominateC}
 	return s
 }
 
-func (s *ULTNodeServer) HealthCheck(ctx context.Context, req *rpc.HealthCheckRequest) (*rpc.HealthCheckResponse, error) {
-	resp := &rpc.HealthCheckResponse{}
+func (s *NodeServer) Hello(ctx context.Context, req *rpc.HelloRequest) (*rpc.HelloResponse, error) {
+	resp := &rpc.HelloResponse{}
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
 		return resp, errors.New("failed to retrieve incoming context")
@@ -47,6 +47,6 @@ func (s *ULTNodeServer) HealthCheck(ctx context.Context, req *rpc.HealthCheckReq
 	return resp, nil
 }
 
-func (s *ULTNodeServer) SubmitTransaction(ctx context.Context, req *rpc.SubmitTransactionRequest) (*rpc.SubmitTransactionResponse, error) {
+func (s *NodeServer) SubmitTx(ctx context.Context, req *rpc.SubmitTxRequest) (*rpc.SubmitTxResponse, error) {
 	return nil, nil
 }
