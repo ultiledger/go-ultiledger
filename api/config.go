@@ -16,6 +16,10 @@ type Config struct {
 	Peers []string
 	// node ID (public key derived from seed)
 	NodeID string
+	// database backend
+	DBBackend string
+	// database file path
+	DBPath string
 }
 
 func NewConfig(v *viper.Viper) (*Config, error) {

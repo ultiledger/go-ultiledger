@@ -7,8 +7,9 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 
+	"github.com/ultiledger/go-ultiledger/consensus"
 	"github.com/ultiledger/go-ultiledger/crypto"
-	pb "github.com/ultiledger/go-ultiledger/ultpb"
+	"github.com/ultiledger/go-ultiledger/peer"
 	"github.com/ultiledger/go-ultiledger/ultpb/rpc"
 )
 
@@ -18,14 +19,12 @@ type NodeServer struct {
 
 	nodeKey map[string]*crypto.ULTKey
 
-	peerChan chan string // channel for adding new peer IP
-
-	txChan       chan *pb.Tx        // channel for transaction submission
-	nominateChan chan *pb.Statement // channel for nomination statement
+	pm     *peer.Manager
+	engine *consensus.Engine
 }
 
-func NewNodeServer(ip string, nodeID string, txC chan *pb.Tx, nominateC chan *pb.Statement) *NodeServer {
-	s := &NodeServer{IP: ip, txChan: txC, nominateChan: nominateC}
+func NewNodeServer(ip string, nodeID string, pm *peer.Manager, eng *consensus.Engine) *NodeServer {
+	s := &NodeServer{IP: ip, NodeID: nodeID, pm: pm, engine: eng}
 	return s
 }
 
@@ -35,14 +34,17 @@ func (s *NodeServer) Hello(ctx context.Context, req *rpc.HelloRequest) (*rpc.Hel
 	if !ok {
 		return resp, errors.New("failed to retrieve incoming context")
 	}
-	if len(md.Get("IP")) > 0 && len(md.Get("NodeID")) > 0 {
-		s.peerChan <- md.Get("IP")[0]
-		k, err := crypto.DecodeKey(md.Get("NodeID")[0])
-		if err != nil {
-			return resp, errors.New("invalid node ID")
-		}
-		s.nodeKey[md.Get("IP")[0]] = k
+	if len(md.Get("IP")) == 0 || len(md.Get("NodeID")) == 0 {
+		return resp, errors.New("IP address or NodeID is absent")
 	}
+	if err := s.pm.AddPeer(md.Get("IP")[0]); err != nil {
+		return resp, err
+	}
+	k, err := crypto.DecodeKey(md.Get("NodeID")[0])
+	if err != nil {
+		return resp, errors.New("invalid node ID")
+	}
+	s.nodeKey[md.Get("IP")[0]] = k
 	grpc.SendHeader(ctx, metadata.Pairs("IP", s.IP, "NodeID", s.NodeID))
 	return resp, nil
 }

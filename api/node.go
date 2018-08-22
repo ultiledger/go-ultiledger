@@ -8,40 +8,34 @@ import (
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 
-	c "github.com/ultiledger/go-ultiledger/consensus"
+	"github.com/ultiledger/go-ultiledger/account"
+	"github.com/ultiledger/go-ultiledger/consensus"
+	"github.com/ultiledger/go-ultiledger/db"
 	"github.com/ultiledger/go-ultiledger/ledger"
 	"github.com/ultiledger/go-ultiledger/peer"
-	pb "github.com/ultiledger/go-ultiledger/ultpb"
 	"github.com/ultiledger/go-ultiledger/ultpb/rpc"
 )
 
 // Node is the central controller for ultiledger
 type Node struct {
-	// IP address of this node
-	IP string
-	// NodeID of this node
-	NodeID string
-	// start time of the node
-	StartTime int64
-
-	// config viper
-	config *Config
-	// zap logger
+	store  db.DB
 	logger *zap.SugaredLogger
-	// ULTNode server
+
+	// IP address of this node
+	ip string
+	// NodeID of this node
+	nodeID string
+	// start time of the node
+	startTime int64
+
+	config *Config
+
 	server *NodeServer
-	// peer manager
-	pm *peer.Manager
-	// ledger manager
-	lm *ledger.Manager
+	pm     *peer.Manager
+	lm     *ledger.Manager
+	am     *account.Manager
+	engine *consensus.Engine
 
-	// engine of consensus
-	engine *c.Engine
-
-	// channel for receiving nomination
-	nominateChan chan *pb.Statement
-	// channel for receiving transaction
-	txChan chan *pb.Tx
 	// channel for stopping all the subroutines
 	stopChan chan struct{}
 }
@@ -53,6 +47,7 @@ func NewNode(conf *Config) *Node {
 	if err != nil {
 		log.Fatal(err)
 	}
+	logger := l.Sugar()
 
 	// get outbound IP
 	conn, err := net.Dial("udp", "8.8.8.8:80")
@@ -65,20 +60,31 @@ func NewNode(conf *Config) *Node {
 	ip := addr.String()
 	nodeID := conf.NodeID
 
-	txC := make(chan *pb.Tx)
-	nominateC := make(chan *pb.Statement)
+	// create database store
+	ctor, err := db.GetDB(conf.DBBackend)
+	if err != nil {
+		log.Fatal(err)
+	}
+	store := ctor(conf.DBPath)
+
+	pm := peer.NewManager(l.Sugar(), conf.Peers, ip, nodeID)
+	lm := ledger.NewManager(store, logger)
+	am := account.NewManager(store, logger)
+	engine := consensus.NewEngine(store, logger, pm, am)
 
 	node := &Node{
-		config:       conf,
-		logger:       l.Sugar(),
-		server:       NewNodeServer(ip, nodeID, txC, nominateC),
-		pm:           peer.NewManager(l.Sugar(), conf.Peers, ip, nodeID),
-		IP:           ip,
-		NodeID:       nodeID,
-		StartTime:    time.Now().Unix(),
-		txChan:       txC,
-		nominateChan: nominateC,
-		stopChan:     make(chan struct{}),
+		config:    conf,
+		store:     store,
+		logger:    l.Sugar(),
+		server:    NewNodeServer(ip, nodeID, pm, engine),
+		pm:        pm,
+		lm:        lm,
+		am:        am,
+		engine:    engine,
+		ip:        ip,
+		nodeID:    nodeID,
+		startTime: time.Now().Unix(),
+		stopChan:  make(chan struct{}),
 	}
 
 	return node
@@ -111,10 +117,6 @@ func (u *Node) Restart() error {
 func (u *Node) eventLoop() {
 	for {
 		select {
-		case <-u.nominateChan:
-			// TODO
-		case <-u.txChan:
-			// TODO
 		case <-u.stopChan:
 			u.logger.Infof("shutdown event loop")
 			return

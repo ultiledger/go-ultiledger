@@ -1,6 +1,7 @@
 package peer
 
 import (
+	"errors"
 	"time"
 
 	"go.uber.org/zap"
@@ -8,6 +9,10 @@ import (
 	"google.golang.org/grpc/metadata"
 
 	"github.com/ultiledger/go-ultiledger/ultpb/rpc"
+)
+
+var (
+	ErrInvalidIP = errors.New("invalid IP address format")
 )
 
 // Manager manages the CRUD of peers
@@ -54,7 +59,10 @@ func NewManager(l *zap.SugaredLogger, ps []string, ip string, nodeID string) *Ma
 		initPeers:    ps,
 		pendingPeers: make(map[string]int),
 		livePeers:    make(map[string]*Peer),
+		connectChan:  make(chan string, 10),
 		stopChan:     make(chan struct{}),
+		addChan:      make(chan *Peer),
+		deleteChan:   make(chan *Peer),
 	}
 }
 
@@ -92,6 +100,18 @@ func (pm *Manager) Start(stopChan chan struct{}) {
 			}
 		}
 	}()
+}
+
+// add new peer IP address to buffered connect
+// channel and appends to waiting queue if failed
+func (pm *Manager) AddPeer(addr string) error {
+	// TODO(bobonovski) check validity of addr
+	select {
+	case pm.connectChan <- addr:
+		return nil
+	}
+	pm.waitPeers = append(pm.waitPeers, addr)
+	return nil
 }
 
 // ConnectPeer connects the remote peer with provided network address
