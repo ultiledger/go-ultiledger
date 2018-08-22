@@ -2,17 +2,17 @@ syntax = "proto3";
 
 package ultpb;
 
-import "asset.proto";
-
 message Account {
   // public key of this account
   string AccountID = 1;
-  // different assets
-  repeated Asset Assets = 2;
+  // balance in ULUs
+  uint64 Balance = 2;
   // public key of the signer of this account
   string Signer = 3;
   // latest transaction sequence number
   uint64 SequenceNumber = 4;
+  // number of items belong to this account
+  uint32 ItemCount = 5;
   // hashes of transactions belongs to this account
-  repeated string TxHashList = 5;  
+  repeated string TxHashList = 6;  
 }

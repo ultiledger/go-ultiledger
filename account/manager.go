@@ -56,15 +56,9 @@ func (am *Manager) CreateMasterAccount(networkID []byte, balance uint64) error {
 	}
 	am.logger.Infof("master private key (seed) is %s", privKey)
 
-	ult := &pb.Asset{
-		AssetType: pb.Asset_NATIVE,
-		AssetName: "ULT",
-		Signer:    pubKey,
-		Balance:   balance,
-	}
 	acc := &pb.Account{
 		AccountID: pubKey,
-		Assets:    []*pb.Asset{ult},
+		Balance:   balance,
 		Signer:    pubKey,
 	}
 	am.master = acc
@@ -87,5 +81,7 @@ func (am *Manager) GetAccount(accountID string) (*pb.Account, error) {
 	if err != nil {
 		return nil, ErrAccountCorrupted
 	}
+	// cache the account
+	am.accounts.Add(accountID, acc)
 	return acc, nil
 }

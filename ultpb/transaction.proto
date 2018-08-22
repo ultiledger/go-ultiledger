@@ -44,9 +44,8 @@ message TxList {
 message CreateAccountOp {
   // destination account
   string AccountID = 1;
-  // the initial asset and balance
-  Asset.AssetTypeEnum AssetType = 2;
-  int64 Balance = 3;
+  // initial balance in ULUs
+  uint64 Balance = 2;
 }
 
 // peer to peer payment

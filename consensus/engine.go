@@ -9,9 +9,17 @@ import (
 	"github.com/ultiledger/go-ultiledger/account"
 	"github.com/ultiledger/go-ultiledger/crypto"
 	"github.com/ultiledger/go-ultiledger/db"
+	"github.com/ultiledger/go-ultiledger/ledger"
 	"github.com/ultiledger/go-ultiledger/peer"
 	"github.com/ultiledger/go-ultiledger/types"
 	pb "github.com/ultiledger/go-ultiledger/ultpb"
+)
+
+var (
+	ErrInvalidTx           = errors.New("invalid transaction")
+	ErrAccountNotFound     = errors.New("account not found")
+	ErrInsufficientBalance = errors.New("insufficient balance")
+	ErrInvalidSeqNum       = errors.New("invalid sequence number")
 )
 
 // Engine is responsible for coordinating between upstream
@@ -22,10 +30,7 @@ type Engine struct {
 
 	logger *zap.SugaredLogger
 
-	// peer manager for sending messages
 	pm *peer.Manager
-
-	// account manager for query account
 	am *account.Manager
 
 	// consensus quorum
@@ -85,11 +90,33 @@ func (e *Engine) AddTx(tx *pb.Tx) error {
 	if err != nil {
 		return err
 	}
-
 	if e.txSet.Contains(h) {
 		return errors.New("duplicate transaction")
 	}
+	// get the account information
+	acc, err := e.am.GetAccount(tx.AccountID)
+	if err != nil {
+		e.logger.Warnw("cannot find the account", "AccountID", tx.AccountID)
+		return err
+	}
+	// compute the total fees and max sequence number
+	totalFees := tx.Fee
+	maxSeq := tx.SequenceNumber
+	if history, ok := e.txMap[tx.AccountID]; ok {
+		totalFees += history.TotalFees
+		maxSeq = MaxUint64(maxSeq, history.MaxSeqNum)
+	} else {
+		e.txMap[tx.AccountID] = types.NewTxHistory()
+	}
+	// check whether tx sequence number is larger than existing one
+	if maxSeq > tx.SequenceNumber {
+		return ErrInvalidSeqNum
+	}
+	// check whether the accounts has sufficient balance
+	if acc.Balance-ledger.GenesisBaseReserve*uint64(acc.ItemCount) < totalFees {
+		return ErrInsufficientBalance
+	}
+	e.txMap[tx.AccountID].AddTx(tx)
 	e.txSet.Add(h)
-
 	return nil
 }
