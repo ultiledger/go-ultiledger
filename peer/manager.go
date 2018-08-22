@@ -101,7 +101,14 @@ func (pm *Manager) connectPeer(addr string) (*Peer, error) {
 		return nil, err
 	}
 	client := rpc.NewULTNodeClient(conn)
-	return &Peer{Addr: addr, ConnTime: time.Now().Unix(), client: client, conn: conn}, nil
+	p := &Peer{
+		Addr:     addr,
+		ConnTime: time.Now().Unix(),
+		metadata: pm.metadata,
+		client:   client,
+		conn:     conn,
+	}
+	return p, nil
 }
 
 // try to connect to peers periodically
