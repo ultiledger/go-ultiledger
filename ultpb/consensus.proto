@@ -7,8 +7,10 @@ package ultpb;
 message ConsensusValue {
   // hash of the transaction list
   string TxListHash = 1;
+  // propose time
+  int64 ProposeTime = 2;
   // close time
-  int64 CloseTime = 2;
+  int64 CloseTime = 3;
 }
 
 // Each ULTNode is associated with a quorum, every message

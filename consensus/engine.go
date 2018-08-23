@@ -1,7 +1,9 @@
 package consensus
 
 import (
+	"encoding/hex"
 	"errors"
+	"time"
 
 	"github.com/deckarep/golang-set"
 	"go.uber.org/zap"
@@ -37,6 +39,9 @@ type Engine struct {
 
 	// consensus protocol
 	cp *ucp
+
+	// consensus slots
+	slots map[uint64]*Slot
 
 	// transactions waiting to be include in the ledger
 	txSet mapset.Set
@@ -107,24 +112,58 @@ func (e *Engine) AddTx(tx *pb.Tx) error {
 	if acc.Balance-ledger.GenesisBaseReserve*uint64(acc.ItemCount) < totalFees {
 		return ErrInsufficientBalance
 	}
-	e.txMap[tx.AccountID].AddTx(tx)
+	e.txMap[tx.AccountID].AddTx(tx, h)
 	e.txSet.Add(h)
 	return nil
 }
 
 // Try to propose current transaction set for consensus
-func (e *Engine) Propose() error {
-	txList := &pb.TxList{
+func (e *Engine) propose() error {
+	// TODO(bobonovski) use sync.Pool
+	txSet := TxSet{
 		PrevLedgerHash: e.lm.CurrLedgerHeaderHash(),
-		Txs:            make([]*pb.Tx, 0),
+		TxHashList:     make([]string, 0),
 	}
 	// append pending transactions to propose list
 	for _, th := range e.txMap {
-		for _, tx := range th.TxList {
-			txList.Txs = append(txList.Txs, tx)
+		for i, _ := range th.TxList {
+			txSet.TxHashList = append(txSet.TxHashList, th.TxHashList[i])
 		}
 	}
 	// compute hash
+	hash, err := txSet.GetHash()
+	if err != nil {
+		return err
+	}
+	// construct new consensus value
+	cv := &pb.ConsensusValue{
+		TxListHash:  hash,
+		ProposeTime: time.Now().Unix(),
+	}
+	// nominate new consensus value
+	slotIdx := e.lm.NextLedgerHeaderSeq()
+	currHeader := e.lm.CurrLedgerHeader()
+	e.nominate(slotIdx, currHeader.ConsensusValue, cv)
+	return nil
+}
 
+// Try to nominate the new consensus value
+func (e *Engine) nominate(slotIdx uint64, prevValue *pb.ConsensusValue, currValue *pb.ConsensusValue) error {
+	// get new slot
+	if _, ok := e.slots[slotIdx]; !ok {
+		e.slots[slotIdx] = newSlot(slotIdx, e.store, e.logger)
+	}
+	prevEnc, err := pb.Encode(prevValue)
+	if err != nil {
+		return err
+	}
+	currEnc, err := pb.Encode(currValue)
+	if err != nil {
+		return err
+	}
+	prevEncStr := hex.EncodeToString(prevEnc)
+	currEncStr := hex.EncodeToString(currEnc)
+	// nominate new value for the slot
+	e.slots[slotIdx].nominate(e.quorum, prevEncStr, currEncStr)
 	return nil
 }

@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package ultpb;
 
+import "consensus.proto";
+
 message LedgerHeader {
   // version of pb message, each time we update the pb message definition, the
   // version number will incremented. The specific version number to use is 
@@ -11,16 +13,18 @@ message LedgerHeader {
   string PrevLedgerHash = 2;
   // hash of the transaction list in this ledger
   string TxListHash = 3;
+  // the consensus value the network agreed
+  ConsensusValue ConsensusValue = 4;
   // maximun number of transactions allowed in a transaction list
-  uint32 MaxTxListSize = 4;
+  uint32 MaxTxListSize = 5;
   // sequence number of this ledger
-  uint64 SeqNum = 5;
+  uint64 SeqNum = 6;
   // total number of tokens in existence
-  uint64 TotalTokens = 6;
+  uint64 TotalTokens = 7;
   // base fee per operation
-  uint64 BaseFee = 7;
+  uint64 BaseFee = 8;
   // base reserver for an account
-  uint64 BaseReserve = 8;
+  uint64 BaseReserve = 9;
   // close time
-  int64 CloseTime = 9;
+  int64 CloseTime = 10;
 }
