@@ -11,7 +11,6 @@ import (
 	"github.com/ultiledger/go-ultiledger/db"
 	"github.com/ultiledger/go-ultiledger/ledger"
 	"github.com/ultiledger/go-ultiledger/peer"
-	"github.com/ultiledger/go-ultiledger/types"
 	pb "github.com/ultiledger/go-ultiledger/ultpb"
 )
 
@@ -49,7 +48,7 @@ type Engine struct {
 	txSet mapset.Set
 
 	// accountID to txList map
-	txMap map[string]*types.TxHistory
+	txMap map[string]*TxHistory
 
 	nominateChan chan string
 }
@@ -64,7 +63,7 @@ func NewEngine(d db.DB, l *zap.SugaredLogger, pm *peer.Manager, am *account.Mana
 		latestSlotIdx: uint64(0),
 		cp:            newUCP(d, l),
 		txSet:         mapset.NewSet(),
-		txMap:         make(map[string]*types.TxHistory),
+		txMap:         make(map[string]*TxHistory),
 	}
 	err := e.store.CreateBucket(e.bucket)
 	if err != nil {
@@ -106,7 +105,7 @@ func (e *Engine) AddTx(tx *pb.Tx) error {
 		totalFees += history.TotalFees
 		maxSeq = MaxUint64(maxSeq, history.MaxSeqNum)
 	} else {
-		e.txMap[tx.AccountID] = types.NewTxHistory()
+		e.txMap[tx.AccountID] = NewTxHistory()
 	}
 	// check whether tx sequence number is larger than existing one
 	if maxSeq > tx.SequenceNumber {
