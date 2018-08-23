@@ -70,7 +70,7 @@ func NewNode(conf *Config) *Node {
 	pm := peer.NewManager(l.Sugar(), conf.Peers, ip, nodeID)
 	lm := ledger.NewManager(store, logger)
 	am := account.NewManager(store, logger)
-	engine := consensus.NewEngine(store, logger, pm, am)
+	engine := consensus.NewEngine(store, logger, pm, am, lm)
 
 	node := &Node{
 		config:    conf,

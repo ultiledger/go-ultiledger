@@ -7,7 +7,6 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/ultiledger/go-ultiledger/account"
-	"github.com/ultiledger/go-ultiledger/crypto"
 	"github.com/ultiledger/go-ultiledger/db"
 	"github.com/ultiledger/go-ultiledger/ledger"
 	"github.com/ultiledger/go-ultiledger/peer"
@@ -31,15 +30,10 @@ type Engine struct {
 
 	pm *peer.Manager
 	am *account.Manager
+	lm *ledger.Manager
 
 	// consensus quorum
 	quorum *pb.Quorum
-
-	// latest voted slot
-	latestSlotIdx uint64
-
-	// vote round
-	roundNum uint32
 
 	// consensus protocol
 	cp *ucp
@@ -49,21 +43,19 @@ type Engine struct {
 
 	// accountID to txList map
 	txMap map[string]*TxHistory
-
-	nominateChan chan string
 }
 
-func NewEngine(d db.DB, l *zap.SugaredLogger, pm *peer.Manager, am *account.Manager) *Engine {
+func NewEngine(d db.DB, l *zap.SugaredLogger, pm *peer.Manager, am *account.Manager, lm *ledger.Manager) *Engine {
 	e := &Engine{
-		store:         d,
-		bucket:        "ENGINE",
-		logger:        l,
-		pm:            pm,
-		am:            am,
-		latestSlotIdx: uint64(0),
-		cp:            newUCP(d, l),
-		txSet:         mapset.NewSet(),
-		txMap:         make(map[string]*TxHistory),
+		store:  d,
+		bucket: "ENGINE",
+		logger: l,
+		pm:     pm,
+		am:     am,
+		lm:     lm,
+		cp:     newUCP(d, l),
+		txSet:  mapset.NewSet(),
+		txMap:  make(map[string]*TxHistory),
 	}
 	err := e.store.CreateBucket(e.bucket)
 	if err != nil {
@@ -85,7 +77,7 @@ func (e *Engine) Start(stopChan chan struct{}) {
 
 // Add transaction to internal pending set
 func (e *Engine) AddTx(tx *pb.Tx) error {
-	h, err := crypto.SHA256HashPb(tx)
+	h, err := pb.SHA256Hash(tx)
 	if err != nil {
 		return err
 	}
@@ -117,5 +109,22 @@ func (e *Engine) AddTx(tx *pb.Tx) error {
 	}
 	e.txMap[tx.AccountID].AddTx(tx)
 	e.txSet.Add(h)
+	return nil
+}
+
+// Try to propose current transaction set for consensus
+func (e *Engine) Propose() error {
+	txList := &pb.TxList{
+		PrevLedgerHash: e.lm.CurrLedgerHeaderHash(),
+		Txs:            make([]*pb.Tx, 0),
+	}
+	// append pending transactions to propose list
+	for _, th := range e.txMap {
+		for _, tx := range th.TxList {
+			txList.Txs = append(txList.Txs, tx)
+		}
+	}
+	// compute hash
+
 	return nil
 }

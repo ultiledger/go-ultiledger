@@ -2,6 +2,8 @@ package ultpb
 
 import (
 	"github.com/golang/protobuf/proto"
+
+	"github.com/ultiledger/go-ultiledger/crypto"
 )
 
 // encode pb message to bytes
@@ -11,6 +13,15 @@ func Encode(msg proto.Message) ([]byte, error) {
 		return nil, err
 	}
 	return b, nil
+}
+
+// compute sha256 checksum of proto message
+func SHA256Hash(msg proto.Message) (string, error) {
+	b, err := Encode(msg)
+	if err != nil {
+		return "", err
+	}
+	return crypto.SHA256Hash(b), nil
 }
 
 // decode pb message to Tx
