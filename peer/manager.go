@@ -4,6 +4,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/deckarep/golang-set"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
@@ -36,6 +37,7 @@ type Manager struct {
 
 	// connected peers
 	livePeers map[string]*Peer
+	nodeIDs   mapset.Set
 
 	// peers waiting to be connected, each peer has three
 	// chances to be connected.
@@ -59,6 +61,7 @@ func NewManager(l *zap.SugaredLogger, ps []string, ip string, nodeID string) *Ma
 		initPeers:    ps,
 		pendingPeers: make(map[string]int),
 		livePeers:    make(map[string]*Peer),
+		nodeIDs:      mapset.NewSet(),
 		connectChan:  make(chan string, 10),
 		stopChan:     make(chan struct{}),
 		addChan:      make(chan *Peer),
@@ -85,9 +88,11 @@ func (pm *Manager) Start(stopChan chan struct{}) {
 			select {
 			case p := <-pm.addChan:
 				pm.livePeers[p.Addr] = p
+				pm.nodeIDs.Add(p.NodeID)
 			case p := <-pm.deleteChan: // only delete connected peers
 				if _, ok := pm.livePeers[p.Addr]; ok {
 					delete(pm.livePeers, p.Addr)
+					pm.nodeIDs.Remove(p.NodeID)
 				}
 			case <-stopChan:
 				close(pm.stopChan) // stop retry first
@@ -112,6 +117,11 @@ func (pm *Manager) AddPeer(addr string) error {
 	}
 	pm.waitPeers = append(pm.waitPeers, addr)
 	return nil
+}
+
+// Get the snapshot of current live nodeIDs
+func (pm *Manager) GetLiveNodeID() mapset.Set {
+	return pm.nodeIDs.Clone()
 }
 
 // ConnectPeer connects the remote peer with provided network address

@@ -151,7 +151,7 @@ func (e *Engine) propose() error {
 func (e *Engine) nominate(slotIdx uint64, prevValue *pb.ConsensusValue, currValue *pb.ConsensusValue) error {
 	// get new slot
 	if _, ok := e.slots[slotIdx]; !ok {
-		e.slots[slotIdx] = newSlot(slotIdx, e.store, e.logger)
+		e.slots[slotIdx] = newSlot(slotIdx, "", e.logger, e.pm)
 	}
 	prevEnc, err := pb.Encode(prevValue)
 	if err != nil {

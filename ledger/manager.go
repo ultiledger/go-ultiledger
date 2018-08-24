@@ -4,6 +4,7 @@ import (
 	"errors"
 	"time"
 
+	lru "github.com/hashicorp/golang-lru"
 	"go.uber.org/zap"
 
 	"github.com/ultiledger/go-ultiledger/crypto"
@@ -40,6 +41,9 @@ type Manager struct {
 
 	logger *zap.SugaredLogger
 
+	// LRU cache for ledger headers
+	headers *lru.Cache
+
 	// ledger state
 	ledgerState LedgerState
 
@@ -70,7 +74,12 @@ func NewManager(d db.DB, l *zap.SugaredLogger) *Manager {
 		ledgerState: NOTSYNCED,
 		startTime:   time.Now().Unix(),
 	}
-	err := lm.store.CreateBucket(lm.bucket)
+	cache, err := lru.New(1000)
+	if err != nil {
+		lm.logger.Fatal(err)
+	}
+	lm.headers = cache
+	err = lm.store.CreateBucket(lm.bucket)
 	if err != nil {
 		lm.logger.Fatal(err)
 	}

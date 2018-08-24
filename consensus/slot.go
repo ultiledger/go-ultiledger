@@ -7,18 +7,24 @@ import (
 	"github.com/deckarep/golang-set"
 	"go.uber.org/zap"
 
-	"github.com/ultiledger/go-ultiledger/db"
+	"github.com/ultiledger/go-ultiledger/peer"
 	pb "github.com/ultiledger/go-ultiledger/ultpb"
 )
 
 // Slot is responsible for maintaining consensus
 // state for a slot index
 type Slot struct {
-	index  uint64
-	store  db.DB
-	bucket string
+	index uint64
 
 	logger *zap.SugaredLogger
+
+	pm *peer.Manager
+
+	// nodeID of this node
+	nodeID string
+
+	// nomination round
+	round int
 
 	votes       mapset.Set
 	accepts     mapset.Set
@@ -26,12 +32,13 @@ type Slot struct {
 	nominations map[string]*pb.Nomination
 }
 
-func newSlot(idx uint64, d db.DB, l *zap.SugaredLogger) *Slot {
+func newSlot(idx uint64, nodeID string, l *zap.SugaredLogger, pm *peer.Manager) *Slot {
 	s := &Slot{
 		index:      idx,
-		store:      d,
 		logger:     l,
-		bucket:     "SLOT",
+		pm:         pm,
+		nodeID:     nodeID,
+		round:      0,
 		votes:      mapset.NewSet(),
 		accepts:    mapset.NewSet(),
 		candidates: mapset.NewSet(),
@@ -40,6 +47,9 @@ func newSlot(idx uint64, d db.DB, l *zap.SugaredLogger) *Slot {
 }
 
 func (s *Slot) nominate(quorum *pb.Quorum, prevHash, currHash string) (string, error) {
+	s.round++
+	// TODO(bobonovski) compute leader weights
+	// leaders := s.pm.GetLiveNodeID()
 	return "", nil
 }
 
