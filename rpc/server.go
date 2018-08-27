@@ -8,6 +8,7 @@ import (
 	"google.golang.org/grpc/metadata"
 
 	"github.com/ultiledger/go-ultiledger/crypto"
+	"github.com/ultiledger/go-ultiledger/future"
 	"github.com/ultiledger/go-ultiledger/rpc/rpcpb"
 	"github.com/ultiledger/go-ultiledger/ultpb"
 )
@@ -22,10 +23,10 @@ type NodeServer struct {
 	// channel for adding new peer IP
 	peerChan chan string
 	// channel for adding new tx
-	txChan chan *ultpb.Tx
+	txChan chan *future.Tx
 }
 
-func NewNodeServer(ip string, nodeID string, seed string, peerC chan string, txC chan *ultpb.Tx) *NodeServer {
+func NewNodeServer(ip string, nodeID string, seed string, peerC chan string, txC chan *future.Tx) *NodeServer {
 	s := &NodeServer{ip: ip, nodeID: nodeID, seed: seed, peerChan: peerC, txChan: txC}
 	return s
 }
@@ -50,6 +51,16 @@ func (s *NodeServer) Hello(ctx context.Context, req *rpcpb.HelloRequest) (*rpcpb
 }
 
 func (s *NodeServer) SubmitTx(ctx context.Context, req *rpcpb.SubmitTxRequest) (*rpcpb.SubmitTxResponse, error) {
+	resp := &rpcpb.SubmitTxResponse{}
+	tx, err := ultpb.DecodeTx(req.Data)
+	if err != nil {
+		return resp, err
+	}
+	f := future.NewTx(tx)
+	s.txChan <- f
+	if err := f.Error(); err != nil {
+		return resp, err
+	}
 	return nil, nil
 }
 
