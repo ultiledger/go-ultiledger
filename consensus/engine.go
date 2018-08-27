@@ -164,6 +164,6 @@ func (e *Engine) nominate(slotIdx uint64, prevValue *pb.ConsensusValue, currValu
 	prevEncStr := hex.EncodeToString(prevEnc)
 	currEncStr := hex.EncodeToString(currEnc)
 	// nominate new value for the slot
-	e.slots[slotIdx].nominate(e.quorum, prevEncStr, currEncStr)
+	e.slots[slotIdx].Nominate(e.quorum, prevEncStr, currEncStr)
 	return nil
 }

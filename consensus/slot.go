@@ -50,11 +50,36 @@ func newSlot(idx uint64, nodeID string, l *zap.SugaredLogger, pm *peer.Manager) 
 }
 
 // nominate a consensus value for this slot
-func (s *Slot) nominate(quorum *pb.Quorum, prevHash, currHash string) (string, error) {
+func (s *Slot) Nominate(quorum *pb.Quorum, prevHash, currHash string) error {
 	s.round++
 	// TODO(bobonovski) compute leader weights
 	s.votes.Add(currHash) // For test
-	return "", nil
+	quorumHash, err := pb.SHA256Hash(quorum)
+	if err != nil {
+		return err
+	}
+	if err := s.sendNomination(quorum, quorumHash); err != nil {
+		return err
+	}
+	return nil
+}
+
+// receive nomination from peers or local node
+func (s *Slot) RecvNomination(nodeID string, quorum *pb.Quorum, quorumHash string, nom *pb.Nomination) error {
+	s.addNomination(s.nodeID, nom)
+	acceptUpdated, candidateUpdated, err := s.promoteVotes(quorum, nom)
+	if err != nil {
+		return err
+	}
+	// send new nomination if votes changed
+	if acceptUpdated {
+		s.sendNomination(quorum, quorumHash)
+	}
+	// start balloting if candidates changed
+	if candidateUpdated {
+		// TODO(bobonovski) balloting
+	}
+	return nil
 }
 
 // assemble a nomination and broadcast it to other peers
@@ -69,6 +94,10 @@ func (s *Slot) sendNomination(quorum *pb.Quorum, quorumHash string) error {
 	for accept := range s.accepts.Iter() {
 		nom.AcceptList = append(nom.AcceptList, accept.(string))
 	}
+	if err := s.RecvNomination(s.nodeID, quorum, quorumHash, nom); err != nil {
+		s.logger.Warnf("failed to accept local nomination: %v", err)
+		return err
+	}
 	/*
 		nomBytes, err := pb.Encode(nom)
 		if err != nil {
@@ -81,23 +110,10 @@ func (s *Slot) sendNomination(quorum *pb.Quorum, quorumHash string) error {
 			Data:          nomBytes,
 		}
 	*/
-	// promote local votes
-	s.addNomination(s.nodeID, nom) // skip error checking
-	acceptUpdated, candidateUpdated, err := s.promoteVotes(quorum, nom)
-	if err != nil {
-		return err
-	}
 	// broadcast the nomination if it is a new one
 	if isNewerNomination(s.latestNomination, nom) {
+		s.latestNomination = nom
 		// TODO(bobonovksi) broadcast nomination
-	}
-	// send new nomination if votes changed
-	if acceptUpdated {
-		s.sendNomination(quorum, quorumHash)
-	}
-	// start balloting if candidates changed
-	if candidateUpdated {
-		// TODO(bobonovski) balloting
 	}
 	return nil
 }
@@ -119,6 +135,9 @@ func (s *Slot) addNomination(nodeID string, newNom *pb.Nomination) error {
 }
 
 func isNewerNomination(anom *pb.Nomination, bnom *pb.Nomination) bool {
+	if anom == nil && bnom != nil {
+		return true
+	}
 	if !IsProperSubset(anom.VoteList, bnom.VoteList) {
 		// TODO(bobonovski) more elaborate check like interset?
 		return false
