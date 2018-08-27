@@ -16,6 +16,8 @@ type Config struct {
 	Peers []string
 	// node ID (public key derived from seed)
 	NodeID string
+	// seed of this node
+	Seed string
 	// database backend
 	DBBackend string
 	// database file path

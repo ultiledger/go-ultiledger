@@ -9,7 +9,8 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 
-	"github.com/ultiledger/go-ultiledger/ultpb/rpc"
+	"github.com/ultiledger/go-ultiledger/rpc"
+	"github.com/ultiledger/go-ultiledger/rpc/rpcpb"
 )
 
 var (
@@ -39,15 +40,17 @@ type Manager struct {
 	livePeers map[string]*Peer
 	nodeIDs   mapset.Set
 
+	// connect channel for add new peer IP
+	ConnectChan chan string
+
 	// peers waiting to be connected, each peer has three
 	// chances to be connected.
 	pendingPeers map[string]int
-	connectChan  chan string
 
 	// channel for stopping pending peers connection
 	stopChan chan struct{}
 
-	// channel for managing peers
+	// channel for managing live peers
 	addChan    chan *Peer
 	deleteChan chan *Peer
 }
@@ -62,7 +65,7 @@ func NewManager(l *zap.SugaredLogger, ps []string, ip string, nodeID string) *Ma
 		pendingPeers: make(map[string]int),
 		livePeers:    make(map[string]*Peer),
 		nodeIDs:      mapset.NewSet(),
-		connectChan:  make(chan string, 10),
+		ConnectChan:  make(chan string, 100),
 		stopChan:     make(chan struct{}),
 		addChan:      make(chan *Peer),
 		deleteChan:   make(chan *Peer),
@@ -107,18 +110,6 @@ func (pm *Manager) Start(stopChan chan struct{}) {
 	}()
 }
 
-// add new peer IP address to buffered connect
-// channel and appends to waiting queue if failed
-func (pm *Manager) AddPeer(addr string) error {
-	// TODO(bobonovski) check validity of addr
-	select {
-	case pm.connectChan <- addr:
-		return nil
-	}
-	pm.waitPeers = append(pm.waitPeers, addr)
-	return nil
-}
-
 // Get the snapshot of current live nodeIDs
 func (pm *Manager) GetLiveNodeID() mapset.Set {
 	return pm.nodeIDs.Clone()
@@ -130,7 +121,7 @@ func (pm *Manager) connectPeer(addr string) (*Peer, error) {
 	if err != nil {
 		return nil, err
 	}
-	client := rpc.NewNodeClient(conn)
+	client := rpcpb.NewNodeClient(conn)
 	p := &Peer{
 		Addr:     addr,
 		ConnTime: time.Now().Unix(),
@@ -163,7 +154,7 @@ func (pm *Manager) connect() {
 					continue
 				}
 				// healthcheck the peer and save the nodeID
-				ip, nodeID, err := p.Hello()
+				ip, nodeID, err := rpc.Hello(p.client, p.metadata)
 				if err != nil {
 					pm.logger.Warnw("peer is not health", "peerIP", p.Addr)
 					p.Close()
@@ -180,7 +171,7 @@ func (pm *Manager) connect() {
 					return
 				}
 			}
-		case addr := <-pm.connectChan:
+		case addr := <-pm.ConnectChan:
 			if _, ok := pm.pendingPeers[addr]; ok {
 				continue
 			}

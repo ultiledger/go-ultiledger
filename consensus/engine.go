@@ -12,7 +12,7 @@ import (
 	"github.com/ultiledger/go-ultiledger/db"
 	"github.com/ultiledger/go-ultiledger/ledger"
 	"github.com/ultiledger/go-ultiledger/peer"
-	pb "github.com/ultiledger/go-ultiledger/ultpb"
+	"github.com/ultiledger/go-ultiledger/ultpb"
 )
 
 var (
@@ -36,7 +36,7 @@ type Engine struct {
 
 	// consensus quorum
 	// each time quorum is updated, its quorum hash should be recomputed accordingly
-	quorum     *pb.Quorum
+	quorum     *ultpb.Quorum
 	quorumHash string
 
 	// consensus protocol
@@ -50,19 +50,23 @@ type Engine struct {
 
 	// accountID to txList map
 	txMap map[string]*TxHistory
+
+	// channel for adding tx
+	AddTxChan chan *ultpb.Tx
 }
 
 func NewEngine(d db.DB, l *zap.SugaredLogger, pm *peer.Manager, am *account.Manager, lm *ledger.Manager) *Engine {
 	e := &Engine{
-		store:  d,
-		bucket: "ENGINE",
-		logger: l,
-		pm:     pm,
-		am:     am,
-		lm:     lm,
-		cp:     newUCP(d, l),
-		txSet:  mapset.NewSet(),
-		txMap:  make(map[string]*TxHistory),
+		store:     d,
+		bucket:    "ENGINE",
+		logger:    l,
+		pm:        pm,
+		am:        am,
+		lm:        lm,
+		cp:        newUCP(d, l),
+		txSet:     mapset.NewSet(),
+		txMap:     make(map[string]*TxHistory),
+		AddTxChan: make(chan *ultpb.Tx),
 	}
 	err := e.store.CreateBucket(e.bucket)
 	if err != nil {
@@ -75,6 +79,8 @@ func (e *Engine) Start(stopChan chan struct{}) {
 	go func() {
 		for {
 			select {
+			case tx := <-e.AddTxChan:
+				e.AddTx(tx)
 			case <-stopChan:
 				return
 			}
@@ -83,8 +89,8 @@ func (e *Engine) Start(stopChan chan struct{}) {
 }
 
 // Add transaction to internal pending set
-func (e *Engine) AddTx(tx *pb.Tx) error {
-	h, err := pb.SHA256Hash(tx)
+func (e *Engine) AddTx(tx *ultpb.Tx) error {
+	h, err := ultpb.SHA256Hash(tx)
 	if err != nil {
 		return err
 	}
@@ -138,7 +144,7 @@ func (e *Engine) propose() error {
 		return err
 	}
 	// construct new consensus value
-	cv := &pb.ConsensusValue{
+	cv := &ultpb.ConsensusValue{
 		TxListHash:  hash,
 		ProposeTime: time.Now().Unix(),
 	}
@@ -150,16 +156,16 @@ func (e *Engine) propose() error {
 }
 
 // Try to nominate the new consensus value
-func (e *Engine) nominate(slotIdx uint64, prevValue *pb.ConsensusValue, currValue *pb.ConsensusValue) error {
+func (e *Engine) nominate(slotIdx uint64, prevValue *ultpb.ConsensusValue, currValue *ultpb.ConsensusValue) error {
 	// get new slot
 	if _, ok := e.slots[slotIdx]; !ok {
 		e.slots[slotIdx] = newSlot(slotIdx, "", e.logger, e.pm)
 	}
-	prevEnc, err := pb.Encode(prevValue)
+	prevEnc, err := ultpb.Encode(prevValue)
 	if err != nil {
 		return err
 	}
-	currEnc, err := pb.Encode(currValue)
+	currEnc, err := ultpb.Encode(currValue)
 	if err != nil {
 		return err
 	}

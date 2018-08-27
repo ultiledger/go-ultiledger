@@ -1,10 +1,11 @@
 syntax = "proto3";
 
-package rpc;
+package rpcpb;
 
 service Node {
   rpc Hello(HelloRequest) returns (HelloResponse) {}
   rpc SubmitTx(SubmitTxRequest) returns (SubmitTxResponse) {}
+  rpc Nominate(NominateRequest) returns (NominateResponse) {}
 }
 
 message HelloRequest {}
@@ -34,3 +35,13 @@ message SubmitTxResponse {
   // error message for REJECTED transaction
   string ErrorMessage = 3;
 }
+
+message NominateRequest {
+  // nomination statement in pb format
+  bytes Data = 1;
+  // digital signature of the data signed by
+  // the private key of peer node
+  string Signature = 2;
+}
+
+message NominateResponse {}

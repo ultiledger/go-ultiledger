@@ -13,7 +13,8 @@ import (
 	"github.com/ultiledger/go-ultiledger/db"
 	"github.com/ultiledger/go-ultiledger/ledger"
 	"github.com/ultiledger/go-ultiledger/peer"
-	"github.com/ultiledger/go-ultiledger/ultpb/rpc"
+	"github.com/ultiledger/go-ultiledger/rpc"
+	pb "github.com/ultiledger/go-ultiledger/rpc/rpcpb"
 )
 
 // Node is the central controller for ultiledger
@@ -23,14 +24,15 @@ type Node struct {
 
 	// IP address of this node
 	ip string
-	// NodeID of this node
+	// NodeID and seed of this node
 	nodeID string
+	seed   string
 	// start time of the node
 	startTime int64
 
 	config *Config
 
-	server *NodeServer
+	server *rpc.NodeServer
 	pm     *peer.Manager
 	lm     *ledger.Manager
 	am     *account.Manager
@@ -59,6 +61,7 @@ func NewNode(conf *Config) *Node {
 
 	ip := addr.String()
 	nodeID := conf.NodeID
+	seed := conf.Seed
 
 	// create database store
 	ctor, err := db.GetDB(conf.DBBackend)
@@ -76,7 +79,7 @@ func NewNode(conf *Config) *Node {
 		config:    conf,
 		store:     store,
 		logger:    l.Sugar(),
-		server:    NewNodeServer(ip, nodeID, pm, engine),
+		server:    rpc.NewNodeServer(ip, nodeID, seed, pm.ConnectChan, engine.AddTxChan),
 		pm:        pm,
 		lm:        lm,
 		am:        am,
@@ -133,7 +136,7 @@ func (u *Node) serveNode() {
 	}
 
 	s := grpc.NewServer()
-	rpc.RegisterNodeServer(s, u.server)
+	pb.RegisterNodeServer(s, u.server)
 
 	u.logger.Infof("start to serve gRPC requests on %s", u.config.Port)
 	go s.Serve(listener)
