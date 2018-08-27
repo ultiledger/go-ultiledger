@@ -50,14 +50,11 @@ func newSlot(idx uint64, nodeID string, l *zap.SugaredLogger, pm *peer.Manager) 
 }
 
 // nominate a consensus value for this slot
-func (s *Slot) Nominate(quorum *pb.Quorum, prevHash, currHash string) error {
+func (s *Slot) Nominate(quorum *pb.Quorum, quorumHash, prevHash, currHash string) error {
 	s.round++
 	// TODO(bobonovski) compute leader weights
 	s.votes.Add(currHash) // For test
-	quorumHash, err := pb.SHA256Hash(quorum)
-	if err != nil {
-		return err
-	}
+
 	if err := s.sendNomination(quorum, quorumHash); err != nil {
 		return err
 	}
