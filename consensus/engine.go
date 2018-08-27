@@ -43,7 +43,7 @@ type Engine struct {
 	cp *ucp
 
 	// consensus slots
-	slots map[uint64]*Slot
+	slots map[uint64]*slot
 
 	// transactions waiting to be include in the ledger
 	txSet mapset.Set
@@ -187,6 +187,6 @@ func (e *Engine) nominate(slotIdx uint64, prevValue *ultpb.ConsensusValue, currV
 	prevEncStr := hex.EncodeToString(prevEnc)
 	currEncStr := hex.EncodeToString(currEnc)
 	// nominate new value for the slot
-	e.slots[slotIdx].Nominate(e.quorum, e.quorumHash, prevEncStr, currEncStr)
+	e.slots[slotIdx].nominate(e.quorum, e.quorumHash, prevEncStr, currEncStr)
 	return nil
 }

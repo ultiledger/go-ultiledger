@@ -12,7 +12,7 @@ import (
 
 // Slot is responsible for maintaining consensus
 // state for a slot index
-type Slot struct {
+type slot struct {
 	index uint64
 
 	logger *zap.SugaredLogger
@@ -35,8 +35,8 @@ type Slot struct {
 	statementChan chan *ultpb.Statement
 }
 
-func newSlot(idx uint64, nodeID string, l *zap.SugaredLogger) *Slot {
-	s := &Slot{
+func newSlot(idx uint64, nodeID string, l *zap.SugaredLogger) *slot {
+	s := &slot{
 		index:      idx,
 		logger:     l,
 		nodeID:     nodeID,
@@ -49,7 +49,7 @@ func newSlot(idx uint64, nodeID string, l *zap.SugaredLogger) *Slot {
 }
 
 // nominate a consensus value for this slot
-func (s *Slot) Nominate(quorum *ultpb.Quorum, quorumHash, prevHash, currHash string) error {
+func (s *slot) nominate(quorum *ultpb.Quorum, quorumHash, prevHash, currHash string) error {
 	s.round++
 	// TODO(bobonovski) compute leader weights
 	s.votes.Add(currHash) // For test
@@ -61,7 +61,7 @@ func (s *Slot) Nominate(quorum *ultpb.Quorum, quorumHash, prevHash, currHash str
 }
 
 // receive nomination from peers or local node
-func (s *Slot) RecvNomination(nodeID string, quorum *ultpb.Quorum, quorumHash string, nom *ultpb.Nomination) error {
+func (s *slot) recvNomination(nodeID string, quorum *ultpb.Quorum, quorumHash string, nom *ultpb.Nomination) error {
 	s.addNomination(s.nodeID, nom)
 	acceptUpdated, candidateUpdated, err := s.promoteVotes(quorum, nom)
 	if err != nil {
@@ -79,7 +79,7 @@ func (s *Slot) RecvNomination(nodeID string, quorum *ultpb.Quorum, quorumHash st
 }
 
 // assemble a nomination and broadcast it to other peers
-func (s *Slot) sendNomination(quorum *ultpb.Quorum, quorumHash string) error {
+func (s *slot) sendNomination(quorum *ultpb.Quorum, quorumHash string) error {
 	// create an abstract nomination statement
 	nom := &ultpb.Nomination{
 		QuorumHash: quorumHash,
@@ -90,7 +90,7 @@ func (s *Slot) sendNomination(quorum *ultpb.Quorum, quorumHash string) error {
 	for accept := range s.accepts.Iter() {
 		nom.AcceptList = append(nom.AcceptList, accept.(string))
 	}
-	if err := s.RecvNomination(s.nodeID, quorum, quorumHash, nom); err != nil {
+	if err := s.recvNomination(s.nodeID, quorum, quorumHash, nom); err != nil {
 		s.logger.Warnf("failed to accept local nomination: %v", err)
 		return err
 	}
@@ -113,7 +113,7 @@ func (s *Slot) sendNomination(quorum *ultpb.Quorum, quorumHash string) error {
 }
 
 // check whether the input nomination is valid and newer
-func (s *Slot) addNomination(nodeID string, newNom *ultpb.Nomination) error {
+func (s *slot) addNomination(nodeID string, newNom *ultpb.Nomination) error {
 	// check validity of votes and accepts
 	if len(newNom.VoteList)+len(newNom.AcceptList) == 0 {
 		return fmt.Errorf("empty vote and accept list")
@@ -225,7 +225,7 @@ func findVoteOrAcceptNodes(v string, noms map[string]*ultpb.Nomination) mapset.S
 //   2. whether all the nodes in the quorum have voted
 // then try to promote accepts to candidates by checking:
 //   1. whether all the nodes in the quorum have accepted
-func (s *Slot) promoteVotes(quorum *ultpb.Quorum, newNom *ultpb.Nomination) (bool, bool, error) {
+func (s *slot) promoteVotes(quorum *ultpb.Quorum, newNom *ultpb.Nomination) (bool, bool, error) {
 	acceptUpdated := false
 	for _, vote := range newNom.VoteList {
 		if s.accepts.Contains(vote) {
