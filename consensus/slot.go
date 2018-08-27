@@ -7,8 +7,7 @@ import (
 	"github.com/deckarep/golang-set"
 	"go.uber.org/zap"
 
-	"github.com/ultiledger/go-ultiledger/peer"
-	pb "github.com/ultiledger/go-ultiledger/ultpb"
+	"github.com/ultiledger/go-ultiledger/ultpb"
 )
 
 // Slot is responsible for maintaining consensus
@@ -18,8 +17,6 @@ type Slot struct {
 
 	logger *zap.SugaredLogger
 
-	pm *peer.Manager
-
 	// nodeID of this node
 	nodeID string
 
@@ -27,19 +24,21 @@ type Slot struct {
 	round int
 
 	// latest nomination
-	latestNomination *pb.Nomination
+	latestNomination *ultpb.Nomination
 
 	votes       mapset.Set
 	accepts     mapset.Set
 	candidates  mapset.Set
-	nominations map[string]*pb.Nomination
+	nominations map[string]*ultpb.Nomination
+
+	// channel for sending statements
+	statementChan chan *ultpb.Statement
 }
 
-func newSlot(idx uint64, nodeID string, l *zap.SugaredLogger, pm *peer.Manager) *Slot {
+func newSlot(idx uint64, nodeID string, l *zap.SugaredLogger) *Slot {
 	s := &Slot{
 		index:      idx,
 		logger:     l,
-		pm:         pm,
 		nodeID:     nodeID,
 		round:      0,
 		votes:      mapset.NewSet(),
@@ -50,7 +49,7 @@ func newSlot(idx uint64, nodeID string, l *zap.SugaredLogger, pm *peer.Manager) 
 }
 
 // nominate a consensus value for this slot
-func (s *Slot) Nominate(quorum *pb.Quorum, quorumHash, prevHash, currHash string) error {
+func (s *Slot) Nominate(quorum *ultpb.Quorum, quorumHash, prevHash, currHash string) error {
 	s.round++
 	// TODO(bobonovski) compute leader weights
 	s.votes.Add(currHash) // For test
@@ -62,7 +61,7 @@ func (s *Slot) Nominate(quorum *pb.Quorum, quorumHash, prevHash, currHash string
 }
 
 // receive nomination from peers or local node
-func (s *Slot) RecvNomination(nodeID string, quorum *pb.Quorum, quorumHash string, nom *pb.Nomination) error {
+func (s *Slot) RecvNomination(nodeID string, quorum *ultpb.Quorum, quorumHash string, nom *ultpb.Nomination) error {
 	s.addNomination(s.nodeID, nom)
 	acceptUpdated, candidateUpdated, err := s.promoteVotes(quorum, nom)
 	if err != nil {
@@ -80,9 +79,9 @@ func (s *Slot) RecvNomination(nodeID string, quorum *pb.Quorum, quorumHash strin
 }
 
 // assemble a nomination and broadcast it to other peers
-func (s *Slot) sendNomination(quorum *pb.Quorum, quorumHash string) error {
+func (s *Slot) sendNomination(quorum *ultpb.Quorum, quorumHash string) error {
 	// create an abstract nomination statement
-	nom := &pb.Nomination{
+	nom := &ultpb.Nomination{
 		QuorumHash: quorumHash,
 	}
 	for vote := range s.votes.Iter() {
@@ -95,28 +94,26 @@ func (s *Slot) sendNomination(quorum *pb.Quorum, quorumHash string) error {
 		s.logger.Warnf("failed to accept local nomination: %v", err)
 		return err
 	}
-	/*
-		nomBytes, err := pb.Encode(nom)
+	// broadcast the nomination if it is a new one
+	if isNewerNomination(s.latestNomination, nom) {
+		s.latestNomination = nom
+		nomBytes, err := ultpb.Encode(nom)
 		if err != nil {
 			return err
 		}
-		stmt := &pb.Statement{
-			StatementType: pb.Statement_NOMINATE,
+		stmt := &ultpb.Statement{
+			StatementType: ultpb.Statement_NOMINATE,
 			NodeID:        s.nodeID,
 			SlotIndex:     s.index,
 			Data:          nomBytes,
 		}
-	*/
-	// broadcast the nomination if it is a new one
-	if isNewerNomination(s.latestNomination, nom) {
-		s.latestNomination = nom
-		// TODO(bobonovksi) broadcast nomination
+		s.statementChan <- stmt
 	}
 	return nil
 }
 
 // check whether the input nomination is valid and newer
-func (s *Slot) addNomination(nodeID string, newNom *pb.Nomination) error {
+func (s *Slot) addNomination(nodeID string, newNom *ultpb.Nomination) error {
 	// check validity of votes and accepts
 	if len(newNom.VoteList)+len(newNom.AcceptList) == 0 {
 		return fmt.Errorf("empty vote and accept list")
@@ -131,7 +128,7 @@ func (s *Slot) addNomination(nodeID string, newNom *pb.Nomination) error {
 	return nil
 }
 
-func isNewerNomination(anom *pb.Nomination, bnom *pb.Nomination) bool {
+func isNewerNomination(anom *ultpb.Nomination, bnom *ultpb.Nomination) bool {
 	if anom == nil && bnom != nil {
 		return true
 	}
@@ -145,7 +142,7 @@ func isNewerNomination(anom *pb.Nomination, bnom *pb.Nomination) bool {
 	return true
 }
 
-func isVblocking(quorum *pb.Quorum, nodeSet mapset.Set) bool {
+func isVblocking(quorum *ultpb.Quorum, nodeSet mapset.Set) bool {
 	qsize := float64(len(quorum.Validators) + len(quorum.NestQuorums))
 	threshold := int(math.Ceil(qsize * (1.0 - quorum.Threshold)))
 	for _, vid := range quorum.Validators {
@@ -167,7 +164,7 @@ func isVblocking(quorum *pb.Quorum, nodeSet mapset.Set) bool {
 	return false
 }
 
-func isQuorumSlice(quorum *pb.Quorum, nodeSet mapset.Set) bool {
+func isQuorumSlice(quorum *ultpb.Quorum, nodeSet mapset.Set) bool {
 	qsize := float64(len(quorum.Validators) + len(quorum.NestQuorums))
 	threshold := int(math.Ceil(qsize * quorum.Threshold))
 	for _, vid := range quorum.Validators {
@@ -190,7 +187,7 @@ func isQuorumSlice(quorum *pb.Quorum, nodeSet mapset.Set) bool {
 }
 
 // find set of nodes claimed to accept the value
-func findAcceptNodes(v string, noms map[string]*pb.Nomination) mapset.Set {
+func findAcceptNodes(v string, noms map[string]*ultpb.Nomination) mapset.Set {
 	nodeSet := mapset.NewSet()
 	for k, nom := range noms {
 		for _, av := range nom.AcceptList {
@@ -204,7 +201,7 @@ func findAcceptNodes(v string, noms map[string]*pb.Nomination) mapset.Set {
 }
 
 // find set of nodes claimed to vote or accept the value
-func findVoteOrAcceptNodes(v string, noms map[string]*pb.Nomination) mapset.Set {
+func findVoteOrAcceptNodes(v string, noms map[string]*ultpb.Nomination) mapset.Set {
 	nodeSet := mapset.NewSet()
 	for k, nom := range noms {
 		for _, vv := range nom.VoteList {
@@ -228,7 +225,7 @@ func findVoteOrAcceptNodes(v string, noms map[string]*pb.Nomination) mapset.Set 
 //   2. whether all the nodes in the quorum have voted
 // then try to promote accepts to candidates by checking:
 //   1. whether all the nodes in the quorum have accepted
-func (s *Slot) promoteVotes(quorum *pb.Quorum, newNom *pb.Nomination) (bool, bool, error) {
+func (s *Slot) promoteVotes(quorum *ultpb.Quorum, newNom *ultpb.Nomination) (bool, bool, error) {
 	acceptUpdated := false
 	for _, vote := range newNom.VoteList {
 		if s.accepts.Contains(vote) {

@@ -51,22 +51,26 @@ type Engine struct {
 	// accountID to txList map
 	txMap map[string]*TxHistory
 
+	// channel for broadcasting statement
+	statementChan chan *ultpb.Statement
+
 	// channel for adding tx
 	AddTxChan chan *ultpb.Tx
 }
 
 func NewEngine(d db.DB, l *zap.SugaredLogger, pm *peer.Manager, am *account.Manager, lm *ledger.Manager) *Engine {
 	e := &Engine{
-		store:     d,
-		bucket:    "ENGINE",
-		logger:    l,
-		pm:        pm,
-		am:        am,
-		lm:        lm,
-		cp:        newUCP(d, l),
-		txSet:     mapset.NewSet(),
-		txMap:     make(map[string]*TxHistory),
-		AddTxChan: make(chan *ultpb.Tx),
+		store:         d,
+		bucket:        "ENGINE",
+		logger:        l,
+		pm:            pm,
+		am:            am,
+		lm:            lm,
+		cp:            newUCP(d, l),
+		txSet:         mapset.NewSet(),
+		txMap:         make(map[string]*TxHistory),
+		statementChan: make(chan *ultpb.Statement),
+		AddTxChan:     make(chan *ultpb.Tx),
 	}
 	err := e.store.CreateBucket(e.bucket)
 	if err != nil {
@@ -79,8 +83,14 @@ func (e *Engine) Start(stopChan chan struct{}) {
 	go func() {
 		for {
 			select {
+			case stmt := <-e.statementChan:
+				err := e.broadcastStatement(stmt)
+				if err != nil {
+					e.logger.Warnf("failed to broadcast statements: %v", err)
+					continue
+				}
 			case tx := <-e.AddTxChan:
-				e.AddTx(tx)
+				e.addTx(tx)
 			case <-stopChan:
 				return
 			}
@@ -89,7 +99,7 @@ func (e *Engine) Start(stopChan chan struct{}) {
 }
 
 // Add transaction to internal pending set
-func (e *Engine) AddTx(tx *ultpb.Tx) error {
+func (e *Engine) addTx(tx *ultpb.Tx) error {
 	h, err := ultpb.SHA256Hash(tx)
 	if err != nil {
 		return err
@@ -122,6 +132,11 @@ func (e *Engine) AddTx(tx *ultpb.Tx) error {
 	}
 	e.txMap[tx.AccountID].AddTx(tx, h)
 	e.txSet.Add(h)
+	return nil
+}
+
+// broadcast statements through rpc broadcasting
+func (e *Engine) broadcastStatement(stmt *ultpb.Statement) error {
 	return nil
 }
 
@@ -159,7 +174,7 @@ func (e *Engine) propose() error {
 func (e *Engine) nominate(slotIdx uint64, prevValue *ultpb.ConsensusValue, currValue *ultpb.ConsensusValue) error {
 	// get new slot
 	if _, ok := e.slots[slotIdx]; !ok {
-		e.slots[slotIdx] = newSlot(slotIdx, "", e.logger, e.pm)
+		e.slots[slotIdx] = newSlot(slotIdx, "", e.logger)
 	}
 	prevEnc, err := ultpb.Encode(prevValue)
 	if err != nil {
