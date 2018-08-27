@@ -13,10 +13,11 @@ message HelloRequest {}
 message HelloResponse {}
 
 enum TxStatusEnum {
-  REJECTED = 0;  // rejected because of some immediate error checking
-  ACCEPTED = 1;  // transaction accepted but not yet confirmed by consensus
-  CONFIRMED = 2; // transaction is valid and confirmed by consensus
-  FAILED = 3;    // failed because of consensus 
+  NOTEXIST = 0;  // transaction not exist
+  REJECTED = 1;  // rejected because of some immediate error checking
+  ACCEPTED = 2;  // transaction accepted but not yet confirmed by consensus
+  CONFIRMED = 3; // transaction is valid and confirmed by consensus
+  FAILED = 4;    // failed because of consensus 
 }
 
 message SubmitTxRequest {

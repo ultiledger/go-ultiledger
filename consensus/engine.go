@@ -6,12 +6,14 @@ import (
 	"time"
 
 	"github.com/deckarep/golang-set"
+	lru "github.com/hashicorp/golang-lru"
 	"go.uber.org/zap"
 
 	"github.com/ultiledger/go-ultiledger/account"
 	"github.com/ultiledger/go-ultiledger/db"
 	"github.com/ultiledger/go-ultiledger/ledger"
 	"github.com/ultiledger/go-ultiledger/peer"
+	"github.com/ultiledger/go-ultiledger/rpc/rpcpb"
 	"github.com/ultiledger/go-ultiledger/ultpb"
 )
 
@@ -27,6 +29,8 @@ var (
 type Engine struct {
 	store  db.DB
 	bucket string
+	// for saving transaction status
+	statusBucket string
 
 	logger *zap.SugaredLogger
 
@@ -45,6 +49,9 @@ type Engine struct {
 	// consensus slots
 	slots map[uint64]*slot
 
+	// transactions status
+	txStatus *lru.Cache
+
 	// transactions waiting to be include in the ledger
 	txSet mapset.Set
 
@@ -62,6 +69,7 @@ func NewEngine(d db.DB, l *zap.SugaredLogger, pm *peer.Manager, am *account.Mana
 	e := &Engine{
 		store:         d,
 		bucket:        "ENGINE",
+		statusBucket:  "TXSTATUS",
 		logger:        l,
 		pm:            pm,
 		am:            am,
@@ -76,6 +84,15 @@ func NewEngine(d db.DB, l *zap.SugaredLogger, pm *peer.Manager, am *account.Mana
 	if err != nil {
 		e.logger.Fatal(err)
 	}
+	err = e.store.CreateBucket(e.statusBucket)
+	if err != nil {
+		e.logger.Fatal(err)
+	}
+	cache, err := lru.New(10000)
+	if err != nil {
+		e.logger.Fatal(err)
+	}
+	e.txStatus = cache
 	return e
 }
 
@@ -90,7 +107,10 @@ func (e *Engine) Start(stopChan chan struct{}) {
 					continue
 				}
 			case tx := <-e.AddTxChan:
-				e.addTx(tx)
+				err := e.addTx(tx)
+				if err != nil {
+
+				}
 			case <-stopChan:
 				return
 			}
@@ -98,20 +118,44 @@ func (e *Engine) Start(stopChan chan struct{}) {
 	}()
 }
 
-// Add transaction to internal pending set
+// check the status of the transaction
+func (e *Engine) GetTxStatus(txHash string) rpcpb.TxStatusEnum {
+	if tx, ok := e.txStatus.Get(txHash); ok {
+		return tx.(rpcpb.TxStatusEnum)
+	}
+	b, ok := e.store.Get(e.statusBucket, []byte(txHash))
+	if !ok {
+		return rpcpb.TxStatusEnum_NOTEXIST
+	}
+	sname := string(b)
+	return rpcpb.TxStatusEnum(rpcpb.TxStatusEnum_value[sname])
+}
+
+// update the status of the transaction
+func (e *Engine) UpdateTxStatus(txHash string, status rpcpb.TxStatusEnum) error {
+	sname := rpcpb.TxStatusEnum_name[int32(status)]
+	e.txStatus.Add(txHash, status)
+	err := e.store.Set(e.statusBucket, []byte(txHash), []byte(sname))
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// add transaction to internal pending set
 func (e *Engine) addTx(tx *ultpb.Tx) error {
 	h, err := ultpb.SHA256Hash(tx)
 	if err != nil {
 		return err
 	}
 	if e.txSet.Contains(h) {
-		return errors.New("duplicate transaction")
+		return nil
 	}
 	// get the account information
 	acc, err := e.am.GetAccount(tx.AccountID)
 	if err != nil {
 		e.logger.Warnw("cannot find the account", "AccountID", tx.AccountID)
-		return err
+		return ErrAccountNotFound
 	}
 	// compute the total fees and max sequence number
 	totalFees := tx.Fee
