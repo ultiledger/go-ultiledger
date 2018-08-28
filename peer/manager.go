@@ -2,6 +2,7 @@ package peer
 
 import (
 	"errors"
+	"sync"
 	"time"
 
 	"github.com/deckarep/golang-set"
@@ -33,8 +34,10 @@ type Manager struct {
 	initPeers []string
 
 	// connected peers
+	peerLock  sync.RWMutex
 	livePeers map[string]*Peer
-	nodeIDs   mapset.Set
+
+	nodeIDs mapset.Set
 
 	// peers waiting to be connected, each peer has three
 	// chances to be connected.
@@ -87,29 +90,45 @@ func (pm *Manager) Start(stopChan chan struct{}) {
 		for {
 			select {
 			case p := <-pm.addChan:
+				pm.peerLock.Lock()
 				pm.livePeers[p.Addr] = p
 				pm.nodeIDs.Add(p.NodeID)
+				pm.peerLock.Unlock()
 			case p := <-pm.deleteChan: // only delete connected peers
+				pm.peerLock.Lock()
 				if _, ok := pm.livePeers[p.Addr]; ok {
 					delete(pm.livePeers, p.Addr)
 					pm.nodeIDs.Remove(p.NodeID)
 				}
+				pm.peerLock.Unlock()
 			case <-stopChan:
 				close(pm.stopChan) // stop retry first
 				pm.pendingPeers = nil
+				pm.peerLock.Lock()
 				for _, p := range pm.livePeers {
 					p.Close()
 				}
 				pm.livePeers = nil
+				pm.peerLock.Unlock()
 				return
 			}
 		}
 	}()
 }
 
-// Get the snapshot of current live nodeIDs
-func (pm *Manager) GetLiveNodeID() mapset.Set {
-	return pm.nodeIDs.Clone()
+// Get a list of rpc clients from live peers
+func (pm *Manager) GetLiveClients() []rpcpb.NodeClient {
+	pm.peerLock.RLock()
+	defer pm.peerLock.RUnlock()
+	var clients []rpcpb.NodeClient
+	for _, p := range pm.livePeers {
+		clients = append(clients, p.client)
+	}
+	return clients
+}
+
+func (pm *Manager) GetMetadata() metadata.MD {
+	return pm.metadata
 }
 
 // Add new peer with network addr

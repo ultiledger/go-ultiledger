@@ -10,9 +10,11 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/ultiledger/go-ultiledger/account"
+	"github.com/ultiledger/go-ultiledger/crypto"
 	"github.com/ultiledger/go-ultiledger/db"
 	"github.com/ultiledger/go-ultiledger/ledger"
 	"github.com/ultiledger/go-ultiledger/peer"
+	"github.com/ultiledger/go-ultiledger/rpc"
 	"github.com/ultiledger/go-ultiledger/rpc/rpcpb"
 	"github.com/ultiledger/go-ultiledger/ultpb"
 )
@@ -31,6 +33,8 @@ type Engine struct {
 	bucket string
 	// for saving transaction status
 	statusBucket string
+
+	seed string
 
 	logger *zap.SugaredLogger
 
@@ -170,8 +174,22 @@ func (e *Engine) AddTx(tx *ultpb.Tx) error {
 	return nil
 }
 
-// broadcast statements through rpc broadcasting
+// broadcast consensus message through rpc broadcast
 func (e *Engine) broadcastStatement(stmt *ultpb.Statement) error {
+	clients := e.pm.GetLiveClients()
+	metadata := e.pm.GetMetadata()
+	payload, err := ultpb.Encode(stmt)
+	if err != nil {
+		return err
+	}
+	sign, err := crypto.Sign(e.seed, payload)
+	if err != nil {
+		return err
+	}
+	err = rpc.BroadcastStatement(clients, metadata, payload, sign)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 

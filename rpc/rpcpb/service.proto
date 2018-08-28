@@ -38,8 +38,8 @@ message SubmitTxResponse {
 }
 
 enum NotifyMsgType {
-  Tx = 0;       // transaction message
-  NOMINATE = 1; // consensus nomination message
+  Tx = 0;        // transaction message
+  STATEMENT = 1; // consensus statement
 }
 
 message NotifyRequest {

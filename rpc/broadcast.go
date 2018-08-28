@@ -29,8 +29,8 @@ func init() {
 	}
 }
 
-// broadcast nomination statements
-func BroadcastNomination(clients []rpcpb.NodeClient, md metadata.MD, payload []byte, signature string) error {
+// broadcast consensus statements
+func BroadcastStatement(clients []rpcpb.NodeClient, md metadata.MD, payload []byte, signature string) error {
 	if len(payload) == 0 {
 		return ErrEmptyPayload
 	}
@@ -38,7 +38,7 @@ func BroadcastNomination(clients []rpcpb.NodeClient, md metadata.MD, payload []b
 		return ErrEmptySignature
 	}
 	req := &rpcpb.NotifyRequest{
-		MsgType:   rpcpb.NotifyMsgType_NOMINATE,
+		MsgType:   rpcpb.NotifyMsgType_STATEMENT,
 		Data:      payload,
 		Signature: signature,
 	}
@@ -46,7 +46,6 @@ func BroadcastNomination(clients []rpcpb.NodeClient, md metadata.MD, payload []b
 	if err != nil {
 		return err
 	}
-	return nil
 	return nil
 }
 
