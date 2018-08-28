@@ -115,6 +115,8 @@ func runTask(done <-chan bool, taskChan <-chan *task) <-chan *rpcpb.NotifyRespon
 			case <-done:
 				return
 			case responseChan <- notify(t):
+				// return task to pool after using
+				taskPool.Put(t)
 			}
 		}
 	}()
