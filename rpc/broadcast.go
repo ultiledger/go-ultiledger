@@ -14,6 +14,8 @@ import (
 
 var (
 	ErrUnknownMsgType = errors.New("unknown broadcast message type")
+	ErrEmptyPayload   = errors.New("empty payload")
+	ErrEmptySignature = errors.New("empty digital signature")
 )
 
 // for reusing broadcast signal type
@@ -29,6 +31,12 @@ func init() {
 
 // broadcast nomination statements
 func BroadcastNomination(clients []rpcpb.NodeClient, md metadata.MD, payload []byte, signature string) error {
+	if len(payload) == 0 {
+		return ErrEmptyPayload
+	}
+	if signature == "" {
+		return ErrEmptySignature
+	}
 	req := &rpcpb.NotifyRequest{
 		MsgType:   rpcpb.NotifyMsgType_NOMINATE,
 		Data:      payload,
@@ -44,6 +52,12 @@ func BroadcastNomination(clients []rpcpb.NodeClient, md metadata.MD, payload []b
 
 // broadcast transaction
 func BroadcastTx(clients []rpcpb.NodeClient, md metadata.MD, payload []byte, signature string) error {
+	if len(payload) == 0 {
+		return ErrEmptyPayload
+	}
+	if signature == "" {
+		return ErrEmptySignature
+	}
 	req := &rpcpb.NotifyRequest{
 		MsgType:   rpcpb.NotifyMsgType_Tx,
 		Data:      payload,
