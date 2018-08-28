@@ -35,15 +35,17 @@ type slot struct {
 	statementChan chan *ultpb.Statement
 }
 
-func newSlot(idx uint64, nodeID string, l *zap.SugaredLogger) *slot {
+func newSlot(idx uint64, nodeID string, l *zap.SugaredLogger, stmtC chan *ultpb.Statement) *slot {
 	s := &slot{
-		index:      idx,
-		logger:     l,
-		nodeID:     nodeID,
-		round:      0,
-		votes:      mapset.NewSet(),
-		accepts:    mapset.NewSet(),
-		candidates: mapset.NewSet(),
+		index:         idx,
+		logger:        l,
+		nodeID:        nodeID,
+		round:         0,
+		votes:         mapset.NewSet(),
+		accepts:       mapset.NewSet(),
+		candidates:    mapset.NewSet(),
+		nominations:   make(map[string]*ultpb.Nomination),
+		statementChan: stmtC,
 	}
 	return s
 }

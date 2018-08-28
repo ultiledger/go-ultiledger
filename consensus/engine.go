@@ -64,6 +64,8 @@ type Engine struct {
 
 	// channel for broadcasting statement
 	statementChan chan *ultpb.Statement
+	// channel for broadcasting tx
+	txChan chan *ultpb.Tx
 }
 
 func NewEngine(d db.DB, l *zap.SugaredLogger, pm *peer.Manager, am *account.Manager, lm *ledger.Manager) *Engine {
@@ -79,6 +81,7 @@ func NewEngine(d db.DB, l *zap.SugaredLogger, pm *peer.Manager, am *account.Mana
 		txSet:         mapset.NewSet(),
 		txMap:         make(map[string]*TxHistory),
 		statementChan: make(chan *ultpb.Statement),
+		txChan:        make(chan *ultpb.Tx),
 	}
 	err := e.store.CreateBucket(e.bucket)
 	if err != nil {
@@ -104,6 +107,12 @@ func (e *Engine) Start(stopChan chan struct{}) {
 				err := e.broadcastStatement(stmt)
 				if err != nil {
 					e.logger.Warnf("failed to broadcast statements: %v", err)
+					continue
+				}
+			case tx := <-e.txChan:
+				err := e.broadcastTx(tx)
+				if err != nil {
+					e.logger.Warnf("failed to broadcast transaction: %v", err)
 					continue
 				}
 			case <-stopChan:
@@ -171,6 +180,27 @@ func (e *Engine) AddTx(tx *ultpb.Tx) error {
 	}
 	e.txMap[tx.AccountID].AddTx(tx, h)
 	e.txSet.Add(h)
+	// add tx to broadcast channel
+	go func() { e.txChan <- tx }()
+	return nil
+}
+
+// broadcast transaction through rpc broadcast
+func (e *Engine) broadcastTx(tx *ultpb.Tx) error {
+	clients := e.pm.GetLiveClients()
+	metadata := e.pm.GetMetadata()
+	payload, err := ultpb.Encode(tx)
+	if err != nil {
+		return err
+	}
+	sign, err := crypto.Sign(e.seed, payload)
+	if err != nil {
+		return err
+	}
+	err = rpc.BroadcastTx(clients, metadata, payload, sign)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -227,7 +257,7 @@ func (e *Engine) propose() error {
 func (e *Engine) nominate(slotIdx uint64, prevValue *ultpb.ConsensusValue, currValue *ultpb.ConsensusValue) error {
 	// get new slot
 	if _, ok := e.slots[slotIdx]; !ok {
-		e.slots[slotIdx] = newSlot(slotIdx, "", e.logger)
+		e.slots[slotIdx] = newSlot(slotIdx, "", e.logger, e.statementChan)
 	}
 	prevEnc, err := ultpb.Encode(prevValue)
 	if err != nil {
