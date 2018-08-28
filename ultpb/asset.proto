@@ -2,13 +2,14 @@ syntax = "proto3";
 
 package ultpb;
 
+// enumerable asset types
+enum AssetType {
+  NATIVE = 0;
+  CUSTOM = 1;
+}
+
 message Asset {
-  // enumerable asset types
-  enum AssetTypeEnum {
-    NATIVE = 0;
-    CUSTOM = 1;
-  }
-  AssetTypeEnum AssetType = 1;
+  AssetType AssetType = 1;
   // user defined asset name, name length should not be more than 4
   string AssetName = 2;
   // signer of this asset

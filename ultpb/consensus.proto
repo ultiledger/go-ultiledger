@@ -33,14 +33,15 @@ message Nomination {
 // Statement is an abstractive value for nodes to vote 
 // and reach consensus. Each statement type has its 
 // corresponding data encoded in pb and saved in Data field.
+enum StatementType {
+  NOMINATE = 0;
+  PREPARE = 1;
+  CONFIRM = 2;
+  EXTERNALIZE = 3;
+}
+
 message Statement {
-  enum StatementTypeEnum {
-    NOMINATE = 0;
-    PREPARE = 1;
-    CONFIRM = 2;
-    EXTERNALIZE = 3;
-  }
-  StatementTypeEnum StatementType = 1;
+  StatementType StatementType = 1;
   string NodeID = 2;
   uint64 SlotIndex = 3;
   bytes Data = 4; 
