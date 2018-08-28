@@ -13,35 +13,28 @@ import (
 	"github.com/ultiledger/go-ultiledger/rpc/rpcpb"
 )
 
-var (
-	ErrInvalidIP = errors.New("invalid IP address format")
-)
-
 // Manager manages the CRUD of peers
 type Manager struct {
 	logger *zap.SugaredLogger
 
 	// Network address of the node
-	Addr string
+	addr string
 
 	// NodeID of the node
-	NodeID string
+	nodeID string
 
 	// Metadata for gRPC context
 	metadata metadata.MD
 
+	// max number of peers to connect
+	maxPeers int
+
 	// initial peer addresses
 	initPeers []string
-
-	// peers waiting for connection
-	waitPeers []string
 
 	// connected peers
 	livePeers map[string]*Peer
 	nodeIDs   mapset.Set
-
-	// connect channel for add new peer IP
-	ConnectChan chan string
 
 	// peers waiting to be connected, each peer has three
 	// chances to be connected.
@@ -49,6 +42,9 @@ type Manager struct {
 
 	// channel for stopping pending peers connection
 	stopChan chan struct{}
+
+	// channel for adding peer addr
+	peerAddrChan chan string
 
 	// channel for managing live peers
 	addChan    chan *Peer
@@ -58,14 +54,14 @@ type Manager struct {
 func NewManager(l *zap.SugaredLogger, ps []string, addr string, nodeID string) *Manager {
 	return &Manager{
 		logger:       l,
-		Addr:         addr,
-		NodeID:       nodeID,
+		addr:         addr,
+		nodeID:       nodeID,
 		metadata:     metadata.Pairs(addr, nodeID),
+		maxPeers:     100, // hard code for now
 		initPeers:    ps,
 		pendingPeers: make(map[string]int),
 		livePeers:    make(map[string]*Peer),
 		nodeIDs:      mapset.NewSet(),
-		ConnectChan:  make(chan string, 100),
 		stopChan:     make(chan struct{}),
 		addChan:      make(chan *Peer),
 		deleteChan:   make(chan *Peer),
@@ -115,7 +111,17 @@ func (pm *Manager) GetLiveNodeID() mapset.Set {
 	return pm.nodeIDs.Clone()
 }
 
-// ConnectPeer connects the remote peer with provided network address
+// Add new peer with network addr
+func (pm *Manager) AddPeerAddr(addr string) error {
+	select {
+	case pm.peerAddrChan <- addr:
+	case <-pm.stopChan:
+		return errors.New("peer manager is stopped")
+	}
+	return nil
+}
+
+// connects the remote peer with provided network address
 func (pm *Manager) connectPeer(addr string) (*Peer, error) {
 	conn, err := grpc.Dial(addr, grpc.WithInsecure(), grpc.WithBlock(), grpc.WithTimeout(1*time.Second))
 	if err != nil {
@@ -132,13 +138,16 @@ func (pm *Manager) connectPeer(addr string) (*Peer, error) {
 	return p, nil
 }
 
-// try to connect to peers periodically
+// connect to peers periodically
 func (pm *Manager) connect() {
 	ticker := time.NewTicker(1 * time.Second)
 	for {
 		select {
 		case <-ticker.C:
 			if len(pm.pendingPeers) == 0 {
+				continue
+			}
+			if len(pm.livePeers) > pm.maxPeers {
 				continue
 			}
 			for addr, count := range pm.pendingPeers {
@@ -170,8 +179,12 @@ func (pm *Manager) connect() {
 				case <-pm.stopChan:
 					return
 				}
+
+				if len(pm.livePeers) > pm.maxPeers {
+					break
+				}
 			}
-		case addr := <-pm.ConnectChan:
+		case addr := <-pm.peerAddrChan:
 			if _, ok := pm.pendingPeers[addr]; ok {
 				continue
 			}

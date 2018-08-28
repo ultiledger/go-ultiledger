@@ -43,7 +43,8 @@ type Node struct {
 	stopChan chan struct{}
 
 	// futures for task with error responses
-	txFuture chan *future.Tx
+	txFuture   chan *future.Tx
+	peerFuture chan *future.Peer
 }
 
 // NewNode creates a Node which controls all the sub tasks
@@ -101,15 +102,15 @@ func NewNode(conf *Config) *Node {
 
 // Start checks the provided configurations, if the config is valid,
 // it will trigger sub goroutines to do the sub tasks.
-func (u *Node) Start() error {
+func (n *Node) Start() error {
 	// start node server
-	go u.serveNode()
+	go n.serveNode()
 
 	// start node event loop
-	go u.eventLoop()
+	go n.eventLoop()
 
 	// start peer manager
-	u.pm.Start(u.stopChan)
+	n.pm.Start(n.stopChan)
 
 	select {}
 	return nil
@@ -117,40 +118,52 @@ func (u *Node) Start() error {
 
 // Restart checks the provided configurations, if the config is valid,
 // it will trigger sub goroutines to do the sub tasks.
-func (u *Node) Restart() error {
+func (n *Node) Restart() error {
 	log.Println("restart called")
 	return nil
 }
 
 // event loop for dealing with various internal events
-func (u *Node) eventLoop() {
+func (n *Node) eventLoop() {
 	for {
 		select {
-		case <-u.stopChan:
-			u.logger.Infof("shutdown event loop")
+		case txf := <-n.txFuture:
+			err := n.engine.AddTx(txf.Tx)
+			if err != nil {
+				n.logger.Warnf("failed to add transaction: %v", err)
+			}
+			txf.Respond(err)
+		case pf := <-n.peerFuture:
+			err := n.pm.AddPeerAddr(pf.Addr)
+			if err != nil {
+				n.logger.Warnf("failed to add peer addr: %v", err)
+			}
+			pf.Respond(err)
+		case <-n.stopChan:
+			n.logger.Infof("shutdown event loop")
 			return
 		}
 	}
 }
 
 // serve starts a listener on the port and starts to accept request
-func (u *Node) serveNode() {
+func (n *Node) serveNode() {
 	// register rpc service and start the ULTNode server
-	listener, err := net.Listen("tcp", u.config.Port)
+	listener, err := net.Listen("tcp", n.config.Port)
 	if err != nil {
-		u.logger.Fatal(err)
+		n.logger.Fatal(err)
 	}
 
 	s := grpc.NewServer()
-	pb.RegisterNodeServer(s, u.server)
+	pb.RegisterNodeServer(s, n.server)
 
-	u.logger.Infof("start to serve gRPC requests on %s", u.config.Port)
+	n.logger.Infof("start to serve gRPC requests on %s", n.config.Port)
 	go s.Serve(listener)
 
 	for {
 		select {
-		case <-u.stopChan:
-			u.logger.Infof("gracefully shutdown gRPC server")
+		case <-n.stopChan:
+			n.logger.Infof("gracefully shutdown gRPC server")
 			s.GracefulStop()
 			return
 		}
