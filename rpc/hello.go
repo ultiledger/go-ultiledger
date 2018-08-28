@@ -24,9 +24,9 @@ func Hello(client pb.NodeClient, md metadata.MD) (string, string, error) {
 	if err != nil {
 		return "", "", err
 	}
-	if len(header.Get("IP")) == 0 || len(header.Get("NodeID")) == 0 {
+	if len(header.Get("Addr")) == 0 || len(header.Get("NodeID")) == 0 {
 		return "", "", errors.New("empty peer IP or NodeID")
 	}
 
-	return header.Get("IP")[0], header.Get("NodeID")[0], nil
+	return header.Get("Addr")[0], header.Get("NodeID")[0], nil
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 
@@ -14,20 +15,21 @@ import (
 )
 
 type NodeServer struct {
-	ip     string // IP address of this node
+	logger *zap.SugaredLogger
+	addr   string // Network address of this node
 	nodeID string // ID of this node (public key)
 	seed   string // Private key of this node
 
 	nodeKey map[string]*crypto.ULTKey
 
-	// channel for adding new peer IP
-	peerChan chan string
-	// channel for adding new tx
-	txChan chan *future.Tx
+	// future for adding new peer addr
+	peerFuture chan *future.Peer
+	// future for adding new tx
+	txFuture chan *future.Tx
 }
 
-func NewNodeServer(ip string, nodeID string, seed string, peerC chan string, txC chan *future.Tx) *NodeServer {
-	s := &NodeServer{ip: ip, nodeID: nodeID, seed: seed, peerChan: peerC, txChan: txC}
+func NewNodeServer(l *zap.SugaredLogger, addr string, nodeID string, seed string, peerC chan *future.Peer, txC chan *future.Tx) *NodeServer {
+	s := &NodeServer{logger: l, addr: addr, nodeID: nodeID, seed: seed, peerFuture: peerC, txFuture: txC}
 	return s
 }
 
@@ -37,16 +39,21 @@ func (s *NodeServer) Hello(ctx context.Context, req *rpcpb.HelloRequest) (*rpcpb
 	if !ok {
 		return resp, errors.New("failed to retrieve incoming context")
 	}
-	if len(md.Get("IP")) == 0 || len(md.Get("NodeID")) == 0 {
-		return resp, errors.New("IP address or NodeID is absent")
+	if len(md.Get("Addr")) == 0 || len(md.Get("NodeID")) == 0 {
+		return resp, errors.New("Network address or NodeID is absent")
 	}
-	s.peerChan <- md.Get("IP")[0]
+	f := &future.Peer{Addr: md.Get("Addr")[0]}
+	f.Init()
+	s.peerFuture <- f
+	if err := f.Error(); err != nil {
+		s.logger.Warnf("failed to add new peer: %v", err)
+	}
 	k, err := crypto.DecodeKey(md.Get("NodeID")[0])
 	if err != nil {
 		return resp, errors.New("invalid node ID")
 	}
-	s.nodeKey[md.Get("IP")[0]] = k
-	grpc.SendHeader(ctx, metadata.Pairs("IP", s.ip, "NodeID", s.nodeID))
+	s.nodeKey[md.Get("Addr")[0]] = k
+	grpc.SendHeader(ctx, metadata.Pairs("Addr", s.addr, "NodeID", s.nodeID))
 	return resp, nil
 }
 
@@ -56,8 +63,9 @@ func (s *NodeServer) SubmitTx(ctx context.Context, req *rpcpb.SubmitTxRequest) (
 	if err != nil {
 		return resp, err
 	}
-	f := future.NewTx(tx)
-	s.txChan <- f
+	f := &future.Tx{Tx: tx}
+	f.Init()
+	s.txFuture <- f
 	if err := f.Error(); err != nil {
 		return resp, err
 	}

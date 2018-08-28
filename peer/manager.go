@@ -21,8 +21,8 @@ var (
 type Manager struct {
 	logger *zap.SugaredLogger
 
-	// IP of the node
-	IP string
+	// Network address of the node
+	Addr string
 
 	// NodeID of the node
 	NodeID string
@@ -55,12 +55,12 @@ type Manager struct {
 	deleteChan chan *Peer
 }
 
-func NewManager(l *zap.SugaredLogger, ps []string, ip string, nodeID string) *Manager {
+func NewManager(l *zap.SugaredLogger, ps []string, addr string, nodeID string) *Manager {
 	return &Manager{
 		logger:       l,
-		IP:           ip,
+		Addr:         addr,
 		NodeID:       nodeID,
-		metadata:     metadata.Pairs(ip, nodeID),
+		metadata:     metadata.Pairs(addr, nodeID),
 		initPeers:    ps,
 		pendingPeers: make(map[string]int),
 		livePeers:    make(map[string]*Peer),

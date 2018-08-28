@@ -11,7 +11,6 @@ import (
 
 	"github.com/ultiledger/go-ultiledger/account"
 	"github.com/ultiledger/go-ultiledger/db"
-	"github.com/ultiledger/go-ultiledger/future"
 	"github.com/ultiledger/go-ultiledger/ledger"
 	"github.com/ultiledger/go-ultiledger/peer"
 	"github.com/ultiledger/go-ultiledger/rpc/rpcpb"
@@ -61,9 +60,6 @@ type Engine struct {
 
 	// channel for broadcasting statement
 	statementChan chan *ultpb.Statement
-
-	// channel for adding tx
-	AddTxChan chan *future.Tx
 }
 
 func NewEngine(d db.DB, l *zap.SugaredLogger, pm *peer.Manager, am *account.Manager, lm *ledger.Manager) *Engine {
@@ -79,7 +75,6 @@ func NewEngine(d db.DB, l *zap.SugaredLogger, pm *peer.Manager, am *account.Mana
 		txSet:         mapset.NewSet(),
 		txMap:         make(map[string]*TxHistory),
 		statementChan: make(chan *ultpb.Statement),
-		AddTxChan:     make(chan *future.Tx),
 	}
 	err := e.store.CreateBucket(e.bucket)
 	if err != nil {
@@ -107,12 +102,6 @@ func (e *Engine) Start(stopChan chan struct{}) {
 					e.logger.Warnf("failed to broadcast statements: %v", err)
 					continue
 				}
-			case txf := <-e.AddTxChan:
-				err := e.addTx(txf.Tx)
-				if err != nil {
-					e.logger.Warnf("failed to add transaction: %v", err)
-				}
-				txf.ErrChan <- err
 			case <-stopChan:
 				return
 			}
@@ -145,7 +134,7 @@ func (e *Engine) UpdateTxStatus(txHash string, status rpcpb.TxStatusEnum) error 
 }
 
 // add transaction to internal pending set
-func (e *Engine) addTx(tx *ultpb.Tx) error {
+func (e *Engine) AddTx(tx *ultpb.Tx) error {
 	h, err := ultpb.SHA256Hash(tx)
 	if err != nil {
 		return err

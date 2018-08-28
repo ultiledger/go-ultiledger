@@ -11,6 +11,7 @@ import (
 	"github.com/ultiledger/go-ultiledger/account"
 	"github.com/ultiledger/go-ultiledger/consensus"
 	"github.com/ultiledger/go-ultiledger/db"
+	"github.com/ultiledger/go-ultiledger/future"
 	"github.com/ultiledger/go-ultiledger/ledger"
 	"github.com/ultiledger/go-ultiledger/peer"
 	"github.com/ultiledger/go-ultiledger/rpc"
@@ -22,8 +23,8 @@ type Node struct {
 	store  db.DB
 	logger *zap.SugaredLogger
 
-	// IP address of this node
-	ip string
+	// Network address of this node
+	addr string
 	// NodeID and seed of this node
 	nodeID string
 	seed   string
@@ -40,6 +41,9 @@ type Node struct {
 
 	// channel for stopping all the subroutines
 	stopChan chan struct{}
+
+	// futures for task with error responses
+	txFuture chan *future.Tx
 }
 
 // NewNode creates a Node which controls all the sub tasks
@@ -57,9 +61,9 @@ func NewNode(conf *Config) *Node {
 		log.Fatal(err)
 	}
 	defer conn.Close()
-	addr := conn.LocalAddr().(*net.UDPAddr)
+	netAddr := conn.LocalAddr().(*net.UDPAddr)
 
-	ip := addr.String()
+	addr := netAddr.String() + ":" + conf.Port
 	nodeID := conf.NodeID
 	seed := conf.Seed
 
@@ -70,21 +74,23 @@ func NewNode(conf *Config) *Node {
 	}
 	store := ctor(conf.DBPath)
 
-	pm := peer.NewManager(l.Sugar(), conf.Peers, ip, nodeID)
+	pm := peer.NewManager(l.Sugar(), conf.Peers, addr, nodeID)
 	lm := ledger.NewManager(store, logger)
 	am := account.NewManager(store, logger)
 	engine := consensus.NewEngine(store, logger, pm, am, lm)
+	txFuture := make(chan *future.Tx)
+	peerFuture := make(chan *future.Peer)
 
 	node := &Node{
 		config:    conf,
 		store:     store,
-		logger:    l.Sugar(),
-		server:    rpc.NewNodeServer(ip, nodeID, seed, pm.ConnectChan, engine.AddTxChan),
+		logger:    logger,
+		server:    rpc.NewNodeServer(logger, addr, nodeID, seed, peerFuture, txFuture),
 		pm:        pm,
 		lm:        lm,
 		am:        am,
 		engine:    engine,
-		ip:        ip,
+		addr:      addr,
 		nodeID:    nodeID,
 		startTime: time.Now().Unix(),
 		stopChan:  make(chan struct{}),
