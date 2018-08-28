@@ -5,21 +5,22 @@ import (
 	"errors"
 	"time"
 
-	pb "github.com/ultiledger/go-ultiledger/rpc/rpcpb"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
+
+	"github.com/ultiledger/go-ultiledger/rpc/rpcpb"
 )
 
 // Hello checks the health of remote peer and at the
 // same time exchanges nodeID (public key) between peers
-func Hello(client pb.NodeClient, md metadata.MD) (string, string, error) {
+func Hello(client rpcpb.NodeClient, md metadata.MD) (string, string, error) {
 	ctx := metadata.NewOutgoingContext(context.Background(), md)
 	ctx, cancel := context.WithTimeout(ctx, time.Duration(1*time.Second))
 	defer cancel()
 
 	var header metadata.MD
 
-	req := pb.HelloRequest{}
+	req := rpcpb.HelloRequest{}
 	_, err := client.Hello(ctx, &req, grpc.Header(&header))
 	if err != nil {
 		return "", "", err

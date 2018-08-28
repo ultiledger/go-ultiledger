@@ -5,7 +5,7 @@ package rpcpb;
 service Node {
   rpc Hello(HelloRequest) returns (HelloResponse) {}
   rpc SubmitTx(SubmitTxRequest) returns (SubmitTxResponse) {}
-  rpc Nominate(NominateRequest) returns (NominateResponse) {}
+  rpc Notify(NotifyRequest) returns (NotifyResponse) {}
 }
 
 message HelloRequest {}
@@ -37,12 +37,19 @@ message SubmitTxResponse {
   string ErrorMessage = 3;
 }
 
-message NominateRequest {
-  // nomination statement in pb format
-  bytes Data = 1;
-  // digital signature of the data signed by
-  // the private key of peer node
-  string Signature = 2;
+enum NotifyMsgType {
+  Tx = 0;       // transaction message
+  NOMINATE = 1; // consensus nomination message
 }
 
-message NominateResponse {}
+message NotifyRequest {
+  // type of message
+  NotifyMsgType MsgType = 1;
+  // message payload in pb format
+  bytes Data = 2;
+  // digital signature of the data signed by
+  // the private key of peer node
+  string Signature = 3;
+}
+
+message NotifyResponse {}

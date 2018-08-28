@@ -102,7 +102,7 @@ func (s *slot) sendNomination(quorum *ultpb.Quorum, quorumHash string) error {
 			return err
 		}
 		stmt := &ultpb.Statement{
-			StatementType: ultpb.Statement_NOMINATE,
+			StatementType: ultpb.StatementType_NOMINATE,
 			NodeID:        s.nodeID,
 			SlotIndex:     s.index,
 			Data:          nomBytes,

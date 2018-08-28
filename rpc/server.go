@@ -72,6 +72,6 @@ func (s *NodeServer) SubmitTx(ctx context.Context, req *rpcpb.SubmitTxRequest) (
 	return nil, nil
 }
 
-func (s *NodeServer) Nominate(ctx context.Context, req *rpcpb.NominateRequest) (*rpcpb.NominateResponse, error) {
+func (s *NodeServer) Notify(ctx context.Context, req *rpcpb.NotifyRequest) (*rpcpb.NotifyResponse, error) {
 	return nil, nil
 }

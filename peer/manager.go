@@ -63,6 +63,7 @@ func NewManager(l *zap.SugaredLogger, ps []string, addr string, nodeID string) *
 		livePeers:    make(map[string]*Peer),
 		nodeIDs:      mapset.NewSet(),
 		stopChan:     make(chan struct{}),
+		peerAddrChan: make(chan string, 100),
 		addChan:      make(chan *Peer),
 		deleteChan:   make(chan *Peer),
 	}
