@@ -71,7 +71,7 @@ func NewNode(conf *Config) *Node {
 	am := account.NewManager(store)
 
 	// consensus engine depends on all the managers above
-	engine := consensus.NewEngine(store, seed, nil /*quorum*/, pm, am, lm)
+	engine := consensus.NewEngine(store, seed, conf.Quorum, pm, am, lm)
 
 	txFuture := make(chan *future.Tx)
 	peerFuture := make(chan *future.Peer)

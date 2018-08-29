@@ -5,6 +5,8 @@ import (
 	"errors"
 
 	"github.com/spf13/viper"
+
+	"github.com/ultiledger/go-ultiledger/ultpb"
 )
 
 type Config struct {
@@ -22,6 +24,8 @@ type Config struct {
 	DBBackend string
 	// database file path
 	DBPath string
+	// initial quorum
+	Quorum *ultpb.Quorum
 }
 
 func NewConfig(v *viper.Viper) (*Config, error) {
