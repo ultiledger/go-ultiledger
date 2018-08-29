@@ -2,13 +2,14 @@ package account
 
 import (
 	"errors"
+	"fmt"
 
 	lru "github.com/hashicorp/golang-lru"
-	"go.uber.org/zap"
 
 	"github.com/ultiledger/go-ultiledger/crypto"
 	"github.com/ultiledger/go-ultiledger/db"
-	pb "github.com/ultiledger/go-ultiledger/ultpb"
+	"github.com/ultiledger/go-ultiledger/log"
+	"github.com/ultiledger/go-ultiledger/ultpb"
 )
 
 var (
@@ -21,28 +22,25 @@ type Manager struct {
 	store  db.DB
 	bucket string
 
-	logger *zap.SugaredLogger
-
 	// LRU cache for accounts
 	accounts *lru.Cache
 
 	// master account
-	master *pb.Account
+	master *ultpb.Account
 }
 
-func NewManager(d db.DB, l *zap.SugaredLogger) *Manager {
+func NewManager(d db.DB) *Manager {
 	am := &Manager{
 		store:  d,
-		bucket: "ACCOUNTS",
-		logger: l,
+		bucket: "ACCOUNT",
 	}
 	err := am.store.CreateBucket(am.bucket)
 	if err != nil {
-		am.logger.Fatal(err)
+		log.Fatal(fmt.Errorf("create bucket %s failed: %v", am.bucket, err))
 	}
 	cache, err := lru.New(10000)
 	if err != nil {
-		am.logger.Fatal(err)
+		log.Fatal(fmt.Errorf("create account manager LRU cache failed: %v", err))
 	}
 	am.accounts = cache
 	return am
@@ -54,9 +52,9 @@ func (am *Manager) CreateMasterAccount(networkID []byte, balance uint64) error {
 	if err != nil {
 		return err
 	}
-	am.logger.Infof("master private key (seed) is %s", privKey)
+	log.Infof("master private key (seed) is %s", privKey)
 
-	acc := &pb.Account{
+	acc := &ultpb.Account{
 		AccountID: pubKey,
 		Balance:   balance,
 		Signer:    pubKey,
@@ -67,17 +65,17 @@ func (am *Manager) CreateMasterAccount(networkID []byte, balance uint64) error {
 }
 
 // Get account information from accountID
-func (am *Manager) GetAccount(accountID string) (*pb.Account, error) {
+func (am *Manager) GetAccount(accountID string) (*ultpb.Account, error) {
 	// first check the LRU cache
 	if acc, ok := am.accounts.Get(accountID); ok {
-		return acc.(*pb.Account), nil
+		return acc.(*ultpb.Account), nil
 	}
 	// then check database
 	b, ok := am.store.Get(am.bucket, []byte(accountID))
 	if !ok {
 		return nil, ErrAccountNotExist
 	}
-	acc, err := pb.DecodeAccount(b)
+	acc, err := ultpb.DecodeAccount(b)
 	if err != nil {
 		return nil, ErrAccountCorrupted
 	}
