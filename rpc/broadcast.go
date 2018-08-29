@@ -13,7 +13,6 @@ import (
 )
 
 var (
-	ErrUnknownMsgType = errors.New("unknown broadcast message type")
 	ErrEmptyPayload   = errors.New("empty payload")
 	ErrEmptySignature = errors.New("empty digital signature")
 )
@@ -44,7 +43,7 @@ func BroadcastStatement(clients []rpcpb.NodeClient, md metadata.MD, payload []by
 	}
 	err := broadcast(clients, md, req)
 	if err != nil {
-		return err
+		return fmt.Errorf("broadcast failed: %v", err)
 	}
 	return nil
 }
@@ -64,7 +63,7 @@ func BroadcastTx(clients []rpcpb.NodeClient, md metadata.MD, payload []byte, sig
 	}
 	err := broadcast(clients, md, req)
 	if err != nil {
-		return err
+		return fmt.Errorf("broadcast failed: %v", err)
 	}
 	return nil
 }

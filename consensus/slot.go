@@ -1,11 +1,11 @@
 package consensus
 
 import (
+	"errors"
 	"fmt"
 	"math"
 
 	"github.com/deckarep/golang-set"
-	"go.uber.org/zap"
 
 	"github.com/ultiledger/go-ultiledger/ultpb"
 )
@@ -14,8 +14,6 @@ import (
 // state for a slot index
 type slot struct {
 	index uint64
-
-	logger *zap.SugaredLogger
 
 	// nodeID of this node
 	nodeID string
@@ -35,10 +33,9 @@ type slot struct {
 	statementChan chan *ultpb.Statement
 }
 
-func newSlot(idx uint64, nodeID string, l *zap.SugaredLogger, stmtC chan *ultpb.Statement) *slot {
+func newSlot(idx uint64, nodeID string, stmtC chan *ultpb.Statement) *slot {
 	s := &slot{
 		index:         idx,
-		logger:        l,
 		nodeID:        nodeID,
 		round:         0,
 		votes:         mapset.NewSet(),
@@ -57,7 +54,7 @@ func (s *slot) nominate(quorum *ultpb.Quorum, quorumHash, prevHash, currHash str
 	s.votes.Add(currHash) // For test
 
 	if err := s.sendNomination(quorum, quorumHash); err != nil {
-		return err
+		return fmt.Errorf("send nomination failed: %v", err)
 	}
 	return nil
 }
@@ -67,16 +64,19 @@ func (s *slot) recvNomination(nodeID string, quorum *ultpb.Quorum, quorumHash st
 	s.addNomination(s.nodeID, nom)
 	acceptUpdated, candidateUpdated, err := s.promoteVotes(quorum, nom)
 	if err != nil {
-		return err
+		return fmt.Errorf("promote votes failed: %v", err)
 	}
+
 	// send new nomination if votes changed
 	if acceptUpdated {
 		s.sendNomination(quorum, quorumHash)
 	}
+
 	// start balloting if candidates changed
 	if candidateUpdated {
 		// TODO(bobonovski) balloting
 	}
+
 	return nil
 }
 
@@ -92,16 +92,17 @@ func (s *slot) sendNomination(quorum *ultpb.Quorum, quorumHash string) error {
 	for accept := range s.accepts.Iter() {
 		nom.AcceptList = append(nom.AcceptList, accept.(string))
 	}
+
 	if err := s.recvNomination(s.nodeID, quorum, quorumHash, nom); err != nil {
-		s.logger.Warnf("failed to accept local nomination: %v", err)
-		return err
+		return fmt.Errorf("receive local nomination failed: %v", err)
 	}
+
 	// broadcast the nomination if it is a new one
 	if isNewerNomination(s.latestNomination, nom) {
 		s.latestNomination = nom
 		nomBytes, err := ultpb.Encode(nom)
 		if err != nil {
-			return err
+			return fmt.Errorf("encode nomination failed: %v", err)
 		}
 		stmt := &ultpb.Statement{
 			StatementType: ultpb.StatementType_NOMINATE,
@@ -111,6 +112,7 @@ func (s *slot) sendNomination(quorum *ultpb.Quorum, quorumHash string) error {
 		}
 		s.statementChan <- stmt
 	}
+
 	return nil
 }
 
@@ -118,8 +120,9 @@ func (s *slot) sendNomination(quorum *ultpb.Quorum, quorumHash string) error {
 func (s *slot) addNomination(nodeID string, newNom *ultpb.Nomination) error {
 	// check validity of votes and accepts
 	if len(newNom.VoteList)+len(newNom.AcceptList) == 0 {
-		return fmt.Errorf("empty vote and accept list")
+		return errors.New("vote and accept list is empty")
 	}
+
 	// check whether the existing nomination of the remote node
 	// is the proper subset of the new nomination
 	if nom, ok := s.nominations[nodeID]; ok {
@@ -127,6 +130,7 @@ func (s *slot) addNomination(nodeID string, newNom *ultpb.Nomination) error {
 			s.nominations[nodeID] = newNom
 		}
 	}
+
 	return nil
 }
 
@@ -134,19 +138,24 @@ func isNewerNomination(anom *ultpb.Nomination, bnom *ultpb.Nomination) bool {
 	if anom == nil && bnom != nil {
 		return true
 	}
+
 	if !IsProperSubset(anom.VoteList, bnom.VoteList) {
 		// TODO(bobonovski) more elaborate check like interset?
 		return false
 	}
+
 	if !IsProperSubset(anom.AcceptList, bnom.AcceptList) {
 		return false
 	}
+
 	return true
 }
 
+// check whether the input node set form V-blocking for input quorum
 func isVblocking(quorum *ultpb.Quorum, nodeSet mapset.Set) bool {
 	qsize := float64(len(quorum.Validators) + len(quorum.NestQuorums))
 	threshold := int(math.Ceil(qsize * (1.0 - quorum.Threshold)))
+
 	for _, vid := range quorum.Validators {
 		if nodeSet.Contains(vid) {
 			threshold = threshold - 1
@@ -155,6 +164,7 @@ func isVblocking(quorum *ultpb.Quorum, nodeSet mapset.Set) bool {
 			return true
 		}
 	}
+
 	for _, nq := range quorum.NestQuorums {
 		if isVblocking(nq, nodeSet) {
 			threshold = threshold - 1
@@ -163,12 +173,15 @@ func isVblocking(quorum *ultpb.Quorum, nodeSet mapset.Set) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
+// check whether the input node set form quorum slice for input quorum
 func isQuorumSlice(quorum *ultpb.Quorum, nodeSet mapset.Set) bool {
 	qsize := float64(len(quorum.Validators) + len(quorum.NestQuorums))
 	threshold := int(math.Ceil(qsize * quorum.Threshold))
+
 	for _, vid := range quorum.Validators {
 		if nodeSet.Contains(vid) {
 			threshold = threshold - 1
@@ -177,6 +190,7 @@ func isQuorumSlice(quorum *ultpb.Quorum, nodeSet mapset.Set) bool {
 			return true
 		}
 	}
+
 	for _, nq := range quorum.NestQuorums {
 		if isVblocking(nq, nodeSet) {
 			threshold = threshold - 1
@@ -185,12 +199,14 @@ func isQuorumSlice(quorum *ultpb.Quorum, nodeSet mapset.Set) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
 // find set of nodes claimed to accept the value
 func findAcceptNodes(v string, noms map[string]*ultpb.Nomination) mapset.Set {
 	nodeSet := mapset.NewSet()
+
 	for k, nom := range noms {
 		for _, av := range nom.AcceptList {
 			if v == av {
@@ -199,12 +215,14 @@ func findAcceptNodes(v string, noms map[string]*ultpb.Nomination) mapset.Set {
 			}
 		}
 	}
+
 	return nodeSet
 }
 
 // find set of nodes claimed to vote or accept the value
 func findVoteOrAcceptNodes(v string, noms map[string]*ultpb.Nomination) mapset.Set {
 	nodeSet := mapset.NewSet()
+
 	for k, nom := range noms {
 		for _, vv := range nom.VoteList {
 			if v == vv {
@@ -219,6 +237,7 @@ func findVoteOrAcceptNodes(v string, noms map[string]*ultpb.Nomination) mapset.S
 			}
 		}
 	}
+
 	return nodeSet
 }
 
@@ -233,29 +252,34 @@ func (s *slot) promoteVotes(quorum *ultpb.Quorum, newNom *ultpb.Nomination) (boo
 		if s.accepts.Contains(vote) {
 			continue
 		}
-		ns := findAcceptNodes(vote, s.nominations)
+
 		// use federated vote to promote value
+		ns := findAcceptNodes(vote, s.nominations)
 		if !isVblocking(quorum, ns) {
 			nset := findVoteOrAcceptNodes(vote, s.nominations)
 			if !isQuorumSlice(quorum, nset) { // TODO(bobonovski) trim nset to contain only other quorums
 				return false, false, fmt.Errorf("failed to promote any votes to accepts")
 			}
 		}
+
 		// TODO(bobonovski) check the validity of the vote
 		s.votes.Add(vote)
 		s.accepts.Add(vote)
 		acceptUpdated = true
 	}
+
 	candidateUpdated := false
 	for _, accept := range newNom.AcceptList {
 		if s.candidates.Contains(accept) {
 			continue
 		}
+
 		ns := findAcceptNodes(accept, s.nominations)
 		if isQuorumSlice(quorum, ns) {
 			s.candidates.Add(accept)
 			candidateUpdated = true
 		}
 	}
+
 	return acceptUpdated, candidateUpdated, nil
 }

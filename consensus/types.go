@@ -3,7 +3,7 @@ package consensus
 import (
 	"bytes"
 	"encoding/hex"
-	"errors"
+	"fmt"
 	"sort"
 
 	"github.com/ultiledger/go-ultiledger/crypto"
@@ -36,7 +36,7 @@ func NewTxHistory() *TxHistory {
 // signature correctness, sufficient balance of account, etc.
 func (th *TxHistory) AddTx(tx *pb.Tx, hash string) error {
 	if tx.SequenceNumber < th.MaxSeqNum {
-		return errors.New("tx sequence number is smaller than current largest sequence number")
+		return fmt.Errorf("tx seqnum mismatch: max %d, input %d", th.MaxSeqNum, tx.SequenceNumber)
 	}
 	th.TotalFees += tx.Fee
 	th.TxList = append(th.TxList, tx)
@@ -54,6 +54,7 @@ type TxSet struct {
 func (ts *TxSet) GetHash() (string, error) {
 	// sort transaction hash list
 	sort.Strings(ts.TxHashList)
+
 	// append all the hash to buffer
 	buf := bytes.NewBuffer(nil)
 	b, err := hex.DecodeString(ts.PrevLedgerHash)
@@ -61,6 +62,7 @@ func (ts *TxSet) GetHash() (string, error) {
 		return "", nil
 	}
 	buf.Write(b)
+
 	for _, tx := range ts.TxHashList {
 		txb, err := hex.DecodeString(tx)
 		if err != nil {
@@ -68,6 +70,8 @@ func (ts *TxSet) GetHash() (string, error) {
 		}
 		buf.Write(txb)
 	}
+
 	hash := crypto.SHA256Hash(buf.Bytes())
+
 	return hash, nil
 }

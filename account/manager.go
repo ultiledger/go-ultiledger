@@ -30,11 +30,11 @@ func NewManager(d db.DB) *Manager {
 	}
 	err := am.store.CreateBucket(am.bucket)
 	if err != nil {
-		log.Fatal(fmt.Errorf("create bucket %s failed: %v", am.bucket, err))
+		log.Fatalf("create db bucket %s failed: %v", am.bucket, err)
 	}
 	cache, err := lru.New(10000)
 	if err != nil {
-		log.Fatal(fmt.Errorf("create account manager LRU cache failed: %v", err))
+		log.Fatalf("create account manager LRU cache failed: %v", err)
 	}
 	am.accounts = cache
 	return am

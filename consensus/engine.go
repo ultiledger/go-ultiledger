@@ -3,16 +3,17 @@ package consensus
 import (
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/deckarep/golang-set"
 	lru "github.com/hashicorp/golang-lru"
-	"go.uber.org/zap"
 
 	"github.com/ultiledger/go-ultiledger/account"
 	"github.com/ultiledger/go-ultiledger/crypto"
 	"github.com/ultiledger/go-ultiledger/db"
 	"github.com/ultiledger/go-ultiledger/ledger"
+	"github.com/ultiledger/go-ultiledger/log"
 	"github.com/ultiledger/go-ultiledger/peer"
 	"github.com/ultiledger/go-ultiledger/rpc"
 	"github.com/ultiledger/go-ultiledger/rpc/rpcpb"
@@ -21,7 +22,6 @@ import (
 
 var (
 	ErrInvalidTx           = errors.New("invalid transaction")
-	ErrAccountNotFound     = errors.New("account not found")
 	ErrInsufficientBalance = errors.New("insufficient balance")
 	ErrInvalidSeqNum       = errors.New("invalid sequence number")
 )
@@ -35,8 +35,6 @@ type Engine struct {
 	statusBucket string
 
 	seed string
-
-	logger *zap.SugaredLogger
 
 	pm *peer.Manager
 	am *account.Manager
@@ -68,16 +66,18 @@ type Engine struct {
 	txChan chan *ultpb.Tx
 }
 
-func NewEngine(d db.DB, l *zap.SugaredLogger, pm *peer.Manager, am *account.Manager, lm *ledger.Manager) *Engine {
+// NewEngine creates an instance of Engine, we assume all the input
+// arguments should be valid (not nil, not empty, etc.).
+func NewEngine(d db.DB, seed string, quorum *ultpb.Quorum, pm *peer.Manager, am *account.Manager, lm *ledger.Manager) *Engine {
 	e := &Engine{
 		store:         d,
 		bucket:        "ENGINE",
 		statusBucket:  "TXSTATUS",
-		logger:        l,
+		seed:          seed,
 		pm:            pm,
 		am:            am,
 		lm:            lm,
-		cp:            newUCP(d, l),
+		slots:         make(map[uint64]*slot),
 		txSet:         mapset.NewSet(),
 		txMap:         make(map[string]*TxHistory),
 		statementChan: make(chan *ultpb.Statement),
@@ -85,15 +85,15 @@ func NewEngine(d db.DB, l *zap.SugaredLogger, pm *peer.Manager, am *account.Mana
 	}
 	err := e.store.CreateBucket(e.bucket)
 	if err != nil {
-		e.logger.Fatal(err)
+		log.Fatalf("create db bucket %s failed: %v", e.bucket, err)
 	}
 	err = e.store.CreateBucket(e.statusBucket)
 	if err != nil {
-		e.logger.Fatal(err)
+		log.Fatalf("create db bucket %s failed: %v", e.statusBucket, err)
 	}
 	cache, err := lru.New(10000)
 	if err != nil {
-		e.logger.Fatal(err)
+		log.Fatalf("create consensus engine LRU cache failed: %v", err)
 	}
 	e.txStatus = cache
 	return e
@@ -106,13 +106,13 @@ func (e *Engine) Start(stopChan chan struct{}) {
 			case stmt := <-e.statementChan:
 				err := e.broadcastStatement(stmt)
 				if err != nil {
-					e.logger.Warnf("failed to broadcast statements: %v", err)
+					log.Errorf("broadcast statement failed: %v", err)
 					continue
 				}
 			case tx := <-e.txChan:
 				err := e.broadcastTx(tx)
 				if err != nil {
-					e.logger.Warnf("failed to broadcast transaction: %v", err)
+					log.Errorf("broadcast tx failed: %v", err)
 					continue
 				}
 			case <-stopChan:
@@ -127,22 +127,28 @@ func (e *Engine) GetTxStatus(txHash string) rpcpb.TxStatusEnum {
 	if tx, ok := e.txStatus.Get(txHash); ok {
 		return tx.(rpcpb.TxStatusEnum)
 	}
+
 	b, ok := e.store.Get(e.statusBucket, []byte(txHash))
 	if !ok {
 		return rpcpb.TxStatusEnum_NOTEXIST
 	}
+
 	sname := string(b)
+
 	return rpcpb.TxStatusEnum(rpcpb.TxStatusEnum_value[sname])
 }
 
 // update the status of the transaction
 func (e *Engine) UpdateTxStatus(txHash string, status rpcpb.TxStatusEnum) error {
 	sname := rpcpb.TxStatusEnum_name[int32(status)]
+
 	e.txStatus.Add(txHash, status)
+
 	err := e.store.Set(e.statusBucket, []byte(txHash), []byte(sname))
 	if err != nil {
 		return err
 	}
+
 	return nil
 }
 
@@ -150,17 +156,20 @@ func (e *Engine) UpdateTxStatus(txHash string, status rpcpb.TxStatusEnum) error 
 func (e *Engine) AddTx(tx *ultpb.Tx) error {
 	h, err := ultpb.SHA256Hash(tx)
 	if err != nil {
-		return err
+		return fmt.Errorf("compute tx hash failed: %v", err)
 	}
+
 	if e.txSet.Contains(h) {
+		// directly return for duplicate tx
 		return nil
 	}
+
 	// get the account information
 	acc, err := e.am.GetAccount(tx.AccountID)
 	if err != nil {
-		e.logger.Warnw("cannot find the account", "AccountID", tx.AccountID)
-		return ErrAccountNotFound
+		return fmt.Errorf("get account %s failed: %v", tx.AccountID, err)
 	}
+
 	// compute the total fees and max sequence number
 	totalFees := tx.Fee
 	maxSeq := tx.SequenceNumber
@@ -170,18 +179,23 @@ func (e *Engine) AddTx(tx *ultpb.Tx) error {
 	} else {
 		e.txMap[tx.AccountID] = NewTxHistory()
 	}
+
 	// check whether tx sequence number is larger than existing one
 	if maxSeq > tx.SequenceNumber {
-		return ErrInvalidSeqNum
+		return fmt.Errorf("account %s seqnum mismatch: max %d, input %d", tx.AccountID, maxSeq, tx.SequenceNumber)
 	}
+
 	// check whether the accounts has sufficient balance
-	if acc.Balance-ledger.GenesisBaseReserve*uint64(acc.ItemCount) < totalFees {
-		return ErrInsufficientBalance
+	balance := acc.Balance - ledger.GenesisBaseReserve*uint64(acc.ItemCount)
+	if balance < totalFees {
+		return fmt.Errorf("account %s insufficient balance", tx.AccountID)
 	}
 	e.txMap[tx.AccountID].AddTx(tx, h)
 	e.txSet.Add(h)
+
 	// add tx to broadcast channel
 	go func() { e.txChan <- tx }()
+
 	return nil
 }
 
@@ -189,18 +203,22 @@ func (e *Engine) AddTx(tx *ultpb.Tx) error {
 func (e *Engine) broadcastTx(tx *ultpb.Tx) error {
 	clients := e.pm.GetLiveClients()
 	metadata := e.pm.GetMetadata()
+
 	payload, err := ultpb.Encode(tx)
 	if err != nil {
-		return err
+		return fmt.Errorf("encode tx failed: %v", err)
 	}
+
 	sign, err := crypto.Sign(e.seed, payload)
 	if err != nil {
-		return err
+		return fmt.Errorf("sign tx failed: %v", err)
 	}
+
 	err = rpc.BroadcastTx(clients, metadata, payload, sign)
 	if err != nil {
-		return err
+		return fmt.Errorf("broadcast tx failed: %v", err)
 	}
+
 	return nil
 }
 
@@ -208,18 +226,22 @@ func (e *Engine) broadcastTx(tx *ultpb.Tx) error {
 func (e *Engine) broadcastStatement(stmt *ultpb.Statement) error {
 	clients := e.pm.GetLiveClients()
 	metadata := e.pm.GetMetadata()
+
 	payload, err := ultpb.Encode(stmt)
 	if err != nil {
-		return err
+		return fmt.Errorf("encode statement failed: %v", err)
 	}
+
 	sign, err := crypto.Sign(e.seed, payload)
 	if err != nil {
-		return err
+		return fmt.Errorf("sign statement failed: %v", err)
 	}
+
 	err = rpc.BroadcastStatement(clients, metadata, payload, sign)
 	if err != nil {
-		return err
+		return fmt.Errorf("broadcast statement failed: %v", err)
 	}
+
 	return nil
 }
 
@@ -230,26 +252,31 @@ func (e *Engine) propose() error {
 		PrevLedgerHash: e.lm.CurrLedgerHeaderHash(),
 		TxHashList:     make([]string, 0),
 	}
+
 	// append pending transactions to propose list
 	for _, th := range e.txMap {
 		for i, _ := range th.TxList {
 			txSet.TxHashList = append(txSet.TxHashList, th.TxHashList[i])
 		}
 	}
+
 	// compute hash
 	hash, err := txSet.GetHash()
 	if err != nil {
-		return err
+		return fmt.Errorf("get tx set hash failed: %v", err)
 	}
+
 	// construct new consensus value
 	cv := &ultpb.ConsensusValue{
 		TxListHash:  hash,
 		ProposeTime: time.Now().Unix(),
 	}
+
 	// nominate new consensus value
 	slotIdx := e.lm.NextLedgerHeaderSeq()
 	currHeader := e.lm.CurrLedgerHeader()
 	e.nominate(slotIdx, currHeader.ConsensusValue, cv)
+
 	return nil
 }
 
@@ -257,19 +284,24 @@ func (e *Engine) propose() error {
 func (e *Engine) nominate(slotIdx uint64, prevValue *ultpb.ConsensusValue, currValue *ultpb.ConsensusValue) error {
 	// get new slot
 	if _, ok := e.slots[slotIdx]; !ok {
-		e.slots[slotIdx] = newSlot(slotIdx, "", e.logger, e.statementChan)
+		e.slots[slotIdx] = newSlot(slotIdx, "", e.statementChan)
 	}
+
 	prevEnc, err := ultpb.Encode(prevValue)
 	if err != nil {
-		return err
+		return fmt.Errorf("encode prev consensus value failed: %v", err)
 	}
+
 	currEnc, err := ultpb.Encode(currValue)
 	if err != nil {
-		return err
+		return fmt.Errorf("encode curr consensus value failed: %v", err)
 	}
+
 	prevEncStr := hex.EncodeToString(prevEnc)
 	currEncStr := hex.EncodeToString(currEnc)
+
 	// nominate new value for the slot
 	e.slots[slotIdx].nominate(e.quorum, e.quorumHash, prevEncStr, currEncStr)
+
 	return nil
 }

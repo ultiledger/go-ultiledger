@@ -6,18 +6,16 @@ import (
 	"time"
 
 	"github.com/deckarep/golang-set"
-	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 
+	"github.com/ultiledger/go-ultiledger/log"
 	"github.com/ultiledger/go-ultiledger/rpc"
 	"github.com/ultiledger/go-ultiledger/rpc/rpcpb"
 )
 
 // Manager manages the CRUD of peers
 type Manager struct {
-	logger *zap.SugaredLogger
-
 	// Network address of the node
 	addr string
 
@@ -32,6 +30,9 @@ type Manager struct {
 
 	// initial peer addresses
 	initPeers []string
+
+	// unhealthy peer addresses
+	unhealthyPeers []string
 
 	// connected peers
 	peerLock  sync.RWMutex
@@ -54,9 +55,8 @@ type Manager struct {
 	deleteChan chan *Peer
 }
 
-func NewManager(l *zap.SugaredLogger, ps []string, addr string, nodeID string) *Manager {
+func NewManager(ps []string, addr string, nodeID string) *Manager {
 	return &Manager{
-		logger:       l,
 		addr:         addr,
 		nodeID:       nodeID,
 		metadata:     metadata.Pairs(addr, nodeID),
@@ -78,7 +78,7 @@ func (pm *Manager) Start(stopChan chan struct{}) {
 		for _, addr := range pm.initPeers {
 			p, err := pm.connectPeer(addr)
 			if err != nil {
-				pm.logger.Warnw("failed to connect to peer", "addr", addr)
+				log.Errorf("connect to peer %s failed: %v", addr, err)
 				pm.pendingPeers[addr] = 3
 				continue
 			}
@@ -102,6 +102,7 @@ func (pm *Manager) Start(stopChan chan struct{}) {
 				}
 				pm.peerLock.Unlock()
 			case <-stopChan:
+				log.Infof("received stop signal")
 				close(pm.stopChan) // stop retry first
 				pm.pendingPeers = nil
 				pm.peerLock.Lock()
@@ -136,7 +137,7 @@ func (pm *Manager) AddPeerAddr(addr string) error {
 	select {
 	case pm.peerAddrChan <- addr:
 	case <-pm.stopChan:
-		return errors.New("peer manager is stopped")
+		return errors.New("peer manager stopped")
 	}
 	return nil
 }
@@ -177,19 +178,21 @@ func (pm *Manager) connect() {
 				}
 				p, err := pm.connectPeer(addr)
 				if err != nil {
-					pm.logger.Warnw("failed to connect to peer", "addr", addr)
+					log.Errorf("connect to peer %s failed: %v", addr, err)
 					count -= 1
 					pm.pendingPeers[addr] = count
 					continue
 				}
 				// healthcheck the peer and save the nodeID
-				ip, nodeID, err := rpc.Hello(p.client, p.metadata)
+				remoteAddr, nodeID, err := rpc.Hello(p.client, p.metadata)
 				if err != nil {
-					pm.logger.Warnw("peer is not health", "peerIP", p.Addr)
+					log.Errorf("say hello to peer %s failed: %v", addr, err)
+					// save unhealthy peers for later reconnect
+					pm.unhealthyPeers = append(pm.unhealthyPeers, addr)
 					p.Close()
 					continue
 				}
-				p.Addr = ip // TODO(bobonovski) check whether the dial IP is the same as the response IP?
+				p.Addr = remoteAddr // TODO(bobonovski) check whether the dial IP is the same as the response IP?
 				p.NodeID = nodeID
 
 				delete(pm.pendingPeers, addr)

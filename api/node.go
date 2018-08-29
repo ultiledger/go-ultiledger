@@ -1,11 +1,9 @@
 package api
 
 import (
-	"log"
 	"net"
 	"time"
 
-	"go.uber.org/zap"
 	"google.golang.org/grpc"
 
 	"github.com/ultiledger/go-ultiledger/account"
@@ -13,15 +11,15 @@ import (
 	"github.com/ultiledger/go-ultiledger/db"
 	"github.com/ultiledger/go-ultiledger/future"
 	"github.com/ultiledger/go-ultiledger/ledger"
+	"github.com/ultiledger/go-ultiledger/log"
 	"github.com/ultiledger/go-ultiledger/peer"
 	"github.com/ultiledger/go-ultiledger/rpc"
-	pb "github.com/ultiledger/go-ultiledger/rpc/rpcpb"
+	"github.com/ultiledger/go-ultiledger/rpc/rpcpb"
 )
 
 // Node is the central controller for ultiledger
 type Node struct {
-	store  db.DB
-	logger *zap.SugaredLogger
+	store db.DB
 
 	// Network address of this node
 	addr string
@@ -49,13 +47,6 @@ type Node struct {
 
 // NewNode creates a Node which controls all the sub tasks
 func NewNode(conf *Config) *Node {
-	// initialize logger
-	l, err := zap.NewProduction()
-	if err != nil {
-		log.Fatal(err)
-	}
-	logger := l.Sugar()
-
 	// get outbound IP
 	conn, err := net.Dial("udp", "8.8.8.8:80")
 	if err != nil {
@@ -75,18 +66,20 @@ func NewNode(conf *Config) *Node {
 	}
 	store := ctor(conf.DBPath)
 
-	pm := peer.NewManager(l.Sugar(), conf.Peers, addr, nodeID)
-	lm := ledger.NewManager(store, logger)
-	am := account.NewManager(store, logger)
-	engine := consensus.NewEngine(store, logger, pm, am, lm)
+	pm := peer.NewManager(conf.Peers, addr, nodeID)
+	lm := ledger.NewManager(store)
+	am := account.NewManager(store)
+
+	// consensus engine depends on all the managers above
+	engine := consensus.NewEngine(store, seed, nil /*quorum*/, pm, am, lm)
+
 	txFuture := make(chan *future.Tx)
 	peerFuture := make(chan *future.Peer)
 
 	node := &Node{
 		config:    conf,
 		store:     store,
-		logger:    logger,
-		server:    rpc.NewNodeServer(logger, addr, nodeID, seed, peerFuture, txFuture),
+		server:    rpc.NewNodeServer(addr, nodeID, seed, peerFuture, txFuture),
 		pm:        pm,
 		lm:        lm,
 		am:        am,
@@ -119,7 +112,6 @@ func (n *Node) Start() error {
 // Restart checks the provided configurations, if the config is valid,
 // it will trigger sub goroutines to do the sub tasks.
 func (n *Node) Restart() error {
-	log.Println("restart called")
 	return nil
 }
 
@@ -130,17 +122,17 @@ func (n *Node) eventLoop() {
 		case txf := <-n.txFuture:
 			err := n.engine.AddTx(txf.Tx)
 			if err != nil {
-				n.logger.Warnf("failed to add transaction: %v", err)
+				log.Errorf("add tx failed: %v", err)
 			}
 			txf.Respond(err)
 		case pf := <-n.peerFuture:
 			err := n.pm.AddPeerAddr(pf.Addr)
 			if err != nil {
-				n.logger.Warnf("failed to add peer addr: %v", err)
+				log.Errorf("add peer addr failed: %v", err)
 			}
 			pf.Respond(err)
 		case <-n.stopChan:
-			n.logger.Infof("shutdown event loop")
+			log.Info("shutdown event loop")
 			return
 		}
 	}
@@ -151,19 +143,19 @@ func (n *Node) serveNode() {
 	// register rpc service and start the ULTNode server
 	listener, err := net.Listen("tcp", n.config.Port)
 	if err != nil {
-		n.logger.Fatal(err)
+		log.Fatal(err)
 	}
 
 	s := grpc.NewServer()
-	pb.RegisterNodeServer(s, n.server)
+	rpcpb.RegisterNodeServer(s, n.server)
 
-	n.logger.Infof("start to serve gRPC requests on %s", n.config.Port)
+	log.Infof("start to serve gRPC server on %s", n.config.Port)
 	go s.Serve(listener)
 
 	for {
 		select {
 		case <-n.stopChan:
-			n.logger.Infof("gracefully shutdown gRPC server")
+			log.Infof("gracefully shutdown gRPC server")
 			s.GracefulStop()
 			return
 		}
