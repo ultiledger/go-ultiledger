@@ -1,7 +1,6 @@
 package account
 
 import (
-	"errors"
 	"fmt"
 
 	lru "github.com/hashicorp/golang-lru"
@@ -10,11 +9,6 @@ import (
 	"github.com/ultiledger/go-ultiledger/db"
 	"github.com/ultiledger/go-ultiledger/log"
 	"github.com/ultiledger/go-ultiledger/ultpb"
-)
-
-var (
-	ErrAccountNotExist  = errors.New("account not exist")
-	ErrAccountCorrupted = errors.New("account corrupted")
 )
 
 // Manager manages the creation of accounts
@@ -73,11 +67,11 @@ func (am *Manager) GetAccount(accountID string) (*ultpb.Account, error) {
 	// then check database
 	b, ok := am.store.Get(am.bucket, []byte(accountID))
 	if !ok {
-		return nil, ErrAccountNotExist
+		return nil, fmt.Errorf("account %s not exist", accountID)
 	}
 	acc, err := ultpb.DecodeAccount(b)
 	if err != nil {
-		return nil, ErrAccountCorrupted
+		return nil, fmt.Errorf("account %s decode failed: %v", accountID, err)
 	}
 	// cache the account
 	am.accounts.Add(accountID, acc)
