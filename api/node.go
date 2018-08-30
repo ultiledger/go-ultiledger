@@ -70,8 +70,17 @@ func NewNode(conf *Config) *Node {
 	lm := ledger.NewManager(store)
 	am := account.NewManager(store)
 
-	// consensus engine depends on all the managers above
-	engine := consensus.NewEngine(store, seed, conf.Quorum, pm, am, lm)
+	// construct consensus engine context
+	engineCtx := &consensus.EngineContext{
+		Store:  store,
+		Seed:   seed,
+		NodeID: nodeID,
+		PM:     pm,
+		AM:     am,
+		LM:     lm,
+		Quorum: conf.Quorum,
+	}
+	engine := consensus.NewEngine(engineCtx)
 
 	txFuture := make(chan *future.Tx)
 	peerFuture := make(chan *future.Peer)

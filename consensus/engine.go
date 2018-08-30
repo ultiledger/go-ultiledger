@@ -26,6 +26,42 @@ var (
 	ErrInvalidSeqNum       = errors.New("invalid sequence number")
 )
 
+// EngineContext represents contextual information Engine needs
+type EngineContext struct {
+	Store  db.DB            // database instance
+	Seed   string           // node seed
+	NodeID string           // node ID
+	PM     *peer.Manager    // peer manager
+	AM     *account.Manager // account manager
+	LM     *ledger.Manager  // ledger manager
+	Quorum *ultpb.Quorum    // initial quorum parsed from config
+}
+
+func ValidateEngineContext(ec *EngineContext) error {
+	if ec == nil {
+		return fmt.Errorf("engine context is nil")
+	}
+	if ec.Seed == "" {
+		return fmt.Errorf("empty node seed")
+	}
+	if ec.NodeID == "" {
+		return fmt.Errorf("empty node ID")
+	}
+	if ec.PM == nil {
+		return fmt.Errorf("peer manager is nil")
+	}
+	if ec.AM == nil {
+		return fmt.Errorf("account manager is nil")
+	}
+	if ec.LM == nil {
+		return fmt.Errorf("ledger manager is nil")
+	}
+	if ec.Quorum == nil {
+		return fmt.Errorf("initial quorum is nil")
+	}
+	return nil
+}
+
 // Engine is responsible for coordinating between upstream
 // events and underlying consensus protocol
 type Engine struct {
@@ -34,7 +70,8 @@ type Engine struct {
 	// for saving transaction status
 	statusBucket string
 
-	seed string
+	seed   string
+	nodeID string
 
 	pm *peer.Manager
 	am *account.Manager
@@ -68,15 +105,18 @@ type Engine struct {
 
 // NewEngine creates an instance of Engine, we assume all the input
 // arguments should be valid (not nil, not empty, etc.).
-func NewEngine(d db.DB, seed string, quorum *ultpb.Quorum, pm *peer.Manager, am *account.Manager, lm *ledger.Manager) *Engine {
+func NewEngine(ctx *EngineContext) *Engine {
+	if err := ValidateEngineContext(ctx); err != nil {
+		log.Fatalf("engine context is invalid: %v", err)
+	}
 	e := &Engine{
-		store:         d,
+		store:         ctx.Store,
 		bucket:        "ENGINE",
 		statusBucket:  "TXSTATUS",
-		seed:          seed,
-		pm:            pm,
-		am:            am,
-		lm:            lm,
+		seed:          ctx.Seed,
+		pm:            ctx.PM,
+		am:            ctx.AM,
+		lm:            ctx.LM,
 		slots:         make(map[uint64]*slot),
 		txSet:         mapset.NewSet(),
 		txMap:         make(map[string]*TxHistory),
