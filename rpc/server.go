@@ -36,11 +36,59 @@ type NodeServer struct {
 	stmtFuture chan *future.Statement
 }
 
-func NewNodeServer(addr string, nodeID string, seed string, peerC chan *future.Peer, txC chan *future.Tx) *NodeServer {
-	s := &NodeServer{addr: addr, nodeID: nodeID, seed: seed, peerFuture: peerC, txFuture: txC}
-	return s
+// ServerContext represents contextual information for running server
+type ServerContext struct {
+	Addr   string                 // local network address
+	NodeID string                 // local node ID
+	Seed   string                 // local node seed
+	PF     chan *future.Peer      // channel for peer future
+	TF     chan *future.Tx        // channel for tx future
+	SF     chan *future.Statement // channel for statement future
 }
 
+func ValidateServerContext(sc *ServerContext) error {
+	if sc == nil {
+		return errors.New("server context is nil")
+	}
+	if sc.Addr == "" {
+		return errors.New("empty local network address")
+	}
+	if sc.NodeID == "" {
+		return errors.New("empty local node ID")
+	}
+	if sc.Seed == "" {
+		return errors.New("empty local node seed")
+	}
+	if sc.PF == nil {
+		return errors.New("peer future channel is nil")
+	}
+	if sc.TF == nil {
+		return errors.New("tx future channel is nil")
+	}
+	if sc.SF == nil {
+		return errors.New("statemetn future channel is nil")
+	}
+	return nil
+}
+
+// NewNodeServer creates a NodeServer instance with server context
+func NewNodeServer(ctx *ServerContext) *NodeServer {
+	if err := ValidateServerContext(ctx); err != nil {
+		log.Fatalf("validate server context failed: %v", err)
+	}
+	server := &NodeServer{
+		addr:       ctx.Addr,
+		nodeID:     ctx.NodeID,
+		seed:       ctx.Seed,
+		peerFuture: ctx.PF,
+		txFuture:   ctx.TF,
+		stmtFuture: ctx.SF,
+	}
+	return server
+}
+
+// Hello retrieves network address and nodeID from context and
+// respond with network address and nodeID of local node
 func (s *NodeServer) Hello(ctx context.Context, req *rpcpb.HelloRequest) (*rpcpb.HelloResponse, error) {
 	resp := &rpcpb.HelloResponse{}
 
@@ -90,6 +138,8 @@ func (s *NodeServer) SubmitTx(ctx context.Context, req *rpcpb.SubmitTxRequest) (
 	return nil, nil
 }
 
+// Notify accepts transaction and consensus message and
+// redistribute message to internal managing components
 func (s *NodeServer) Notify(ctx context.Context, req *rpcpb.NotifyRequest) (*rpcpb.NotifyResponse, error) {
 	resp := &rpcpb.NotifyResponse{}
 

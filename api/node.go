@@ -70,7 +70,7 @@ func NewNode(conf *Config) *Node {
 	lm := ledger.NewManager(store)
 	am := account.NewManager(store)
 
-	// construct consensus engine context
+	// construct consensus engine context and create consensus engine
 	engineCtx := &consensus.EngineContext{
 		Store:  store,
 		Seed:   seed,
@@ -84,11 +84,24 @@ func NewNode(conf *Config) *Node {
 
 	txFuture := make(chan *future.Tx)
 	peerFuture := make(chan *future.Peer)
+	stmtFuture := make(chan *future.Statement)
 
+	// construct node server context and create node server
+	serverCtx := &rpc.ServerContext{
+		Addr:   addr,
+		NodeID: nodeID,
+		Seed:   seed,
+		PF:     peerFuture,
+		TF:     txFuture,
+		SF:     stmtFuture,
+	}
+	nodeServer := rpc.NewNodeServer(serverCtx)
+
+	// create local node
 	node := &Node{
 		config:    conf,
 		store:     store,
-		server:    rpc.NewNodeServer(addr, nodeID, seed, peerFuture, txFuture),
+		server:    nodeServer,
 		pm:        pm,
 		lm:        lm,
 		am:        am,
