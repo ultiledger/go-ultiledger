@@ -38,7 +38,7 @@ message SubmitTxResponse {
 }
 
 enum NotifyMsgType {
-  Tx = 0;        // transaction message
+  TX = 0;        // transaction message
   STATEMENT = 1; // consensus statement
 }
 

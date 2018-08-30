@@ -4,6 +4,10 @@ import (
 	"github.com/ultiledger/go-ultiledger/ultpb"
 )
 
+type Future interface {
+	Error() error
+}
+
 // allow a future to respond an error in the future
 type deferError struct {
 	err       error
@@ -11,10 +15,13 @@ type deferError struct {
 	responded bool
 }
 
+// every future should call this method to initialize
+// underlying error channel
 func (d *deferError) Init() {
 	d.errChan = make(chan error, 1)
 }
 
+// each future can only respond error once
 func (d *deferError) Respond(err error) {
 	if d.errChan == nil || d.responded {
 		return
@@ -41,8 +48,14 @@ type Tx struct {
 	Tx *ultpb.Tx
 }
 
-// future for adding new peer
+// future for adding peer
 type Peer struct {
 	deferError
 	Addr string
+}
+
+// future for adding consensus statement
+type Statement struct {
+	deferError
+	Stmt *ultpb.Statement
 }

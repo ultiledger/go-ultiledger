@@ -57,7 +57,7 @@ func BroadcastTx(clients []rpcpb.NodeClient, md metadata.MD, payload []byte, sig
 		return ErrEmptySignature
 	}
 	req := &rpcpb.NotifyRequest{
-		MsgType:   rpcpb.NotifyMsgType_Tx,
+		MsgType:   rpcpb.NotifyMsgType_TX,
 		Data:      payload,
 		Signature: signature,
 	}
