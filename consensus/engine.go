@@ -62,8 +62,7 @@ func ValidateEngineContext(ec *EngineContext) error {
 	return nil
 }
 
-// Engine is responsible for coordinating between upstream
-// events and underlying consensus protocol
+// Engine is the driver of underlying consensus protocol
 type Engine struct {
 	store  db.DB
 	bucket string
@@ -103,8 +102,7 @@ type Engine struct {
 	txChan chan *ultpb.Tx
 }
 
-// NewEngine creates an instance of Engine, we assume all the input
-// arguments should be valid (not nil, not empty, etc.).
+// NewEngine creates an instance of Engine with EngineContext
 func NewEngine(ctx *EngineContext) *Engine {
 	if err := ValidateEngineContext(ctx); err != nil {
 		log.Fatalf("engine context is invalid: %v", err)
@@ -237,6 +235,14 @@ func (e *Engine) AddTx(tx *ultpb.Tx) error {
 	go func() { e.txChan <- tx }()
 
 	return nil
+}
+
+// RecvStatement deals with received broadcast statement
+func (e *Engine) RecvStatement(stmt *pb.Statement) error {
+	// ignore own message
+	if stmt.NodeID == e.NodeID {
+		return nil
+	}
 }
 
 // broadcast transaction through rpc broadcast

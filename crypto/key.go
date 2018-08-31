@@ -23,7 +23,7 @@ var (
 	ErrInvalidKey = errors.New("invalid key string")
 )
 
-// UTLKey is the internal key to represent various key hash,
+// ULTKey is the internal key to represent various key hash,
 // Code is for identifying the type of certain key hash.
 type ULTKey struct {
 	Code KeyType
