@@ -18,7 +18,7 @@ message ConsensusValue {
 // the node
 message Quorum {
   double Threshold = 1;
-  string Validators = 2;
+  repeated string Validators = 2;
   repeated Quorum NestQuorums = 3;
 }
 
