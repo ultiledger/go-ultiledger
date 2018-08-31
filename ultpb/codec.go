@@ -41,6 +41,15 @@ func DecodeAccount(b []byte) (*Account, error) {
 	return acc, nil
 }
 
+// decode pb message to consensus value
+func DecodeConsensusValue(b []byte) (*ConsensusValue, error) {
+	cv := &ConsensusValue{}
+	if err := proto.Unmarshal(b, cv); err != nil {
+		return nil, err
+	}
+	return cv, nil
+}
+
 // decode pb message to statement
 func DecodeStatement(b []byte) (*Statement, error) {
 	stmt := &Statement{}
