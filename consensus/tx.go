@@ -7,7 +7,7 @@ import (
 	"sort"
 
 	"github.com/ultiledger/go-ultiledger/crypto"
-	pb "github.com/ultiledger/go-ultiledger/ultpb"
+	"github.com/ultiledger/go-ultiledger/ultpb"
 )
 
 // TxHistory is used to hold unconfirmed transactions
@@ -17,7 +17,7 @@ type TxHistory struct {
 	// total fees of the tx list
 	TotalFees uint64
 	// list of transactions
-	TxList []*pb.Tx
+	TxList []*ultpb.Tx
 	// list of hash of corresponding transactions
 	TxHashList []string
 }
@@ -26,7 +26,7 @@ func NewTxHistory() *TxHistory {
 	h := &TxHistory{
 		MaxSeqNum: uint64(0),
 		TotalFees: uint64(0),
-		TxList:    make([]*pb.Tx, 0),
+		TxList:    make([]*ultpb.Tx, 0),
 	}
 	return h
 }
@@ -34,7 +34,7 @@ func NewTxHistory() *TxHistory {
 // Add transaction to pending list, note that before
 // adding any transaction, it should be checked against
 // signature correctness, sufficient balance of account, etc.
-func (th *TxHistory) AddTx(tx *pb.Tx, hash string) error {
+func (th *TxHistory) AddTx(tx *ultpb.Tx, hash string) error {
 	if tx.SequenceNumber < th.MaxSeqNum {
 		return fmt.Errorf("tx seqnum mismatch: max %d, input %d", th.MaxSeqNum, tx.SequenceNumber)
 	}

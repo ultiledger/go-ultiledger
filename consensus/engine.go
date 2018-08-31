@@ -238,11 +238,12 @@ func (e *Engine) AddTx(tx *ultpb.Tx) error {
 }
 
 // RecvStatement deals with received broadcast statement
-func (e *Engine) RecvStatement(stmt *pb.Statement) error {
+func (e *Engine) RecvStatement(stmt *ultpb.Statement) error {
 	// ignore own message
-	if stmt.NodeID == e.NodeID {
+	if stmt.NodeID == e.nodeID {
 		return nil
 	}
+	return nil
 }
 
 // broadcast transaction through rpc broadcast

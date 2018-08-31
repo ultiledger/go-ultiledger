@@ -1,6 +1,8 @@
 package consensus
 
-import "github.com/deckarep/golang-set"
+import (
+	"github.com/deckarep/golang-set"
+)
 
 // Check whether the first set is the proper subset
 // of the second subset
