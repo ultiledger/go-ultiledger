@@ -43,6 +43,7 @@ type Node struct {
 	// futures for task with error responses
 	txFuture   chan *future.Tx
 	peerFuture chan *future.Peer
+	stmtFuture chan *future.Statement
 }
 
 // NewNode creates a Node which controls all the sub tasks
@@ -142,7 +143,7 @@ func (n *Node) eventLoop() {
 	for {
 		select {
 		case txf := <-n.txFuture:
-			err := n.engine.AddTx(txf.Tx)
+			err := n.engine.RecvTx(txf.Tx)
 			if err != nil {
 				log.Errorf("add tx failed: %v", err)
 			}
@@ -153,6 +154,12 @@ func (n *Node) eventLoop() {
 				log.Errorf("add peer addr failed: %v", err)
 			}
 			pf.Respond(err)
+		case sf := <-n.stmtFuture:
+			err := n.engine.RecvStatement(sf.Stmt)
+			if err != nil {
+				log.Errorf("recv statement failed: %v", err)
+			}
+			sf.Respond(err)
 		case <-n.stopChan:
 			log.Info("shutdown event loop")
 			return

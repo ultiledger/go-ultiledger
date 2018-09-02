@@ -84,9 +84,6 @@ type Engine struct {
 	quorum     *ultpb.Quorum
 	quorumHash string
 
-	// consensus protocol
-	cp *ucp
-
 	// decrees for each round
 	decrees map[uint64]*Decree
 
@@ -157,9 +154,23 @@ func (e *Engine) Start(stopChan chan struct{}) {
 					log.Errorf("broadcast tx failed: %v", err)
 					continue
 				}
+			case <-stopChan:
+				return
+			}
+		}
+	}()
+	// create seperate goroutine for listening ready statements
+	go func() {
+		for {
+			select {
 			case <-e.sv.Watch():
 				seq := e.lm.NextLedgerHeaderSeq()
-				e.processStatements(e.sv.Ready(seq))
+				for s := range e.sv.Ready(seq) {
+					if _, ok := e.decrees[s.Index]; !ok {
+						continue
+					}
+					e.decrees[s.Index].Recv(s)
+				}
 			case <-stopChan:
 				return
 			}
@@ -198,7 +209,7 @@ func (e *Engine) UpdateTxStatus(txHash string, status rpcpb.TxStatusEnum) error 
 }
 
 // add transaction to internal pending set
-func (e *Engine) AddTx(tx *ultpb.Tx) error {
+func (e *Engine) RecvTx(tx *ultpb.Tx) error {
 	h, err := ultpb.SHA256Hash(tx)
 	if err != nil {
 		return fmt.Errorf("compute tx hash failed: %v", err)
@@ -257,15 +268,6 @@ func (e *Engine) RecvStatement(stmt *ultpb.Statement) error {
 	return nil
 }
 
-func (e *Engine) processStatements(stmts <-chan *ultpb.Statement) {
-	for s := range stmts {
-		if _, ok := e.decrees[s.Index]; !ok {
-			continue
-		}
-		e.decrees[s.Index].Recv(s)
-	}
-}
-
 // broadcast transaction through rpc broadcast
 func (e *Engine) broadcastTx(tx *ultpb.Tx) error {
 	clients := e.pm.GetLiveClients()
@@ -313,7 +315,7 @@ func (e *Engine) broadcastStatement(stmt *ultpb.Statement) error {
 }
 
 // Try to propose current transaction set for consensus
-func (e *Engine) propose() error {
+func (e *Engine) Propose() error {
 	// TODO(bobonovski) use sync.Pool
 	txSet := TxSet{
 		PrevLedgerHash: e.lm.CurrLedgerHeaderHash(),

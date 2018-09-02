@@ -64,20 +64,28 @@ func (d *Decree) Nominate(prevHash, currHash string) error {
 // Recv receives validated statement and redistributes it to
 // corresponding route handler
 func (d *Decree) Recv(stmt *ultpb.Statement) error {
+	if stmt == nil {
+		return nil
+	}
+
+	switch stmt.StatementType {
+	case ultpb.StatementType_NOMINATE:
+
+	}
 	return nil
 }
 
 // receive nomination from peers or local node
-func (d *Decree) recvNomination(nodeID string, quorum *ultpb.Quorum, quorumHash string, nom *ultpb.Nomination) error {
+func (d *Decree) recvNomination(nodeID string, nom *ultpb.Nomination) error {
 	d.addNomination(d.nodeID, nom)
-	acceptUpdated, candidateUpdated, err := d.promoteVotes(quorum, nom)
+	acceptUpdated, candidateUpdated, err := d.promoteVotes(d.quorum, nom)
 	if err != nil {
 		return fmt.Errorf("promote votes failed: %v", err)
 	}
 
 	// send new nomination if votes changed
 	if acceptUpdated {
-		d.sendNomination(quorum, quorumHash)
+		d.sendNomination(d.quorum, d.quorumHash)
 	}
 
 	// start balloting if candidates changed
@@ -101,7 +109,7 @@ func (d *Decree) sendNomination(quorum *ultpb.Quorum, quorumHash string) error {
 		nom.AcceptList = append(nom.AcceptList, accept.(string))
 	}
 
-	if err := d.recvNomination(d.nodeID, quorum, quorumHash, nom); err != nil {
+	if err := d.recvNomination(d.nodeID, nom); err != nil {
 		return fmt.Errorf("receive local nomination failed: %v", err)
 	}
 
