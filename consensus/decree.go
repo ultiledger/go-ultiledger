@@ -24,6 +24,9 @@ type Decree struct {
 	// latest nomination
 	latestNomination *ultpb.Nomination
 
+	// latest composite candidate
+	latestComposite string
+
 	votes       mapset.Set
 	accepts     mapset.Set
 	candidates  mapset.Set
@@ -97,6 +100,11 @@ func (d *Decree) recvNomination(nodeID string, nom *ultpb.Nomination) error {
 
 	// start balloting if candidates changed
 	if candidateUpdated {
+		compValue, err := d.combineCandidates()
+		if err != nil {
+			return fmt.Errorf("combine candidates failed: %v", err)
+		}
+		d.latestComposite = compValue
 		// TODO(bobonovski) balloting
 	}
 
@@ -305,4 +313,8 @@ func (d *Decree) promoteVotes(newNom *ultpb.Nomination) (bool, bool, error) {
 	}
 
 	return acceptUpdated, candidateUpdated, nil
+}
+
+func (d *Decree) combineCandidates() (string, error) {
+	return "", nil
 }
