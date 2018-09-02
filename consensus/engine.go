@@ -84,8 +84,8 @@ type Engine struct {
 	// consensus protocol
 	cp *ucp
 
-	// consensus slots
-	slots map[uint64]*slot
+	// decrees for each round
+	decrees map[uint64]*Decree
 
 	// transactions status
 	txStatus *lru.Cache
@@ -115,7 +115,7 @@ func NewEngine(ctx *EngineContext) *Engine {
 		pm:            ctx.PM,
 		am:            ctx.AM,
 		lm:            ctx.LM,
-		slots:         make(map[uint64]*slot),
+		decrees:       make(map[uint64]*Decree),
 		txSet:         mapset.NewSet(),
 		txMap:         make(map[string]*TxHistory),
 		statementChan: make(chan *ultpb.Statement),
@@ -328,10 +328,10 @@ func (e *Engine) propose() error {
 }
 
 // Try to nominate the new consensus value
-func (e *Engine) nominate(slotIdx uint64, prevValue *ultpb.ConsensusValue, currValue *ultpb.ConsensusValue) error {
+func (e *Engine) nominate(idx uint64, prevValue *ultpb.ConsensusValue, currValue *ultpb.ConsensusValue) error {
 	// get new slot
-	if _, ok := e.slots[slotIdx]; !ok {
-		e.slots[slotIdx] = newSlot(slotIdx, "", e.statementChan)
+	if _, ok := e.decrees[idx]; !ok {
+		e.decrees[idx] = NewDecree(idx, "", e.statementChan)
 	}
 
 	prevEnc, err := ultpb.Encode(prevValue)
@@ -348,7 +348,7 @@ func (e *Engine) nominate(slotIdx uint64, prevValue *ultpb.ConsensusValue, currV
 	currEncStr := hex.EncodeToString(currEnc)
 
 	// nominate new value for the slot
-	e.slots[slotIdx].nominate(e.quorum, e.quorumHash, prevEncStr, currEncStr)
+	e.decrees[idx].Nominate(e.quorum, e.quorumHash, prevEncStr, currEncStr)
 
 	return nil
 }

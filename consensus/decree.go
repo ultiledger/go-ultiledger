@@ -10,9 +10,9 @@ import (
 	"github.com/ultiledger/go-ultiledger/ultpb"
 )
 
-// Slot is responsible for maintaining consensus
-// state for a slot index
-type slot struct {
+// Decree is an abstractive decision the consensus engine
+// should reach in each round
+type Decree struct {
 	index uint64
 
 	// nodeID of this node
@@ -33,8 +33,8 @@ type slot struct {
 	statementChan chan *ultpb.Statement
 }
 
-func newSlot(idx uint64, nodeID string, stmtC chan *ultpb.Statement) *slot {
-	s := &slot{
+func NewDecree(idx uint64, nodeID string, stmtC chan *ultpb.Statement) *Decree {
+	d := &Decree{
 		index:         idx,
 		nodeID:        nodeID,
 		round:         0,
@@ -44,32 +44,32 @@ func newSlot(idx uint64, nodeID string, stmtC chan *ultpb.Statement) *slot {
 		nominations:   make(map[string]*ultpb.Nomination),
 		statementChan: stmtC,
 	}
-	return s
+	return d
 }
 
 // nominate a consensus value for this slot
-func (s *slot) nominate(quorum *ultpb.Quorum, quorumHash, prevHash, currHash string) error {
-	s.round++
+func (d *Decree) Nominate(quorum *ultpb.Quorum, quorumHash, prevHash, currHash string) error {
+	d.round++
 	// TODO(bobonovski) compute leader weights
-	s.votes.Add(currHash) // For test
+	d.votes.Add(currHash) // For test
 
-	if err := s.sendNomination(quorum, quorumHash); err != nil {
+	if err := d.sendNomination(quorum, quorumHash); err != nil {
 		return fmt.Errorf("send nomination failed: %v", err)
 	}
 	return nil
 }
 
 // receive nomination from peers or local node
-func (s *slot) recvNomination(nodeID string, quorum *ultpb.Quorum, quorumHash string, nom *ultpb.Nomination) error {
-	s.addNomination(s.nodeID, nom)
-	acceptUpdated, candidateUpdated, err := s.promoteVotes(quorum, nom)
+func (d *Decree) recvNomination(nodeID string, quorum *ultpb.Quorum, quorumHash string, nom *ultpb.Nomination) error {
+	d.addNomination(d.nodeID, nom)
+	acceptUpdated, candidateUpdated, err := d.promoteVotes(quorum, nom)
 	if err != nil {
 		return fmt.Errorf("promote votes failed: %v", err)
 	}
 
 	// send new nomination if votes changed
 	if acceptUpdated {
-		s.sendNomination(quorum, quorumHash)
+		d.sendNomination(quorum, quorumHash)
 	}
 
 	// start balloting if candidates changed
@@ -81,43 +81,43 @@ func (s *slot) recvNomination(nodeID string, quorum *ultpb.Quorum, quorumHash st
 }
 
 // assemble a nomination and broadcast it to other peers
-func (s *slot) sendNomination(quorum *ultpb.Quorum, quorumHash string) error {
+func (d *Decree) sendNomination(quorum *ultpb.Quorum, quorumHash string) error {
 	// create an abstract nomination statement
 	nom := &ultpb.Nomination{
 		QuorumHash: quorumHash,
 	}
-	for vote := range s.votes.Iter() {
+	for vote := range d.votes.Iter() {
 		nom.VoteList = append(nom.VoteList, vote.(string))
 	}
-	for accept := range s.accepts.Iter() {
+	for accept := range d.accepts.Iter() {
 		nom.AcceptList = append(nom.AcceptList, accept.(string))
 	}
 
-	if err := s.recvNomination(s.nodeID, quorum, quorumHash, nom); err != nil {
+	if err := d.recvNomination(d.nodeID, quorum, quorumHash, nom); err != nil {
 		return fmt.Errorf("receive local nomination failed: %v", err)
 	}
 
 	// broadcast the nomination if it is a new one
-	if isNewerNomination(s.latestNomination, nom) {
-		s.latestNomination = nom
+	if isNewerNomination(d.latestNomination, nom) {
+		d.latestNomination = nom
 		nomBytes, err := ultpb.Encode(nom)
 		if err != nil {
 			return fmt.Errorf("encode nomination failed: %v", err)
 		}
 		stmt := &ultpb.Statement{
 			StatementType: ultpb.StatementType_NOMINATE,
-			NodeID:        s.nodeID,
-			SlotIndex:     s.index,
+			NodeID:        d.nodeID,
+			SlotIndex:     d.index,
 			Data:          nomBytes,
 		}
-		s.statementChan <- stmt
+		d.statementChan <- stmt
 	}
 
 	return nil
 }
 
 // check whether the input nomination is valid and newer
-func (s *slot) addNomination(nodeID string, newNom *ultpb.Nomination) error {
+func (d *Decree) addNomination(nodeID string, newNom *ultpb.Nomination) error {
 	// check validity of votes and accepts
 	if len(newNom.VoteList)+len(newNom.AcceptList) == 0 {
 		return errors.New("vote and accept list is empty")
@@ -125,9 +125,9 @@ func (s *slot) addNomination(nodeID string, newNom *ultpb.Nomination) error {
 
 	// check whether the existing nomination of the remote node
 	// is the proper subset of the new nomination
-	if nom, ok := s.nominations[nodeID]; ok {
+	if nom, ok := d.nominations[nodeID]; ok {
 		if isNewerNomination(nom, newNom) {
-			s.nominations[nodeID] = newNom
+			d.nominations[nodeID] = newNom
 		}
 	}
 
@@ -246,37 +246,37 @@ func findVoteOrAcceptNodes(v string, noms map[string]*ultpb.Nomination) mapset.S
 //   2. whether all the nodes in the quorum have voted
 // then try to promote accepts to candidates by checking:
 //   1. whether all the nodes in the quorum have accepted
-func (s *slot) promoteVotes(quorum *ultpb.Quorum, newNom *ultpb.Nomination) (bool, bool, error) {
+func (d *Decree) promoteVotes(quorum *ultpb.Quorum, newNom *ultpb.Nomination) (bool, bool, error) {
 	acceptUpdated := false
 	for _, vote := range newNom.VoteList {
-		if s.accepts.Contains(vote) {
+		if d.accepts.Contains(vote) {
 			continue
 		}
 
 		// use federated vote to promote value
-		ns := findAcceptNodes(vote, s.nominations)
+		ns := findAcceptNodes(vote, d.nominations)
 		if !isVblocking(quorum, ns) {
-			nset := findVoteOrAcceptNodes(vote, s.nominations)
+			nset := findVoteOrAcceptNodes(vote, d.nominations)
 			if !isQuorumSlice(quorum, nset) { // TODO(bobonovski) trim nset to contain only other quorums
 				return false, false, fmt.Errorf("failed to promote any votes to accepts")
 			}
 		}
 
 		// TODO(bobonovski) check the validity of the vote
-		s.votes.Add(vote)
-		s.accepts.Add(vote)
+		d.votes.Add(vote)
+		d.accepts.Add(vote)
 		acceptUpdated = true
 	}
 
 	candidateUpdated := false
 	for _, accept := range newNom.AcceptList {
-		if s.candidates.Contains(accept) {
+		if d.candidates.Contains(accept) {
 			continue
 		}
 
-		ns := findAcceptNodes(accept, s.nominations)
+		ns := findAcceptNodes(accept, d.nominations)
 		if isQuorumSlice(quorum, ns) {
-			s.candidates.Add(accept)
+			d.candidates.Add(accept)
 			candidateUpdated = true
 		}
 	}

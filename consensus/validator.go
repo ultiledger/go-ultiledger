@@ -8,10 +8,56 @@ import (
 	"github.com/ultiledger/go-ultiledger/ultpb"
 )
 
-type pendingStatement struct{}
+type Statement = ultpb.Statement // for convenience
+
+// Validator validates incoming consensus messages and
+// requests missing information of transaction and quorum
+// from other peers.
+type Validator struct {
+	// ready statements map for decrees
+	readyMap map[uint64][]*Statement
+	// notify engine there are new statements ready to be processed
+	readyChan chan struct{}
+	// stop channel
+	stopChan chan struct{}
+}
+
+func (v *Validator) Watch() <-chan struct{} {
+	return v.readyChan
+}
+
+// Ready retrives ready statements with decree index less than
+// and equal to input idx.
+func (v *Validator) Ready(idx uint64) (<-chan *Statement, error) {
+	stmtChan := make(chan *Statement)
+	go func() {
+		for i, stmts := range v.readyMap {
+			if i > idx {
+				continue
+			}
+			for _, s := range stmts {
+				select {
+				case stmtChan <- s:
+				case <-v.stopChan:
+					return
+				}
+			}
+		}
+	}()
+	return stmtChan, nil
+}
+
+func (v *Validator) Recv(stmt *Statement) error {
+	if stmt == nil {
+		return nil
+	}
+	// TODO(bobonovski) get missing tx info
+	v.readyChan <- struct{}{}
+	return nil
+}
 
 // Extract quorum hash from statement
-func extractQuorumHash(stmt *ultpb.Statement) (string, error) {
+func extractQuorumHash(stmt *Statement) (string, error) {
 	if stmt == nil {
 		return "", errors.New("statement is nil")
 	}
