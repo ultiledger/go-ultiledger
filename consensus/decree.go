@@ -55,7 +55,7 @@ func (d *Decree) Nominate(prevHash, currHash string) error {
 	// TODO(bobonovski) compute leader weights
 	d.votes.Add(currHash) // For test
 
-	if err := d.sendNomination(d.quorum, d.quorumHash); err != nil {
+	if err := d.sendNomination(); err != nil {
 		return fmt.Errorf("send nomination failed: %v", err)
 	}
 	return nil
@@ -70,22 +70,29 @@ func (d *Decree) Recv(stmt *ultpb.Statement) error {
 
 	switch stmt.StatementType {
 	case ultpb.StatementType_NOMINATE:
-
+		nom, err := ultpb.DecodeNomination(stmt.Data)
+		if err != nil {
+			return fmt.Errorf("decode nomination failed: %v", err)
+		}
+		err = d.recvNomination(d.nodeID, nom)
+		if err != nil {
+			return fmt.Errorf("recv nomination failed: %v", err)
+		}
 	}
 	return nil
 }
 
 // receive nomination from peers or local node
 func (d *Decree) recvNomination(nodeID string, nom *ultpb.Nomination) error {
-	d.addNomination(d.nodeID, nom)
-	acceptUpdated, candidateUpdated, err := d.promoteVotes(d.quorum, nom)
+	d.addNomination(nodeID, nom)
+	acceptUpdated, candidateUpdated, err := d.promoteVotes(nom)
 	if err != nil {
 		return fmt.Errorf("promote votes failed: %v", err)
 	}
 
 	// send new nomination if votes changed
 	if acceptUpdated {
-		d.sendNomination(d.quorum, d.quorumHash)
+		d.sendNomination()
 	}
 
 	// start balloting if candidates changed
@@ -97,10 +104,10 @@ func (d *Decree) recvNomination(nodeID string, nom *ultpb.Nomination) error {
 }
 
 // assemble a nomination and broadcast it to other peers
-func (d *Decree) sendNomination(quorum *ultpb.Quorum, quorumHash string) error {
+func (d *Decree) sendNomination() error {
 	// create an abstract nomination statement
 	nom := &ultpb.Nomination{
-		QuorumHash: quorumHash,
+		QuorumHash: d.quorumHash,
 	}
 	for vote := range d.votes.Iter() {
 		nom.VoteList = append(nom.VoteList, vote.(string))
@@ -262,7 +269,7 @@ func findVoteOrAcceptNodes(v string, noms map[string]*ultpb.Nomination) mapset.S
 //   2. whether all the nodes in the quorum have voted
 // then try to promote accepts to candidates by checking:
 //   1. whether all the nodes in the quorum have accepted
-func (d *Decree) promoteVotes(quorum *ultpb.Quorum, newNom *ultpb.Nomination) (bool, bool, error) {
+func (d *Decree) promoteVotes(newNom *ultpb.Nomination) (bool, bool, error) {
 	acceptUpdated := false
 	for _, vote := range newNom.VoteList {
 		if d.accepts.Contains(vote) {
@@ -271,9 +278,9 @@ func (d *Decree) promoteVotes(quorum *ultpb.Quorum, newNom *ultpb.Nomination) (b
 
 		// use federated vote to promote value
 		ns := findAcceptNodes(vote, d.nominations)
-		if !isVblocking(quorum, ns) {
+		if !isVblocking(d.quorum, ns) {
 			nset := findVoteOrAcceptNodes(vote, d.nominations)
-			if !isQuorumSlice(quorum, nset) { // TODO(bobonovski) trim nset to contain only other quorums
+			if !isQuorumSlice(d.quorum, nset) { // TODO(bobonovski) trim nset to contain only other quorums
 				return false, false, fmt.Errorf("failed to promote any votes to accepts")
 			}
 		}
@@ -291,7 +298,7 @@ func (d *Decree) promoteVotes(quorum *ultpb.Quorum, newNom *ultpb.Nomination) (b
 		}
 
 		ns := findAcceptNodes(accept, d.nominations)
-		if isQuorumSlice(quorum, ns) {
+		if isQuorumSlice(d.quorum, ns) {
 			d.candidates.Add(accept)
 			candidateUpdated = true
 		}

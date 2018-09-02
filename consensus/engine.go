@@ -349,7 +349,7 @@ func (e *Engine) Propose() error {
 	return nil
 }
 
-// Try to nominate the new consensus value
+// nominate a new consensus value for specified decree
 func (e *Engine) nominate(idx uint64, prevValue *ultpb.ConsensusValue, currValue *ultpb.ConsensusValue) error {
 	// get new slot
 	if _, ok := e.decrees[idx]; !ok {
