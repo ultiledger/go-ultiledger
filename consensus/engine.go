@@ -331,7 +331,7 @@ func (e *Engine) propose() error {
 func (e *Engine) nominate(idx uint64, prevValue *ultpb.ConsensusValue, currValue *ultpb.ConsensusValue) error {
 	// get new slot
 	if _, ok := e.decrees[idx]; !ok {
-		e.decrees[idx] = NewDecree(idx, "", e.statementChan)
+		e.decrees[idx] = NewDecree(idx, "", e.quorum, e.quorumHash, e.statementChan)
 	}
 
 	prevEnc, err := ultpb.Encode(prevValue)
@@ -348,7 +348,7 @@ func (e *Engine) nominate(idx uint64, prevValue *ultpb.ConsensusValue, currValue
 	currEncStr := hex.EncodeToString(currEnc)
 
 	// nominate new value for the slot
-	e.decrees[idx].Nominate(e.quorum, e.quorumHash, prevEncStr, currEncStr)
+	e.decrees[idx].Nominate(prevEncStr, currEncStr)
 
 	return nil
 }

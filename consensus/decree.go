@@ -13,10 +13,10 @@ import (
 // Decree is an abstractive decision the consensus engine
 // should reach in each round
 type Decree struct {
-	index uint64
-
-	// nodeID of this node
-	nodeID string
+	index      uint64
+	nodeID     string
+	quorum     *ultpb.Quorum
+	quorumHash string
 
 	// nomination round
 	round int
@@ -33,10 +33,12 @@ type Decree struct {
 	statementChan chan *ultpb.Statement
 }
 
-func NewDecree(idx uint64, nodeID string, stmtC chan *ultpb.Statement) *Decree {
+func NewDecree(idx uint64, nodeID string, quorum *ultpb.Quorum, quorumHash string, stmtC chan *ultpb.Statement) *Decree {
 	d := &Decree{
 		index:         idx,
 		nodeID:        nodeID,
+		quorum:        quorum,
+		quorumHash:    quorumHash,
 		round:         0,
 		votes:         mapset.NewSet(),
 		accepts:       mapset.NewSet(),
@@ -48,12 +50,12 @@ func NewDecree(idx uint64, nodeID string, stmtC chan *ultpb.Statement) *Decree {
 }
 
 // nominate a consensus value for this slot
-func (d *Decree) Nominate(quorum *ultpb.Quorum, quorumHash, prevHash, currHash string) error {
+func (d *Decree) Nominate(prevHash, currHash string) error {
 	d.round++
 	// TODO(bobonovski) compute leader weights
 	d.votes.Add(currHash) // For test
 
-	if err := d.sendNomination(quorum, quorumHash); err != nil {
+	if err := d.sendNomination(d.quorum, d.quorumHash); err != nil {
 		return fmt.Errorf("send nomination failed: %v", err)
 	}
 	return nil
