@@ -49,7 +49,7 @@ func NewDecree(idx uint64, nodeID string, quorum *ultpb.Quorum, quorumHash strin
 	return d
 }
 
-// nominate a consensus value for this slot
+// Nominate nominates a consensus value for the decree
 func (d *Decree) Nominate(prevHash, currHash string) error {
 	d.round++
 	// TODO(bobonovski) compute leader weights
@@ -58,6 +58,12 @@ func (d *Decree) Nominate(prevHash, currHash string) error {
 	if err := d.sendNomination(d.quorum, d.quorumHash); err != nil {
 		return fmt.Errorf("send nomination failed: %v", err)
 	}
+	return nil
+}
+
+// Recv receives validated statement and redistributes it to
+// corresponding route handler
+func (d *Decree) Recv(stmt *ultpb.Statement) error {
 	return nil
 }
 
@@ -109,7 +115,7 @@ func (d *Decree) sendNomination(quorum *ultpb.Quorum, quorumHash string) error {
 		stmt := &ultpb.Statement{
 			StatementType: ultpb.StatementType_NOMINATE,
 			NodeID:        d.nodeID,
-			SlotIndex:     d.index,
+			Index:         d.index,
 			Data:          nomBytes,
 		}
 		d.statementChan <- stmt

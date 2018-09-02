@@ -22,13 +22,21 @@ type Validator struct {
 	stopChan chan struct{}
 }
 
+func NewValidator() *Validator {
+	return &Validator{
+		readyMap:  make(map[uint64][]*Statement),
+		readyChan: make(chan struct{}),
+		stopChan:  make(chan struct{}),
+	}
+}
+
 func (v *Validator) Watch() <-chan struct{} {
 	return v.readyChan
 }
 
 // Ready retrives ready statements with decree index less than
 // and equal to input idx.
-func (v *Validator) Ready(idx uint64) (<-chan *Statement, error) {
+func (v *Validator) Ready(idx uint64) <-chan *Statement {
 	stmtChan := make(chan *Statement)
 	go func() {
 		for i, stmts := range v.readyMap {
@@ -44,7 +52,7 @@ func (v *Validator) Ready(idx uint64) (<-chan *Statement, error) {
 			}
 		}
 	}()
-	return stmtChan, nil
+	return stmtChan
 }
 
 func (v *Validator) Recv(stmt *Statement) error {

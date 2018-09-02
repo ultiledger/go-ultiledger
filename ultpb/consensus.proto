@@ -43,6 +43,6 @@ enum StatementType {
 message Statement {
   StatementType StatementType = 1;
   string NodeID = 2;
-  uint64 SlotIndex = 3;
+  uint64 Index = 3;
   bytes Data = 4; 
 }

@@ -76,6 +76,9 @@ type Engine struct {
 	am *account.Manager
 	lm *ledger.Manager
 
+	// statement validator
+	sv *Validator
+
 	// consensus quorum
 	// each time quorum is updated, its quorum hash should be recomputed accordingly
 	quorum     *ultpb.Quorum
@@ -115,6 +118,7 @@ func NewEngine(ctx *EngineContext) *Engine {
 		pm:            ctx.PM,
 		am:            ctx.AM,
 		lm:            ctx.LM,
+		sv:            NewValidator(),
 		decrees:       make(map[uint64]*Decree),
 		txSet:         mapset.NewSet(),
 		txMap:         make(map[string]*TxHistory),
@@ -153,6 +157,9 @@ func (e *Engine) Start(stopChan chan struct{}) {
 					log.Errorf("broadcast tx failed: %v", err)
 					continue
 				}
+			case <-e.sv.Watch():
+				seq := e.lm.NextLedgerHeaderSeq()
+				e.processStatements(e.sv.Ready(seq))
 			case <-stopChan:
 				return
 			}
@@ -243,7 +250,20 @@ func (e *Engine) RecvStatement(stmt *ultpb.Statement) error {
 	if stmt.NodeID == e.nodeID {
 		return nil
 	}
+	err := e.sv.Recv(stmt)
+	if err != nil {
+		return fmt.Errorf("send statement to validator failed: %v", err)
+	}
 	return nil
+}
+
+func (e *Engine) processStatements(stmts <-chan *ultpb.Statement) {
+	for s := range stmts {
+		if _, ok := e.decrees[s.Index]; !ok {
+			continue
+		}
+		e.decrees[s.Index].Recv(s)
+	}
 }
 
 // broadcast transaction through rpc broadcast
