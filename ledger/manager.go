@@ -64,7 +64,7 @@ func NewManager(d db.DB) *Manager {
 	lm := &Manager{
 		store:       d,
 		bucket:      "LEDGERS",
-		ledgerState: NOTSYNCED,
+		ledgerState: LedgerStateNotSynced,
 		startTime:   time.Now().Unix(),
 	}
 	cache, err := lru.New(1000)
@@ -136,7 +136,7 @@ func (lm *Manager) NextLedgerHeaderSeq() uint64 {
 // Append the committed transaction list to current ledger, the operation
 // is only valid when the ledger manager in synced state.
 func (lm *Manager) AppendTxList(seq uint64, prevHeaderHash string, txHash string) error {
-	if lm.ledgerState != SYNCED {
+	if lm.ledgerState != LedgerStateSynced {
 		return errors.New("ledger is not synced")
 	}
 
