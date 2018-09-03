@@ -10,6 +10,14 @@ import (
 	"github.com/ultiledger/go-ultiledger/ultpb"
 )
 
+type BallotState uint8
+
+const (
+	BallotStatePrepare BallotState = iota
+	BallotStateConfirm
+	BallotStateExternalize
+)
+
 // Decree is an abstractive decision the consensus engine
 // should reach in each round
 type Decree struct {
@@ -27,6 +35,7 @@ type Decree struct {
 	// latest composite candidate
 	latestComposite string
 
+	// for nominations
 	votes       mapset.Set
 	accepts     mapset.Set
 	candidates  mapset.Set

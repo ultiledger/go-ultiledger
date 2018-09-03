@@ -34,9 +34,46 @@ message Nomination {
 // a specific decree
 message Ballot {
   // ballot counter
-  uint64 Counter = 1;
+  uint32 Counter = 1;
   // composite candidate value
   string Value = 2;
+}
+
+// Prepare message for ballot protocol
+message Prepare {
+  // current ballot
+  Ballot B = 1;
+  // two hightest ballot accepted as 
+  // prepared such as Q < P and Q ~ P
+  Ballot Q = 2;
+  Ballot P = 3;
+  // counter of highest ballot confirmed as prepared
+  uint32 HC = 4;
+  // counter of lowest ballot confirmed as prepared
+  uint32 LC = 5;
+  string QuorumHash = 6;
+}
+
+// Confirm message for ballot protocol
+message Confirm {
+  // current ballot
+  Ballot B = 1;
+  // counter of highest accepted prepared ballot
+  uint32 PC = 2;
+  // counter of lowest ballot for which the node has accepted commit
+  uint32 LC = 3; 
+  // counter of highest ballot for which the node has accepted commit
+  uint32 HC = 4;
+  string QuorumHash = 5; 
+}
+
+// Externalize message for ballot protocol
+message Externalize {
+  // lowest confirmed committed ballot
+  Ballot B = 1;
+  // counter of highest confirmed committed ballot
+  uint32 HC = 2;
+  string QuorumHash = 3;
 }
 
 // Statement is an abstractive value for nodes to vote 

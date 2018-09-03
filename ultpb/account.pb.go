@@ -18,6 +18,9 @@ It has these top-level messages:
 	Quorum
 	Nomination
 	Ballot
+	Prepare
+	Confirm
+	Externalize
 	Statement
 	LedgerHeader
 	Op
