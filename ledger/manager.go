@@ -16,8 +16,8 @@ import (
 type LedgerState uint8
 
 const (
-	NOTSYNCED LedgerState = iota
-	SYNCED
+	LedgerStateSynced LedgerState = iota
+	LedgerStateNotSynced
 )
 
 var (

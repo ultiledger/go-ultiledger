@@ -23,11 +23,20 @@ message Quorum {
 }
 
 // Nomination is used to find a candidate value for
-// later federated voting
+// later federated voting of ballot
 message Nomination {
   repeated string VoteList = 1;
   repeated string AcceptList = 2;
   string QuorumHash = 3;
+}
+
+// Ballot is used to finalize a consensus value for
+// a specific decree
+message Ballot {
+  // ballot counter
+  uint64 Counter = 1;
+  // composite candidate value
+  string Value = 2;
 }
 
 // Statement is an abstractive value for nodes to vote 
@@ -42,7 +51,10 @@ enum StatementType {
 
 message Statement {
   StatementType StatementType = 1;
+  // node ID of sender
   string NodeID = 2;
+  // decree index
   uint64 Index = 3;
+  // nomination or ballot in pb format
   bytes Data = 4; 
 }

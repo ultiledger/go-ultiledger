@@ -17,6 +17,7 @@ It has these top-level messages:
 	ConsensusValue
 	Quorum
 	Nomination
+	Ballot
 	Statement
 	LedgerHeader
 	Op

@@ -272,10 +272,10 @@ func findVoteOrAcceptNodes(v string, noms map[string]*ultpb.Nomination) mapset.S
 	return nodeSet
 }
 
-// try to promote votes to accepts by checking two conditions:
+// try to promote votes to accepts by checking two conditions (ACCEPT):
 //   1. whether the votes form V-blocking
 //   2. whether all the nodes in the quorum have voted
-// then try to promote accepts to candidates by checking:
+// then try to promote accepts to candidates by checking (CONFIRM):
 //   1. whether all the nodes in the quorum have accepted
 func (d *Decree) promoteVotes(newNom *ultpb.Nomination) (bool, bool, error) {
 	acceptUpdated := false
