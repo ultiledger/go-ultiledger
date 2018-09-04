@@ -4,9 +4,11 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"strings"
 
 	"github.com/deckarep/golang-set"
 
+	"github.com/ultiledger/go-ultiledger/log"
 	"github.com/ultiledger/go-ultiledger/ultpb"
 )
 
@@ -26,23 +28,22 @@ type Decree struct {
 	quorum     *ultpb.Quorum
 	quorumHash string
 
-	// nomination round
-	round int
-
-	// latest nomination
+	// for nomination protocol
+	votes            mapset.Set
+	accepts          mapset.Set
+	candidates       mapset.Set
+	nominations      map[string]*ultpb.Nomination
+	nominationRound  int
 	latestNomination *ultpb.Nomination
+	latestComposite  string // latest composite candidate value
 
-	// latest composite candidate
-	latestComposite string
-
-	// for nominations
-	votes       mapset.Set
-	accepts     mapset.Set
-	candidates  mapset.Set
-	nominations map[string]*ultpb.Nomination
-
-	// for ballot
-	ballotPhase BallotPhase
+	// for ballot protocol
+	currentPhase  BallotPhase
+	currentBallot *ultpb.Ballot
+	pBallot       *ultpb.Ballot // p
+	qBallot       *ultpb.Ballot // p'
+	hBallot       *ultpb.Ballot // h
+	cBallot       *ultpb.Ballot // c
 
 	// channel for sending statements
 	statementChan chan *ultpb.Statement
@@ -50,23 +51,23 @@ type Decree struct {
 
 func NewDecree(idx uint64, nodeID string, quorum *ultpb.Quorum, quorumHash string, stmtC chan *ultpb.Statement) *Decree {
 	d := &Decree{
-		index:         idx,
-		nodeID:        nodeID,
-		quorum:        quorum,
-		quorumHash:    quorumHash,
-		round:         0,
-		votes:         mapset.NewSet(),
-		accepts:       mapset.NewSet(),
-		candidates:    mapset.NewSet(),
-		nominations:   make(map[string]*ultpb.Nomination),
-		statementChan: stmtC,
+		index:           idx,
+		nodeID:          nodeID,
+		quorum:          quorum,
+		quorumHash:      quorumHash,
+		nominationRound: 0,
+		votes:           mapset.NewSet(),
+		accepts:         mapset.NewSet(),
+		candidates:      mapset.NewSet(),
+		nominations:     make(map[string]*ultpb.Nomination),
+		statementChan:   stmtC,
 	}
 	return d
 }
 
 // Nominate nominates a consensus value for the decree
 func (d *Decree) Nominate(prevHash, currHash string) error {
-	d.round++
+	d.nominationRound++
 	// TODO(bobonovski) compute leader weights
 	d.votes.Add(currHash) // For test
 
@@ -128,7 +129,8 @@ func (d *Decree) recvNomination(nodeID string, nom *ultpb.Nomination) error {
 			return fmt.Errorf("combine candidates failed: %v", err)
 		}
 		d.latestComposite = compValue
-		// TODO(bobonovski) balloting
+
+		d.updateBallotPhase(compValue, false)
 	}
 
 	return nil
@@ -168,6 +170,169 @@ func (d *Decree) sendNomination() error {
 	}
 
 	return nil
+}
+
+// update the current ballot phase
+func (d *Decree) updateBallotPhase(val string, force bool) bool {
+	if !force && d.currentBallot == nil {
+		return false
+	}
+
+	counter := uint32(1)
+	if d.currentBallot != nil {
+		counter = d.currentBallot.Counter + 1
+	}
+
+	if d.currentPhase != BallotPhasePrepare && d.currentPhase != BallotPhaseConfirm {
+		return false
+	}
+
+	// TODO(bobonovski) use confirmed prepared value?
+	b := &ultpb.Ballot{Counter: counter, Value: val}
+
+	updated := d.updateBallotValue(b)
+	if updated {
+		// TODO(bobonovski) emit ballot statement
+	}
+
+	return false
+}
+
+// update the current ballot value
+func (d *Decree) updateBallotValue(b *ultpb.Ballot) bool {
+	if d.currentPhase != BallotPhasePrepare && d.currentPhase != BallotPhaseConfirm {
+		return false
+	}
+
+	updated := false
+
+	if d.currentBallot == nil {
+		d.updateBallot(b)
+		updated = true
+	} else {
+		if compareBallots(d.currentBallot, b) <= 0 {
+			log.Fatal("cannot update current ballot with smaller one")
+		}
+
+		if d.cBallot != nil && strings.Compare(d.cBallot.Value, b.Value) != 0 {
+			return false
+		}
+
+		if compareBallots(d.currentBallot, b) <= 0 {
+			d.updateBallot(b)
+			updated = true
+		}
+	}
+
+	d.checkBallotInvariants()
+
+	return updated
+}
+
+// update the current ballot
+func (d *Decree) updateBallot(b *ultpb.Ballot) {
+	if d.currentPhase == BallotPhaseExternalize {
+		log.Fatal("should not update ballot in externalize phase")
+	}
+
+	if d.currentBallot != nil && compareBallots(d.currentBallot, b) <= 0 {
+		log.Fatal("cannot update current ballot with smaller one")
+	}
+
+	d.currentBallot = &ultpb.Ballot{Counter: b.Counter, Value: b.Value}
+
+	if d.hBallot != nil && !compatibleBallots(d.currentBallot, d.hBallot) {
+		d.hBallot.Reset()
+	}
+}
+
+// check invariants of ballot states
+func (d *Decree) checkBallotInvariants() {
+	if d.currentBallot != nil && d.currentBallot.Counter == 0 {
+		log.Fatal("current ballot is not nil but counter is zero")
+	}
+
+	if d.pBallot != nil && d.qBallot != nil {
+		cond := compareBallots(d.qBallot, d.pBallot) <= 0 && !compatibleBallots(d.qBallot, d.pBallot)
+		if !cond {
+			log.Fatal("q ballot and p ballot invariant not satisfied")
+		}
+	}
+
+	if d.hBallot != nil {
+		if d.currentBallot == nil {
+			log.Fatal("high ballot is not nil but current ballot is nil")
+		}
+		cond := compareBallots(d.hBallot, d.currentBallot) <= 0 && compatibleBallots(d.hBallot, d.currentBallot)
+		if !cond {
+			log.Fatal("current ballot and higher ballot invariant not satisfied")
+		}
+	}
+
+	if d.cBallot != nil {
+		if d.currentBallot == nil {
+			log.Fatal("commit ballot is not nil but current ballot is nil")
+		}
+		cond := compareBallots(d.cBallot, d.hBallot) <= 0 && compatibleBallots(d.cBallot, d.hBallot)
+		if !cond {
+			log.Fatal("commit ballot and higher ballot invariant not satisfied")
+		}
+		cond = compareBallots(d.hBallot, d.currentBallot) <= 0 && compatibleBallots(d.hBallot, d.currentBallot)
+		if !cond {
+			log.Fatal("current ballot and higher ballot invariant not satisfied")
+		}
+	}
+
+	switch d.currentPhase {
+	case BallotPhasePrepare:
+	case BallotPhaseConfirm:
+		if d.cBallot == nil {
+			log.Fatal("commit ballot should not be nil in confirm phase")
+		}
+	case BallotPhaseExternalize:
+		if d.cBallot == nil {
+			log.Fatal("commit ballot should not be nil in externalize phase")
+		}
+		if d.hBallot == nil {
+			log.Fatal("higher ballot should not be nil in externalize phase")
+		}
+	default:
+		log.Fatalf("invalid ballot phase: %d", d.currentPhase)
+	}
+}
+
+// compare two ballots by counter then value
+func compareBallots(lb *ultpb.Ballot, rb *ultpb.Ballot) int {
+	// check input with nil ballot
+	if lb == nil && rb == nil {
+		return 0
+	} else if lb == nil && rb != nil {
+		return 1
+	} else if lb != nil && rb == nil {
+		return -1
+	}
+
+	// check normal case
+	if lb.Counter < rb.Counter {
+		return -1
+	} else if lb.Counter > rb.Counter {
+		return 1
+	}
+
+	return strings.Compare(lb.Value, rb.Value)
+}
+
+// check whether the two ballots has the same value
+func compatibleBallots(lb *ultpb.Ballot, rb *ultpb.Ballot) bool {
+	if lb == nil || rb == nil {
+		return false
+	}
+
+	if strings.Compare(lb.Value, rb.Value) == 0 {
+		return true
+	}
+
+	return false
 }
 
 // check whether the latter nomination contains all the information of the first one
