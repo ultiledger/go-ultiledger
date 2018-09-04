@@ -10,12 +10,12 @@ import (
 	"github.com/ultiledger/go-ultiledger/ultpb"
 )
 
-type BallotState uint8
+type BallotPhase uint8
 
 const (
-	BallotStatePrepare BallotState = iota
-	BallotStateConfirm
-	BallotStateExternalize
+	BallotPhasePrepare BallotPhase = iota
+	BallotPhaseConfirm
+	BallotPhaseExternalize
 )
 
 // Decree is an abstractive decision the consensus engine
@@ -40,6 +40,9 @@ type Decree struct {
 	accepts     mapset.Set
 	candidates  mapset.Set
 	nominations map[string]*ultpb.Nomination
+
+	// for ballot
+	ballotPhase BallotPhase
 
 	// channel for sending statements
 	statementChan chan *ultpb.Statement
@@ -96,7 +99,18 @@ func (d *Decree) Recv(stmt *ultpb.Statement) error {
 
 // receive nomination from peers or local node
 func (d *Decree) recvNomination(nodeID string, nom *ultpb.Nomination) error {
-	d.addNomination(nodeID, nom)
+	// check validity of votes and accepts
+	if len(nom.VoteList)+len(nom.AcceptList) == 0 {
+		return errors.New("vote and accept list is empty")
+	}
+
+	// check whether the existing nomination of the remote node
+	// is the proper subset of the new nomination
+	if oldNom, ok := d.nominations[nodeID]; ok {
+		if isNewerNomination(oldNom, nom) {
+			d.nominations[nodeID] = nom
+		}
+	}
 	acceptUpdated, candidateUpdated, err := d.promoteVotes(nom)
 	if err != nil {
 		return fmt.Errorf("promote votes failed: %v", err)
@@ -156,24 +170,7 @@ func (d *Decree) sendNomination() error {
 	return nil
 }
 
-// check whether the input nomination is valid and newer
-func (d *Decree) addNomination(nodeID string, newNom *ultpb.Nomination) error {
-	// check validity of votes and accepts
-	if len(newNom.VoteList)+len(newNom.AcceptList) == 0 {
-		return errors.New("vote and accept list is empty")
-	}
-
-	// check whether the existing nomination of the remote node
-	// is the proper subset of the new nomination
-	if nom, ok := d.nominations[nodeID]; ok {
-		if isNewerNomination(nom, newNom) {
-			d.nominations[nodeID] = newNom
-		}
-	}
-
-	return nil
-}
-
+// check whether the latter nomination contains all the information of the first one
 func isNewerNomination(anom *ultpb.Nomination, bnom *ultpb.Nomination) bool {
 	if anom == nil && bnom != nil {
 		return true
