@@ -41,13 +41,14 @@ type Decree struct {
 	latestComposite  string // latest composite candidate value
 
 	// for ballot protocol
-	currentPhase  BallotPhase
-	currentBallot *ultpb.Ballot
-	pBallot       *ultpb.Ballot // p
-	qBallot       *ultpb.Ballot // p'
-	hBallot       *ultpb.Ballot // h
-	cBallot       *ultpb.Ballot // c
-	ballots       map[string]*ultpb.Statement
+	currentPhase     BallotPhase
+	currentBallot    *ultpb.Ballot
+	pBallot          *ultpb.Ballot // p
+	qBallot          *ultpb.Ballot // p'
+	hBallot          *ultpb.Ballot // h
+	cBallot          *ultpb.Ballot // c
+	ballots          map[string]*ultpb.Statement
+	latestBallotStmt *ultpb.Statement
 
 	// channel for sending statements
 	statementChan chan *ultpb.Statement
@@ -255,11 +256,16 @@ func (d *Decree) sendBallot() error {
 		Data:          msgBytes,
 	}
 
-	// check whether the statement is new one
+	// check whether the statement is already processed
 	s, ok := d.ballots[d.nodeID]
 	if !ok || pb.Equal(s, stmt) {
 		if err := d.recvBallot(stmt); err != nil {
 			return fmt.Errorf("recv local ballot failed: %v", err)
+		}
+		if d.latestBallotStmt == nil || isNewerBallot(d.latestBallotStmt, stmt) {
+			d.latestBallotStmt = stmt
+			// broadcast the ballot
+			d.statementChan <- stmt
 		}
 	}
 
@@ -286,10 +292,12 @@ func (d *Decree) updateBallotPhase(val string, force bool) bool {
 
 	updated := d.updateBallotValue(b)
 	if updated {
-		// TODO(bobonovski) emit ballot statement
+		if err := d.sendBallot(); err != nil {
+			log.Fatalf("send ballot failed: %v", err)
+		}
 	}
 
-	return false
+	return updated
 }
 
 // update the current ballot value
