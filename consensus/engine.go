@@ -208,6 +208,14 @@ func (e *Engine) UpdateTxStatus(txHash string, status rpcpb.TxStatusEnum) error 
 	return nil
 }
 
+// Find the max between two uint64 values
+func MaxUint64(x uint64, y uint64) uint64 {
+	if x >= y {
+		return x
+	}
+	return y
+}
+
 // add transaction to internal pending set
 func (e *Engine) RecvTx(tx *ultpb.Tx) error {
 	h, err := ultpb.SHA256Hash(tx)
