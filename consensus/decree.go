@@ -116,6 +116,7 @@ func (d *Decree) Recv(stmt *ultpb.Statement) error {
 	return nil
 }
 
+/* Nomination Protocol */
 // receive nomination from peers or local node
 func (d *Decree) recvNomination(nodeID string, nom *ultpb.Nomination) error {
 	// check validity of votes and accepts
@@ -190,6 +191,54 @@ func (d *Decree) sendNomination() error {
 	return nil
 }
 
+// try to promote votes to accepts by checking two conditions (ACCEPT):
+//   1. whether the votes form V-blocking
+//   2. whether all the nodes in the quorum have voted
+// then try to promote accepts to candidates by checking (CONFIRM):
+//   1. whether all the nodes in the quorum have accepted
+func (d *Decree) promoteVotes(newNom *ultpb.Nomination) (bool, bool, error) {
+	acceptUpdated := false
+	for _, vote := range newNom.VoteList {
+		if d.accepts.Contains(vote) {
+			continue
+		}
+
+		// use federated vote to promote value
+		ns := findAcceptNodes(vote, d.nominations)
+		if !isVblocking(d.quorum, ns) {
+			nset := findVoteOrAcceptNodes(vote, d.nominations)
+			if !isQuorumSlice(d.quorum, nset) { // TODO(bobonovski) trim nset to contain only other quorums
+				return false, false, fmt.Errorf("failed to promote any votes to accepts")
+			}
+		}
+
+		// TODO(bobonovski) check the validity of the vote
+		d.votes.Add(vote)
+		d.accepts.Add(vote)
+		acceptUpdated = true
+	}
+
+	candidateUpdated := false
+	for _, accept := range newNom.AcceptList {
+		if d.candidates.Contains(accept) {
+			continue
+		}
+
+		ns := findAcceptNodes(accept, d.nominations)
+		if isQuorumSlice(d.quorum, ns) {
+			d.candidates.Add(accept)
+			candidateUpdated = true
+		}
+	}
+
+	return acceptUpdated, candidateUpdated, nil
+}
+
+func (d *Decree) combineCandidates() (string, error) {
+	return "", nil
+}
+
+/* Ballot Protocol */
 // receive ballot statement from peer or local nodes
 func (d *Decree) recvBallot(stmt *ultpb.Statement) error {
 	if stmt.Index != d.index {
@@ -288,6 +337,16 @@ func (d *Decree) sendBallot() error {
 		}
 	}
 
+	return nil
+}
+
+// try to step ballot state
+func (d *Decree) step(stmt *ultpb.Statement) error {
+	return nil
+}
+
+// try to accept new ballot as prepared
+func (d *Decree) acceptPrepared(stmt *ultpb.Statement) error {
 	return nil
 }
 
@@ -523,51 +582,4 @@ func (d *Decree) validateConsensusValue(val string) error {
 	// TODO(bobonovski) define maybe validate state
 
 	return nil
-}
-
-// try to promote votes to accepts by checking two conditions (ACCEPT):
-//   1. whether the votes form V-blocking
-//   2. whether all the nodes in the quorum have voted
-// then try to promote accepts to candidates by checking (CONFIRM):
-//   1. whether all the nodes in the quorum have accepted
-func (d *Decree) promoteVotes(newNom *ultpb.Nomination) (bool, bool, error) {
-	acceptUpdated := false
-	for _, vote := range newNom.VoteList {
-		if d.accepts.Contains(vote) {
-			continue
-		}
-
-		// use federated vote to promote value
-		ns := findAcceptNodes(vote, d.nominations)
-		if !isVblocking(d.quorum, ns) {
-			nset := findVoteOrAcceptNodes(vote, d.nominations)
-			if !isQuorumSlice(d.quorum, nset) { // TODO(bobonovski) trim nset to contain only other quorums
-				return false, false, fmt.Errorf("failed to promote any votes to accepts")
-			}
-		}
-
-		// TODO(bobonovski) check the validity of the vote
-		d.votes.Add(vote)
-		d.accepts.Add(vote)
-		acceptUpdated = true
-	}
-
-	candidateUpdated := false
-	for _, accept := range newNom.AcceptList {
-		if d.candidates.Contains(accept) {
-			continue
-		}
-
-		ns := findAcceptNodes(accept, d.nominations)
-		if isQuorumSlice(d.quorum, ns) {
-			d.candidates.Add(accept)
-			candidateUpdated = true
-		}
-	}
-
-	return acceptUpdated, candidateUpdated, nil
-}
-
-func (d *Decree) combineCandidates() (string, error) {
-	return "", nil
 }
