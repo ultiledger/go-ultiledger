@@ -68,6 +68,33 @@ func DecodeNomination(b []byte) (*Nomination, error) {
 	return nom, nil
 }
 
+// decode pb message to ballot prepare statement
+func DecodePrepare(b []byte) (*Prepare, error) {
+	pre := &Prepare{}
+	if err := proto.Unmarshal(b, pre); err != nil {
+		return nil, err
+	}
+	return pre, nil
+}
+
+// decode pb message to ballot confirm statement
+func DecodeConfirm(b []byte) (*Confirm, error) {
+	con := &Confirm{}
+	if err := proto.Unmarshal(b, con); err != nil {
+		return nil, err
+	}
+	return con, nil
+}
+
+// decode pb message to ballot externalize statement
+func DecodeExternalize(b []byte) (*Externalize, error) {
+	ext := &Externalize{}
+	if err := proto.Unmarshal(b, ext); err != nil {
+		return nil, err
+	}
+	return ext, nil
+}
+
 // decode pb message to CreateAccountOp
 func DecodeCreateAccountOp(b []byte) (*CreateAccountOp, error) {
 	op := &CreateAccountOp{}

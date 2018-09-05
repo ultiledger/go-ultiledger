@@ -1,12 +1,14 @@
 package consensus
 
 import (
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"math"
 	"strings"
 
 	"github.com/deckarep/golang-set"
+	pb "github.com/golang/protobuf/proto"
 
 	"github.com/ultiledger/go-ultiledger/log"
 	"github.com/ultiledger/go-ultiledger/ultpb"
@@ -23,10 +25,11 @@ const (
 // Decree is an abstractive decision the consensus engine
 // should reach in each round
 type Decree struct {
-	index      uint64
-	nodeID     string
-	quorum     *ultpb.Quorum
-	quorumHash string
+	index           uint64
+	nodeID          string
+	quorum          *ultpb.Quorum
+	quorumHash      string
+	latestCloseTime uint64
 
 	// for nomination protocol
 	votes            mapset.Set
@@ -44,6 +47,7 @@ type Decree struct {
 	qBallot       *ultpb.Ballot // p'
 	hBallot       *ultpb.Ballot // h
 	cBallot       *ultpb.Ballot // c
+	ballots       map[string]*ultpb.Statement
 
 	// channel for sending statements
 	statementChan chan *ultpb.Statement
@@ -167,6 +171,96 @@ func (d *Decree) sendNomination() error {
 			Data:          nomBytes,
 		}
 		d.statementChan <- stmt
+	}
+
+	return nil
+}
+
+// receive ballot statement from peer or local nodes
+func (d *Decree) recvBallot(stmt *ultpb.Statement) error {
+	if stmt.Index != d.index {
+		log.Fatalf("received incompatible ballot index: local %d, recv %d", d.index, stmt.Index)
+	}
+
+	// skip outdated statement without returning error
+	if s, ok := d.ballots[stmt.NodeID]; ok {
+		if !isNewerBallot(s, stmt) {
+			return nil
+		}
+	}
+
+	// make sure the ballot is valid
+	if err := d.validateBallot(stmt); err != nil {
+		return fmt.Errorf("ballot is invalid: %v", err)
+	}
+
+	return nil
+}
+
+// assemble a ballot statement based on current ballot phase
+func (d *Decree) sendBallot() error {
+	var stmtType ultpb.StatementType
+	var msg pb.Message
+
+	d.checkBallotInvariants()
+
+	// assemble ballot statement based on current phase
+	switch d.currentPhase {
+	case BallotPhasePrepare: // Prepare statement
+		stmtType = ultpb.StatementType_PREPARE
+		prepare := &ultpb.Prepare{
+			B:          d.currentBallot,
+			P:          d.pBallot,
+			Q:          d.qBallot,
+			QuorumHash: d.quorumHash,
+		}
+		if d.cBallot != nil {
+			prepare.LC = d.cBallot.Counter
+		}
+		if d.hBallot != nil {
+			prepare.HC = d.hBallot.Counter
+		}
+		msg = prepare
+	case BallotPhaseConfirm: // Confirm statement
+		stmtType = ultpb.StatementType_CONFIRM
+		confirm := &ultpb.Confirm{
+			B:          d.currentBallot,
+			PC:         d.pBallot.Counter,
+			LC:         d.cBallot.Counter,
+			HC:         d.hBallot.Counter,
+			QuorumHash: d.quorumHash,
+		}
+		msg = confirm
+	case BallotPhaseExternalize: // Externalize statement
+		stmtType = ultpb.StatementType_EXTERNALIZE
+		exter := &ultpb.Externalize{
+			B:          d.cBallot,
+			HC:         d.hBallot.Counter,
+			QuorumHash: d.quorumHash,
+		}
+		msg = exter
+	default:
+		log.Fatalf("invalid ballot phase: %d", d.currentPhase)
+	}
+
+	// create statement
+	msgBytes, err := ultpb.Encode(msg)
+	if err != nil {
+		return fmt.Errorf("encode ballot failed: %v", err)
+	}
+	stmt := &ultpb.Statement{
+		StatementType: stmtType,
+		NodeID:        d.nodeID,
+		Index:         d.index,
+		Data:          msgBytes,
+	}
+
+	// check whether the statement is new one
+	s, ok := d.ballots[d.nodeID]
+	if !ok || pb.Equal(s, stmt) {
+		if err := d.recvBallot(stmt); err != nil {
+			return fmt.Errorf("recv local ballot failed: %v", err)
+		}
 	}
 
 	return nil
@@ -301,6 +395,109 @@ func (d *Decree) checkBallotInvariants() {
 	}
 }
 
+// validate ballot by checking:
+// 1. ballot counters are in expected states
+// 2. ballot values are normal and satisfy consensus constraints
+func (d *Decree) validateBallot(stmt *ultpb.Statement) error {
+	if stmt == nil {
+		return fmt.Errorf("ballot statement is nil")
+	}
+
+	fromSelf := d.nodeID == stmt.NodeID
+
+	// value set for checking validity of ballot value
+	values := mapset.NewSet()
+
+	// TODO(bobonovski) check quorum sanity
+
+	switch stmt.StatementType {
+	case ultpb.StatementType_PREPARE:
+		prepare, err := ultpb.DecodePrepare(stmt.Data)
+		if err != nil {
+			return fmt.Errorf("decode prepare statement failed: %v", err)
+		}
+		// checking counter sanity
+		if !fromSelf && prepare.B.Counter == 0 {
+			return errors.New("prepare ballot counter is zero and not self msg")
+		}
+		cond := compareBallots(prepare.Q, prepare.P) <= 0 && !compatibleBallots(prepare.Q, prepare.P)
+		if prepare.Q != nil && prepare.P != nil && !cond {
+			return errors.New("prepare q ballot and p ballot are not in expected states")
+		}
+		cond = prepare.HC == 0 || (prepare.P != nil && prepare.HC <= prepare.P.Counter)
+		if !cond {
+			return errors.New("prepare p ballot and higher counters are not in expected states")
+		}
+		cond = prepare.LC == 0 || (prepare.HC != 0 && prepare.HC <= prepare.B.Counter && prepare.LC <= prepare.HC)
+		if !cond {
+			return errors.New("prepare ballot counters are not in expected states")
+		}
+		// add value to set
+		if prepare.B.Counter > 0 {
+			values.Add(prepare.B.Value)
+		}
+		if prepare.P != nil {
+			values.Add(prepare.P.Value)
+		}
+	case ultpb.StatementType_CONFIRM:
+		confirm, err := ultpb.DecodeConfirm(stmt.Data)
+		if err != nil {
+			return fmt.Errorf("decode confirm statement failed: %v", err)
+		}
+		// check counter sanity
+		if confirm.B.Counter == 0 {
+			return fmt.Errorf("confirm current ballot counter should not be zero")
+		}
+		cond := confirm.LC <= confirm.HC && confirm.HC <= confirm.B.Counter
+		if !cond {
+			return fmt.Errorf("confirm ballot counters are not in expected states")
+		}
+		// add value to set
+		values.Add(confirm.B.Value)
+	case ultpb.StatementType_EXTERNALIZE:
+		ext, err := ultpb.DecodeExternalize(stmt.Data)
+		if err != nil {
+			return fmt.Errorf("decode externalize statement failed: %v", err)
+		}
+		// check counter sanity
+		cond := ext.B.Counter > 0 && ext.B.Counter <= ext.HC
+		if !cond {
+			return fmt.Errorf("externalize ballot counters are not in expected states")
+		}
+		// add value to set
+		values.Add(ext.B.Value)
+	default:
+		log.Fatalf("invalid statement type: %v", stmt.StatementType)
+	}
+
+	// check values against consensus constraints
+	var valueErr error
+	for v := range values.Iter() {
+		if err := d.validateConsensusValue(v.(string)); err != nil {
+			valueErr = err
+		}
+	}
+
+	return valueErr
+}
+
+// validate consensus value
+func (d *Decree) validateConsensusValue(val string) error {
+	vb, err := hex.DecodeString(val)
+	if err != nil {
+		return fmt.Errorf("decode hex string failed: %v", err)
+	}
+
+	_, err = ultpb.DecodeConsensusValue(vb)
+	if err != nil {
+		return fmt.Errorf("decode consensus value failed: %v", err)
+	}
+
+	// TODO(bobonovski) define maybe validate state
+
+	return nil
+}
+
 // compare two ballots by counter then value
 func compareBallots(lb *ultpb.Ballot, rb *ultpb.Ballot) int {
 	// check input with nil ballot
@@ -332,6 +529,11 @@ func compatibleBallots(lb *ultpb.Ballot, rb *ultpb.Ballot) bool {
 		return true
 	}
 
+	return false
+}
+
+// check whether the latter ballot statement is newer than first one
+func isNewerBallot(lb *ultpb.Statement, rb *ultpb.Statement) bool {
 	return false
 }
 
