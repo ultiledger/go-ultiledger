@@ -9,6 +9,14 @@ import (
 	"github.com/ultiledger/go-ultiledger/ultpb"
 )
 
+// ballots compare utilities
+func lessAndCompatibleBallots(lb *ultpb.Ballot, rb *ultpb.Ballot) bool {
+	if compareBallots(lb, rb) <= 0 && compatibleBallots(lb, rb) {
+		return true
+	}
+	return false
+}
+
 // compare two ballots by counter then value
 func compareBallots(lb *ultpb.Ballot, rb *ultpb.Ballot) int {
 	// check input with nil ballot

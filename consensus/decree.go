@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 
 	"github.com/deckarep/golang-set"
@@ -347,7 +348,108 @@ func (d *Decree) step(stmt *ultpb.Statement) error {
 
 // try to accept new ballot as prepared
 func (d *Decree) acceptPrepared(stmt *ultpb.Statement) error {
+	// it is only necessary to call this method when
+	// current phase is in prepare or confirm.
+	if d.currentPhase != BallotPhasePrepare && d.currentPhase != BallotPhaseConfirm {
+		return fmt.Errorf("current phase not in prepare or confirm: %d", d.currentPhase)
+	}
 	return nil
+}
+
+// extract unique prepare candidate ballots from statement
+func (d *Decree) extractPrepareCandidates(stmt *ultpb.Statement) ([]*ultpb.Ballot, error) {
+	// filter ballots with the same value
+	ballots := mapset.NewSet()
+
+	switch stmt.StatementType {
+	case ultpb.StatementType_PREPARE:
+		prepare, err := ultpb.DecodePrepare(stmt.Data)
+		if err != nil {
+			return nil, fmt.Errorf("decode prepare statement failed: %v", err)
+		}
+		ballots.Add(*prepare.B)
+		if prepare.P != nil {
+			ballots.Add(*prepare.P)
+		}
+		if prepare.Q != nil {
+			ballots.Add(*prepare.Q)
+		}
+	case ultpb.StatementType_CONFIRM:
+		confirm, err := ultpb.DecodeConfirm(stmt.Data)
+		if err != nil {
+			return nil, fmt.Errorf("decode confirm statement failed: %v", err)
+		}
+		ballots.Add(ultpb.Ballot{Value: confirm.B.Value, Counter: confirm.PC})
+		ballots.Add(ultpb.Ballot{Value: confirm.B.Value, Counter: math.MaxUint32})
+	case ultpb.StatementType_EXTERNALIZE:
+		ext, err := ultpb.DecodeExternalize(stmt.Data)
+		if err != nil {
+			return nil, fmt.Errorf("decode externalize statement failed: %v", err)
+		}
+		ballots.Add(ultpb.Ballot{Value: ext.B.Value, Counter: math.MaxUint32})
+	default:
+		log.Fatalf("invalid ballot statement type: %d", stmt.StatementType)
+	}
+
+	var candidates []*ultpb.Ballot
+	if ballots.Cardinality() == 0 {
+		return candidates, nil
+	}
+
+	// process ballots in descending order
+	candSet := mapset.NewSet()
+	for ballot := range ballots.Iter() {
+		b := ballot.(ultpb.Ballot)
+		for _, stmt := range d.ballots {
+			switch stmt.StatementType {
+			case ultpb.StatementType_PREPARE:
+				prepare, err := ultpb.DecodePrepare(stmt.Data)
+				if err != nil {
+					// skip corrupted ballot
+					continue
+				}
+				if lessAndCompatibleBallots(prepare.B, &b) {
+					candSet.Add(b)
+				}
+				if prepare.P != nil && lessAndCompatibleBallots(prepare.P, &b) {
+					candSet.Add(*prepare.P)
+				}
+				if prepare.Q != nil && lessAndCompatibleBallots(prepare.Q, &b) {
+					candSet.Add(*prepare.Q)
+				}
+			case ultpb.StatementType_CONFIRM:
+				confirm, err := ultpb.DecodeConfirm(stmt.Data)
+				if err != nil {
+					// skip corrupted ballot
+					continue
+				}
+				if compatibleBallots(confirm.B, &b) {
+					candSet.Add(b)
+					if confirm.PC < b.Counter {
+						candSet.Add(ultpb.Ballot{Value: b.Value, Counter: confirm.PC})
+					}
+				}
+			case ultpb.StatementType_EXTERNALIZE:
+				ext, err := ultpb.DecodeExternalize(stmt.Data)
+				if err != nil {
+					// skip corrupted ballot
+					continue
+				}
+				if compatibleBallots(ext.B, &b) {
+					candSet.Add(b)
+				}
+			default:
+				log.Fatalf("invalid ballot statement type: %d", stmt.StatementType)
+			}
+		}
+	}
+
+	for v := range candSet.Iter() {
+		b := v.(ultpb.Ballot)
+		candidates = append(candidates, &b)
+	}
+
+	return candidates, nil
 }
 
 // update the current ballot phase
