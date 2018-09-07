@@ -9,8 +9,17 @@ import (
 	"github.com/ultiledger/go-ultiledger/ultpb"
 )
 
+// type alias for convenience
+type Statement = ultpb.Statement
+type Nominate = ultpb.Nominate
+type Prepare = ultpb.Prepare
+type Confirm = ultpb.Confirm
+type Externalize = ultpb.Externalize
+type Quorum = ultpb.Quorum
+type Ballot = ultpb.Ballot
+
 // ballots compare utilities
-func lessAndCompatibleBallots(lb *ultpb.Ballot, rb *ultpb.Ballot) bool {
+func lessAndCompatibleBallots(lb *Ballot, rb *Ballot) bool {
 	if compareBallots(lb, rb) <= 0 && compatibleBallots(lb, rb) {
 		return true
 	}
@@ -18,7 +27,7 @@ func lessAndCompatibleBallots(lb *ultpb.Ballot, rb *ultpb.Ballot) bool {
 }
 
 // compare two ballots by counter then value
-func compareBallots(lb *ultpb.Ballot, rb *ultpb.Ballot) int {
+func compareBallots(lb *Ballot, rb *Ballot) int {
 	// check input with nil ballot
 	if lb == nil && rb == nil {
 		return 0
@@ -39,7 +48,7 @@ func compareBallots(lb *ultpb.Ballot, rb *ultpb.Ballot) int {
 }
 
 // check whether the two ballots has the same value
-func compatibleBallots(lb *ultpb.Ballot, rb *ultpb.Ballot) bool {
+func compatibleBallots(lb *Ballot, rb *Ballot) bool {
 	if lb == nil || rb == nil {
 		return false
 	}
@@ -52,7 +61,7 @@ func compatibleBallots(lb *ultpb.Ballot, rb *ultpb.Ballot) bool {
 }
 
 // check whether the latter ballot statement is newer than first one
-func isNewerBallot(lb *ultpb.Statement, rb *ultpb.Statement) bool {
+func isNewerBallot(lb *Statement, rb *Statement) bool {
 	return false
 }
 
@@ -76,7 +85,7 @@ func IsProperSubset(a []string, b []string) bool {
 }
 
 // check whether the latter nomination contains all the information of the first one
-func isNewerNomination(anom *ultpb.Nomination, bnom *ultpb.Nomination) bool {
+func isNewerNomination(anom *ultpb.Nominate, bnom *ultpb.Nominate) bool {
 	if anom == nil && bnom != nil {
 		return true
 	}
@@ -143,42 +152,4 @@ func isQuorumSlice(quorum *ultpb.Quorum, nodeSet mapset.Set) bool {
 	}
 
 	return false
-}
-
-// find set of nodes claimed to accept the value
-func findAcceptNodes(v string, noms map[string]*ultpb.Nomination) mapset.Set {
-	nodeSet := mapset.NewSet()
-
-	for k, nom := range noms {
-		for _, av := range nom.AcceptList {
-			if v == av {
-				nodeSet.Add(k)
-				break
-			}
-		}
-	}
-
-	return nodeSet
-}
-
-// find set of nodes claimed to vote or accept the value
-func findVoteOrAcceptNodes(v string, noms map[string]*ultpb.Nomination) mapset.Set {
-	nodeSet := mapset.NewSet()
-
-	for k, nom := range noms {
-		for _, vv := range nom.VoteList {
-			if v == vv {
-				nodeSet.Add(k)
-				break
-			}
-		}
-		for _, av := range nom.AcceptList {
-			if v == av {
-				nodeSet.Add(k)
-				break
-			}
-		}
-	}
-
-	return nodeSet
 }

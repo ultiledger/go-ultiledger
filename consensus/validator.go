@@ -8,8 +8,6 @@ import (
 	"github.com/ultiledger/go-ultiledger/ultpb"
 )
 
-type Statement = ultpb.Statement // for convenience
-
 // Validator validates incoming consensus messages and
 // requests missing information of transaction and quorum
 // from other peers.
@@ -72,10 +70,7 @@ func extractQuorumHash(stmt *Statement) (string, error) {
 	var hash string
 	switch stmt.StatementType {
 	case ultpb.StatementType_NOMINATE:
-		nom, err := ultpb.DecodeNomination(stmt.Data)
-		if err != nil {
-			return "", fmt.Errorf("decode nomination failed: %v", err)
-		}
+		nom := stmt.GetNominate()
 		hash = nom.QuorumHash
 	default:
 		return "", errors.New("unknown statement type")
@@ -91,10 +86,7 @@ func extractTxListHash(stmt *ultpb.Statement) ([]string, error) {
 	var hashes []string
 	switch stmt.StatementType {
 	case ultpb.StatementType_NOMINATE:
-		nom, err := ultpb.DecodeNomination(stmt.Data)
-		if err != nil {
-			return nil, fmt.Errorf("decode nomination failed: %v", err)
-		}
+		nom := stmt.GetNominate()
 		for _, v := range nom.VoteList {
 			b, err := hex.DecodeString(v)
 			if err != nil {
