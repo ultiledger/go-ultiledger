@@ -279,32 +279,6 @@ func (d *Decree) sendNomination() error {
 	return nil
 }
 
-// Vote filter to choose nominate statement that has voted the input vote value
-func voteFilter(vote string) func(*Statement) bool {
-	return func(s *Statement) bool {
-		nom := s.GetNominate()
-		for _, v := range nom.VoteList {
-			if strings.Compare(vote, v) == 0 {
-				return true
-			}
-		}
-		return false
-	}
-}
-
-// accept filter to choose statement that has accepted the input vote value
-func acceptFilter(vote string) func(*Statement) bool {
-	return func(s *Statement) bool {
-		nom := s.GetNominate()
-		for _, v := range nom.AcceptList {
-			if strings.Compare(vote, v) == 0 {
-				return true
-			}
-		}
-		return false
-	}
-}
-
 // Promote votes to accepts and accepts to candidates for nomination
 func (d *Decree) promoteVotes(newNom *Nominate) (bool, bool, error) {
 	acceptUpdated := false
@@ -443,7 +417,8 @@ func (d *Decree) step(stmt *Statement) error {
 	return nil
 }
 
-// try to accept new ballot as prepared
+// Accept new ballot statement as prepared, error return
+// indicates we failed to conduct the operation.
 func (d *Decree) acceptPrepared(stmt *Statement) error {
 	// it is only necessary to call this method when
 	// current phase is in prepare or confirm.
@@ -474,12 +449,38 @@ func (d *Decree) acceptPrepared(stmt *Statement) error {
 		if d.pBallot != nil && lessAndCompatibleBallots(cand, d.pBallot) {
 			continue
 		}
+
+		accepted := d.federatedAccept(ballotVoteFilter(cand), ballotAcceptFilter(cand), d.ballots)
+		if accepted {
+			// try to update prepared ballot
+			err = d.updatePreparedBallot(cand)
+			if err == nil {
+				d.sendBallot()
+			}
+			if d.cBallot != nil && d.hBallot != nil {
+				if (d.pBallot != nil && lessAndCompatibleBallots(d.hBallot, d.pBallot)) ||
+					(d.qBallot != nil && lessAndCompatibleBallots(d.hBallot, d.qBallot)) {
+					if d.currentPhase != BallotPhasePrepare {
+						log.Fatal("current ballot phase is not prepare")
+					}
+					d.cBallot.Reset()
+					if err != nil {
+						d.sendBallot()
+					}
+				}
+			}
+		}
 	}
 
 	return nil
 }
 
-// extract unique prepare candidate ballots from statement
+func (d *Decree) updatePreparedBallot(b *Ballot) error {
+	// TODO
+	return nil
+}
+
+// Extract unique prepared candidate ballots from statement
 func (d *Decree) preparedCandidates(stmt *Statement) ([]*Ballot, error) {
 	// filter ballots with the same value
 	ballots := mapset.NewSet()
