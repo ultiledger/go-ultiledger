@@ -60,8 +60,8 @@ func DecodeStatement(b []byte) (*Statement, error) {
 }
 
 // decode pb message to nomination
-func DecodeNomination(b []byte) (*Nomination, error) {
-	nom := &Nomination{}
+func DecodeNominate(b []byte) (*Nominate, error) {
+	nom := &Nominate{}
 	if err := proto.Unmarshal(b, nom); err != nil {
 		return nil, err
 	}

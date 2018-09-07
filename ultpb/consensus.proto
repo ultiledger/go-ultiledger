@@ -22,16 +22,14 @@ message Quorum {
   repeated Quorum NestQuorums = 3;
 }
 
-// Nomination is used to find a candidate value for
-// later federated voting of ballot
-message Nomination {
+// Nominate statement is used to find a candidate value for ballot protocol
+message Nominate {
   repeated string VoteList = 1;
   repeated string AcceptList = 2;
   string QuorumHash = 3;
 }
 
-// Ballot is used to finalize a consensus value for
-// a specific decree
+// Ballot is used to finalize a consensus value for a specific decree
 message Ballot {
   // ballot counter
   uint32 Counter = 1;
@@ -92,6 +90,11 @@ message Statement {
   string NodeID = 2;
   // decree index
   uint64 Index = 3;
-  // nomination or ballot in pb format
-  bytes Data = 4; 
+  // corresponding statement
+  oneof Stmt {
+    Nominate Nominate = 4;
+    Prepare Prepare = 5;
+    Confirm Confirm = 6;
+    Externalize Externalize = 7; 
+  }
 }

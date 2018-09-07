@@ -16,7 +16,7 @@ It has these top-level messages:
 	Asset
 	ConsensusValue
 	Quorum
-	Nomination
+	Nominate
 	Ballot
 	Prepare
 	Confirm
