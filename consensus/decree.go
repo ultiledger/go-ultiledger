@@ -453,8 +453,8 @@ func (d *Decree) acceptPrepared(stmt *Statement) error {
 		accepted := d.federatedAccept(ballotVoteFilter(cand), ballotAcceptFilter(cand), d.ballots)
 		if accepted {
 			// try to update prepared ballot
-			err = d.updatePreparedBallot(cand)
-			if err == nil {
+			updated := d.updatePreparedBallot(cand)
+			if updated {
 				d.sendBallot()
 			}
 			if d.cBallot != nil && d.hBallot != nil {
@@ -475,9 +475,29 @@ func (d *Decree) acceptPrepared(stmt *Statement) error {
 	return nil
 }
 
-func (d *Decree) updatePreparedBallot(b *Ballot) error {
-	// TODO
-	return nil
+// Update internal ballot states with new accepted ballot
+func (d *Decree) updatePreparedBallot(b *Ballot) bool {
+	updated := false
+	if d.pBallot != nil { // b < p
+		cmp := compareBallots(b, d.pBallot)
+		if cmp < 0 {
+			// check whether we can update q ballot
+			if d.qBallot == nil && compareBallots(b, d.qBallot) > 0 {
+				d.qBallot = b
+				updated = true
+			}
+		} else if cmp > 0 { // q < p < b
+			if !compatibleBallots(b, d.pBallot) {
+				d.qBallot = d.pBallot
+			}
+			d.pBallot = b
+			updated = true
+		}
+	} else {
+		d.pBallot = b
+		updated = true
+	}
+	return updated
 }
 
 // Extract unique prepared candidate ballots from statement
