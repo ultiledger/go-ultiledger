@@ -419,17 +419,14 @@ func (d *Decree) step(stmt *Statement) error {
 
 // Accept new ballot statement as prepared, error return
 // indicates we failed to conduct the operation.
-func (d *Decree) acceptPrepared(stmt *Statement) error {
+func (d *Decree) acceptPrepared(stmt *Statement) bool {
 	// it is only necessary to call this method when
 	// current phase is in prepare or confirm.
 	if d.currentPhase != BallotPhasePrepare && d.currentPhase != BallotPhaseConfirm {
-		return fmt.Errorf("current phase not in prepare or confirm: %d", d.currentPhase)
+		return false
 	}
 
-	candidates, err := d.preparedCandidates(stmt)
-	if err != nil {
-		return fmt.Errorf("extract prepared candidates failed: %v", err)
-	}
+	candidates := d.preparedCandidates(stmt)
 
 	for _, cand := range candidates {
 		if d.currentPhase == BallotPhaseConfirm {
@@ -454,25 +451,24 @@ func (d *Decree) acceptPrepared(stmt *Statement) error {
 		if accepted {
 			// try to update prepared ballot
 			updated := d.updatePreparedBallot(cand)
-			if updated {
-				d.sendBallot()
-			}
 			if d.cBallot != nil && d.hBallot != nil {
-				if (d.pBallot != nil && lessAndCompatibleBallots(d.hBallot, d.pBallot)) ||
-					(d.qBallot != nil && lessAndCompatibleBallots(d.hBallot, d.qBallot)) {
+				if (d.pBallot != nil && lessAndIncompatibleBallots(d.hBallot, d.pBallot)) ||
+					(d.qBallot != nil && lessAndIncompatibleBallots(d.hBallot, d.qBallot)) {
 					if d.currentPhase != BallotPhasePrepare {
 						log.Fatal("current ballot phase is not prepare")
 					}
 					d.cBallot.Reset()
-					if err != nil {
-						d.sendBallot()
-					}
+					updated = true
 				}
 			}
+			if updated {
+				d.sendBallot()
+			}
+			return updated
 		}
 	}
 
-	return nil
+	return false
 }
 
 // Update internal ballot states with new accepted ballot
@@ -501,7 +497,7 @@ func (d *Decree) updatePreparedBallot(b *Ballot) bool {
 }
 
 // Extract unique prepared candidate ballots from statement
-func (d *Decree) preparedCandidates(stmt *Statement) ([]*Ballot, error) {
+func (d *Decree) preparedCandidates(stmt *Statement) []*Ballot {
 	// filter ballots with the same value
 	ballots := mapset.NewSet()
 
@@ -528,7 +524,7 @@ func (d *Decree) preparedCandidates(stmt *Statement) ([]*Ballot, error) {
 
 	var candidates []*Ballot
 	if ballots.Cardinality() == 0 {
-		return candidates, nil
+		return candidates
 	}
 
 	// process ballots in descending order
@@ -585,7 +581,7 @@ func (d *Decree) preparedCandidates(stmt *Statement) ([]*Ballot, error) {
 		return false
 	})
 
-	return candidates, nil
+	return candidates
 }
 
 // update the current ballot phase

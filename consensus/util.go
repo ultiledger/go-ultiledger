@@ -26,6 +26,13 @@ func lessAndCompatibleBallots(lb *Ballot, rb *Ballot) bool {
 	return false
 }
 
+func lessAndIncompatibleBallots(lb *Ballot, rb *Ballot) bool {
+	if compareBallots(lb, rb) <= 0 && !compatibleBallots(lb, rb) {
+		return true
+	}
+	return false
+}
+
 // compare two ballots by counter then value
 func compareBallots(lb *Ballot, rb *Ballot) int {
 	// check input with nil ballot
