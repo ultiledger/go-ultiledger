@@ -482,7 +482,7 @@ func (d *Decree) updatePreparedBallot(b *Ballot) bool {
 		cmp := compareBallots(b, d.pBallot)
 		if cmp < 0 {
 			// check whether we can update q ballot
-			if d.qBallot == nil && compareBallots(b, d.qBallot) > 0 {
+			if d.qBallot == nil || (compareBallots(b, d.qBallot) > 0 && !compatibleBallots(b, d.pBallot)) {
 				d.qBallot = b
 				updated = true
 			}
