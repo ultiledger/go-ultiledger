@@ -50,6 +50,7 @@ type Decree struct {
 	cBallot          *Ballot // c
 	ballots          map[string]*Statement
 	latestBallotStmt *Statement
+	nextValue        string // z
 
 	// channel for sending statements
 	statementChan chan *Statement
@@ -450,7 +451,7 @@ func (d *Decree) acceptPrepared(stmt *Statement) bool {
 		accepted := d.federatedAccept(ballotVoteFilter(cand), ballotAcceptFilter(cand), d.ballots)
 		if accepted {
 			// try to update prepared ballot
-			updated := d.updatePreparedBallot(cand)
+			updated := d.updateQPBallots(cand)
 			if d.cBallot != nil && d.hBallot != nil {
 				if (d.pBallot != nil && lessAndIncompatibleBallots(d.hBallot, d.pBallot)) ||
 					(d.qBallot != nil && lessAndIncompatibleBallots(d.hBallot, d.qBallot)) {
@@ -471,8 +472,8 @@ func (d *Decree) acceptPrepared(stmt *Statement) bool {
 	return false
 }
 
-// Update internal ballot states with new accepted ballot
-func (d *Decree) updatePreparedBallot(b *Ballot) bool {
+// Update internal q and p ballot states with new accepted ballot
+func (d *Decree) updateQPBallots(b *Ballot) bool {
 	updated := false
 	if d.pBallot != nil { // b < p
 		cmp := compareBallots(b, d.pBallot)
@@ -584,7 +585,99 @@ func (d *Decree) preparedCandidates(stmt *Statement) []*Ballot {
 	return candidates
 }
 
-// update the current ballot phase
+// Confirm new ballot statement as prepared by ratifying accepted prepared ballots
+func (d *Decree) confirmPrepared(stmt *Statement) bool {
+	if d.currentPhase != BallotPhasePrepare || d.pBallot == nil {
+		return false
+	}
+
+	candidates := d.preparedCandidates(stmt)
+
+	// candidate for higher ballot
+	var hCandidate *ultpb.Ballot
+
+	i := 0
+	for ; i < len(candidates); i++ {
+		cand := candidates[i]
+		if d.hBallot != nil && compareBallots(cand, d.hBallot) <= 0 {
+			continue
+		}
+
+		if d.federatedRatify(ballotAcceptFilter(cand), d.ballots) {
+			hCandidate = cand
+			break
+		}
+	}
+
+	if hCandidate != nil {
+		// candidate for commit ballot
+		var cCandidate *Ballot
+		curb := d.currentBallot
+		if curb == nil {
+			curb = &Ballot{}
+		}
+		if d.cBallot != nil &&
+			(d.pBallot != nil && !lessAndIncompatibleBallots(hCandidate, d.pBallot) &&
+				(d.qBallot != nil && !lessAndIncompatibleBallots(hCandidate, d.qBallot))) {
+			for ; i < len(candidates); i++ {
+				cand := candidates[i]
+				if compareBallots(cand, curb) < 0 || !lessAndCompatibleBallots(cand, hCandidate) {
+					continue
+				}
+				if d.federatedRatify(ballotAcceptFilter(cand), d.ballots) {
+					cCandidate = cand
+					continue
+				}
+				// TODO(bobonovski) break or continue searching?
+			}
+			updated := d.updateCHBallots(cCandidate, hCandidate)
+			return updated
+		}
+	}
+
+	return false
+}
+
+// Update internal c and h ballots with new confirmed prepared ballots
+func (d *Decree) updateCHBallots(cb *Ballot, hb *Ballot) bool {
+	updated := false
+
+	// save the next ballot value to use
+	d.nextValue = hb.Value
+
+	if d.currentBallot == nil || compatibleBallots(d.currentBallot, hb) {
+		if d.hBallot == nil || compareBallots(d.hBallot, hb) < 0 {
+			d.hBallot = hb
+			updated = true
+		}
+		if cb.Counter != 0 {
+			if d.cBallot != nil {
+				log.Fatal("commit ballot is not nil")
+			}
+			d.cBallot = cb
+			updated = true
+		}
+	}
+
+	updated = d.updateBallotIfNeeded(hb) || updated
+	if updated {
+		d.sendBallot()
+	}
+
+	return updated
+}
+
+// Update the current ballot if needed
+func (d *Decree) updateBallotIfNeeded(b *Ballot) bool {
+	updated := false
+	if d.currentBallot == nil || compareBallots(d.currentBallot, b) < 0 {
+		d.updateBallot(b)
+		updated = true
+	}
+	return updated
+}
+
+// Update the current ballot phase
 func (d *Decree) updateBallotPhase(val string, force bool) bool {
 	if !force && d.currentBallot == nil {
 		return false
@@ -604,15 +697,13 @@ func (d *Decree) updateBallotPhase(val string, force bool) bool {
 
 	updated := d.updateBallotValue(b)
 	if updated {
-		if err := d.sendBallot(); err != nil {
-			log.Fatalf("send ballot failed: %v", err)
-		}
+		d.sendBallot()
 	}
 
 	return updated
 }
 
-// update the current ballot value
+// Update the current ballot value
 func (d *Decree) updateBallotValue(b *Ballot) bool {
 	if d.currentPhase != BallotPhasePrepare && d.currentPhase != BallotPhaseConfirm {
 		return false
@@ -643,24 +734,25 @@ func (d *Decree) updateBallotValue(b *Ballot) bool {
 	return updated
 }
 
-// update the current ballot
+// Update the current ballot
 func (d *Decree) updateBallot(b *Ballot) {
 	if d.currentPhase == BallotPhaseExternalize {
 		log.Fatal("should not update ballot in externalize phase")
 	}
 
-	if d.currentBallot != nil && compareBallots(d.currentBallot, b) <= 0 {
+	if d.currentBallot != nil && compareBallots(d.currentBallot, b) > 0 {
 		log.Fatal("cannot update current ballot with smaller one")
 	}
 
-	d.currentBallot = &Ballot{Counter: b.Counter, Value: b.Value}
+	// TODO(bobonovski) copy pointer or create new one?
+	d.currentBallot = b
 
 	if d.hBallot != nil && !compatibleBallots(d.currentBallot, d.hBallot) {
 		d.hBallot.Reset()
 	}
 }
 
-// check invariants of ballot states
+// Check invariants of ballot states
 func (d *Decree) checkBallotInvariants() {
 	if d.currentBallot != nil && d.currentBallot.Counter == 0 {
 		log.Fatal("current ballot is not nil but counter is zero")
