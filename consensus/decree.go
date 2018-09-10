@@ -15,6 +15,10 @@ import (
 	"github.com/ultiledger/go-ultiledger/ultpb"
 )
 
+var (
+	ErrUnknownStmtType = errors.New("unknown statement type")
+)
+
 type BallotPhase uint8
 
 const (
@@ -201,14 +205,14 @@ func (d *Decree) federatedRatify(filter func(*Statement) bool, stmts map[string]
 	return false
 }
 
-// get the quorum from statement
+// Get the quorum from statement
 func (d *Decree) getStatementQuorum(stmt *Statement) *Quorum {
 	// TODO(bobonovski) get quorum from validator
 	return nil
 }
 
 /* Nomination Protocol */
-// receive nomination from peers or local node
+// Receive nomination from peers or local node
 func (d *Decree) recvNomination(stmt *Statement) error {
 	nom := stmt.GetNominate()
 
@@ -321,7 +325,7 @@ func (d *Decree) combineCandidates() (string, error) {
 }
 
 /* Ballot Protocol */
-// receive ballot statement from peer or local nodes
+// Receive ballot statement from peer or local nodes
 func (d *Decree) recvBallot(stmt *Statement) error {
 	if stmt.Index != d.index {
 		log.Fatalf("received incompatible ballot index: local %d, recv %d", d.index, stmt.Index)
@@ -348,7 +352,7 @@ func (d *Decree) recvBallot(stmt *Statement) error {
 	return nil
 }
 
-// assemble a ballot statement based on current ballot phase
+// Assemble a ballot statement based on current ballot phase and broadcast it
 func (d *Decree) sendBallot() error {
 	d.checkBallotInvariants()
 
@@ -418,8 +422,7 @@ func (d *Decree) step(stmt *Statement) error {
 	return nil
 }
 
-// Accept new ballot statement as prepared, error return
-// indicates we failed to conduct the operation.
+// Accept new ballot statement as prepared using federated voting
 func (d *Decree) acceptPrepared(stmt *Statement) bool {
 	// it is only necessary to call this method when
 	// current phase is in prepare or confirm.
@@ -448,10 +451,10 @@ func (d *Decree) acceptPrepared(stmt *Statement) bool {
 			continue
 		}
 
-		accepted := d.federatedAccept(ballotVoteFilter(cand), ballotAcceptFilter(cand), d.ballots)
+		accepted := d.federatedAccept(prepareVoteFilter(cand), prepareAcceptFilter(cand), d.ballots)
 		if accepted {
 			// try to update prepared ballot
-			updated := d.updateQPBallots(cand)
+			updated := d.setAcceptPrepared(cand)
 			if d.cBallot != nil && d.hBallot != nil {
 				if (d.pBallot != nil && lessAndIncompatibleBallots(d.hBallot, d.pBallot)) ||
 					(d.qBallot != nil && lessAndIncompatibleBallots(d.hBallot, d.qBallot)) {
@@ -473,7 +476,7 @@ func (d *Decree) acceptPrepared(stmt *Statement) bool {
 }
 
 // Update internal q and p ballot states with new accepted ballot
-func (d *Decree) updateQPBallots(b *Ballot) bool {
+func (d *Decree) setAcceptPrepared(b *Ballot) bool {
 	updated := false
 	if d.pBallot != nil { // b < p
 		cmp := compareBallots(b, d.pBallot)
@@ -603,7 +606,7 @@ func (d *Decree) confirmPrepared(stmt *Statement) bool {
 			continue
 		}
 
-		if d.federatedRatify(ballotAcceptFilter(cand), d.ballots) {
+		if d.federatedRatify(prepareAcceptFilter(cand), d.ballots) {
 			hCandidate = cand
 			break
 		}
@@ -624,13 +627,13 @@ func (d *Decree) confirmPrepared(stmt *Statement) bool {
 				if compareBallots(cand, curb) < 0 || !lessAndCompatibleBallots(cand, hCandidate) {
 					continue
 				}
-				if d.federatedRatify(ballotAcceptFilter(cand), d.ballots) {
+				if d.federatedRatify(prepareAcceptFilter(cand), d.ballots) {
 					cCandidate = cand
 					continue
 				}
 				// TODO(bobonovski) break or continue searching?
 			}
-			updated := d.updateCHBallots(cCandidate, hCandidate)
+			updated := d.setConfirmPrepared(cCandidate, hCandidate)
 			return updated
 		}
 	}
@@ -639,12 +642,11 @@ func (d *Decree) confirmPrepared(stmt *Statement) bool {
 }
 
 // Update internal c and h ballots with new confirmed prepared ballots
-func (d *Decree) updateCHBallots(cb *Ballot, hb *Ballot) bool {
-	updated := false
-
+func (d *Decree) setConfirmPrepared(cb *Ballot, hb *Ballot) bool {
 	// save the next ballot value to use
 	d.nextValue = hb.Value
 
+	updated := false
 	if d.currentBallot == nil || compatibleBallots(d.currentBallot, hb) {
 		if d.hBallot == nil || compareBallots(d.hBallot, hb) < 0 {
 			d.hBallot = hb
@@ -665,6 +667,135 @@ func (d *Decree) updateCHBallots(cb *Ballot, hb *Ballot) bool {
 	}
 
 	return updated
+}
+
+// Accept commit statement for the ballot
+func (d *Decree) acceptCommit(stmt *Statement) bool {
+	if d.currentPhase != BallotPhasePrepare && d.currentPhase != BallotPhaseConfirm {
+		return false
+	}
+
+	// create commit ballot from statement
+	ballot := &Ballot{}
+	switch stmt.StatementType {
+	case ultpb.StatementType_PREPARE:
+		prepare := stmt.GetPrepare()
+		if prepare.LC == 0 { // no commit ballot yet
+			return false
+		}
+		ballot.Value = prepare.B.Value
+		ballot.Counter = prepare.HC
+	case ultpb.StatementType_CONFIRM:
+		confirm := stmt.GetConfirm()
+		ballot.Value = confirm.B.Value
+		ballot.Counter = confirm.HC
+	case ultpb.StatementType_EXTERNALIZE:
+		ext := stmt.GetExternalize()
+		ballot.Value = ext.B.Value
+		ballot.Counter = ext.HC
+	default:
+		log.Fatal(ErrUnknownStmtType)
+	}
+
+	// make sure the new ballot is compatible with local higher ballot
+	if d.currentPhase == BallotPhaseConfirm && !compatibleBallots(ballot, d.hBallot) {
+		return false
+	}
+
+	// collect all the candidate counters
+	counters := d.getCommitCounters(ballot)
+
+	filter := func(l, r uint32) bool {
+		return d.federatedAccept(commitVoteFilter(ballot, l, r), commitAcceptFilter(ballot, l, r), d.ballots)
+	}
+
+	lb, rb := d.findCommitInterval(counters, filter)
+	if lb != 0 {
+		if d.currentPhase != BallotPhaseConfirm || rb > d.hBallot.Counter {
+			cBallot := &Ballot{Value: ballot.Value, Counter: lb}
+			hBallot := &Ballot{Value: ballot.Value, Counter: rb}
+			updated := d.setAcceptCommit(cBallot, hBallot)
+			return updated
+		}
+	}
+
+	return false
+}
+
+// Update internal c and h ballots with new accepted commit ballots
+func (d *Decree) setAcceptCommit(cb *Ballot, hb *Ballot) bool {
+	// save the next ballot value to use
+	d.nextValue = hb.Value
+
+	updated := false
+	if d.hBallot == nil || d.cBallot == nil || compareBallots(d.hBallot, hb) != 0 || compareBallots(d.cBallot, cb) != 0 {
+		d.hBallot = hb
+		d.cBallot = cb
+		updated = true
+	}
+
+	// TODO(bobonovski) rethinking the logic
+	if d.currentPhase == BallotPhasePrepare {
+		d.currentPhase = BallotPhaseConfirm
+		if d.currentBallot != nil && !lessAndCompatibleBallots(hb, d.currentBallot) {
+			d.updateBallot(hb)
+		}
+		d.qBallot.Reset()
+		updated = true
+	}
+
+	if updated {
+		d.updateBallotIfNeeded(d.hBallot)
+		d.sendBallot()
+	}
+
+	return updated
+}
+
+// Find lower and higher counter for commit ballot
+func (d *Decree) findCommitInterval(counters []uint32, filter func(l, r uint32) bool) (uint32, uint32) {
+	return 0, 0
+}
+
+// Extract commit lower and higher counters
+func (d *Decree) getCommitCounters(b *Ballot) []uint32 {
+	counters := mapset.NewSet()
+
+	for _, s := range d.ballots {
+		switch s.StatementType {
+		case ultpb.StatementType_PREPARE:
+			prepare := s.GetPrepare()
+			if compatibleBallots(b, prepare.B) {
+				if prepare.LC > 0 {
+					counters.Add(prepare.LC)
+					counters.Add(prepare.HC)
+				}
+			}
+		case ultpb.StatementType_CONFIRM:
+			confirm := s.GetConfirm()
+			if compatibleBallots(b, confirm.B) {
+				counters.Add(confirm.LC)
+				counters.Add(confirm.HC)
+			}
+		case ultpb.StatementType_EXTERNALIZE:
+			ext := s.GetExternalize()
+			if compatibleBallots(b, ext.B) {
+				counters.Add(ext.B.Counter)
+				counters.Add(ext.HC)
+				counters.Add(math.MaxUint32)
+			}
+		default:
+			log.Fatal(ErrUnknownStmtType)
+		}
+	}
+
+	var ctrs []uint32
+	for c := range counters.Iter() {
+		counter := c.(uint32)
+		ctrs = append(ctrs, counter)
+	}
+
+	return ctrs
 }
 
 // Update the current ballot if needed

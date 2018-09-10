@@ -7,7 +7,7 @@ import (
 	"github.com/ultiledger/go-ultiledger/ultpb"
 )
 
-// Vote filter to choose nominate statement that has voted the input vote value
+// Vote filter to choose nominate statements that have voted the input vote value
 func voteFilter(vote string) func(*Statement) bool {
 	return func(s *Statement) bool {
 		nom := s.GetNominate()
@@ -20,7 +20,7 @@ func voteFilter(vote string) func(*Statement) bool {
 	}
 }
 
-// Accept filter to choose statement that has accepted the input vote value
+// Accept filter to choose statements that have accepted the input vote value
 func acceptFilter(vote string) func(*Statement) bool {
 	return func(s *Statement) bool {
 		nom := s.GetNominate()
@@ -33,8 +33,8 @@ func acceptFilter(vote string) func(*Statement) bool {
 	}
 }
 
-// Vote filter to choose ballot statement that has voted the the input ballot
-func ballotVoteFilter(b *Ballot) func(*Statement) bool {
+// Vote filter to choose ballot statements that has voted the the prepare ballot
+func prepareVoteFilter(b *Ballot) func(*Statement) bool {
 	return func(stmt *Statement) bool {
 		if stmt == nil {
 			return false
@@ -62,9 +62,8 @@ func ballotVoteFilter(b *Ballot) func(*Statement) bool {
 	}
 }
 
-// Accept filter to choose ballot statement that has accepted the input ballot,
-// in other words, has accepted prepared of the ballot.
-func ballotAcceptFilter(b *Ballot) func(*Statement) bool {
+// Accept filter to choose ballot statements that have accepted the prepare ballot
+func prepareAcceptFilter(b *Ballot) func(*Statement) bool {
 	return func(stmt *Statement) bool {
 		if stmt == nil {
 			return false
@@ -90,8 +89,66 @@ func ballotAcceptFilter(b *Ballot) func(*Statement) bool {
 				return true
 			}
 		default:
-			log.Fatalf("invalide ballot statement type: %d", stmt.StatementType)
+			log.Fatal(ErrUnknownStmtType)
 		}
 		return false
+	}
+}
+
+// Vote filter to choose ballot statements that have voted the commit ballot
+func commitVoteFilter(b *Ballot, l uint32, r uint32) func(*Statement) bool {
+	return func(stmt *Statement) bool {
+		if stmt == nil {
+			return false
+		}
+		cond := false
+		switch stmt.StatementType {
+		case ultpb.StatementType_PREPARE:
+			prepare := stmt.GetPrepare()
+			if compatibleBallots(b, prepare.B) {
+				if prepare.LC != 0 {
+					cond = prepare.LC <= l && r <= prepare.HC
+				}
+			}
+		case ultpb.StatementType_CONFIRM:
+			confirm := stmt.GetConfirm()
+			if compatibleBallots(b, confirm.B) {
+				cond = confirm.LC <= l
+			}
+		case ultpb.StatementType_EXTERNALIZE:
+			ext := stmt.GetExternalize()
+			if compatibleBallots(b, ext.B) {
+				cond = ext.B.Counter <= l
+			}
+		default:
+			log.Fatal(ErrUnknownStmtType)
+		}
+		return cond
+	}
+}
+
+// Accept filter to choose ballot statements that have voted the commit ballot
+func commitAcceptFilter(b *Ballot, l uint32, r uint32) func(*Statement) bool {
+	return func(stmt *Statement) bool {
+		if stmt == nil {
+			return false
+		}
+		cond := false
+		switch stmt.StatementType {
+		case ultpb.StatementType_PREPARE:
+		case ultpb.StatementType_CONFIRM:
+			confirm := stmt.GetConfirm()
+			if compatibleBallots(b, confirm.B) {
+				cond = confirm.LC <= l && r <= confirm.HC
+			}
+		case ultpb.StatementType_EXTERNALIZE:
+			ext := stmt.GetExternalize()
+			if compatibleBallots(b, ext.B) {
+				cond = ext.B.Counter <= l
+			}
+		default:
+			log.Fatal(ErrUnknownStmtType)
+		}
+		return cond
 	}
 }
