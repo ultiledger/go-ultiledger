@@ -42,6 +42,7 @@ type Decree struct {
 	candidates       mapset.Set
 	nominations      map[string]*Statement
 	nominationRound  int
+	nominationStart  bool
 	latestNomination *Nominate
 	latestComposite  string // latest composite candidate value
 
@@ -80,6 +81,8 @@ func NewDecree(idx uint64, nodeID string, quorum *Quorum, quorumHash string, stm
 
 // Nominate nominates a consensus value for the decree
 func (d *Decree) Nominate(prevHash, currHash string) error {
+	d.nominationStart = true
+
 	d.nominationRound++
 	// TODO(bobonovski) compute leader weights
 	d.votes.Add(currHash) // For test
@@ -222,12 +225,18 @@ func (d *Decree) recvNomination(stmt *Statement) error {
 	}
 
 	// check whether the existing nomination of the remote node
-	// is the proper subset of the new nomination
+	// is the proper subset of the new nomination and save the
+	// new nomination statement
 	if s, ok := d.nominations[stmt.NodeID]; ok {
 		if isNewerNomination(s.GetNominate(), nom) {
 			d.nominations[stmt.NodeID] = stmt
 		}
 	}
+
+	if d.nominationStart == false {
+		return errors.New("nomination has stopped")
+	}
+
 	acceptUpdated, candidateUpdated, err := d.promoteVotes(nom)
 	if err != nil {
 		return fmt.Errorf("promote votes failed: %v", err)
@@ -398,7 +407,7 @@ func (d *Decree) sendBallot() error {
 		stmt.StatementType = ultpb.StatementType_EXTERNALIZE
 		stmt.Stmt = &ultpb.Statement_Externalize{Externalize: ext}
 	default:
-		log.Fatalf("invalid ballot phase: %d", d.currentPhase)
+		log.Fatal(ErrUnknownStmtType)
 	}
 
 	// check whether the statement is already processed
@@ -523,7 +532,7 @@ func (d *Decree) preparedCandidates(stmt *Statement) []*Ballot {
 		ext := stmt.GetExternalize()
 		ballots.Add(Ballot{Value: ext.B.Value, Counter: math.MaxUint32})
 	default:
-		log.Fatalf("invalid ballot statement type: %d", stmt.StatementType)
+		log.Fatal(ErrUnknownStmtType)
 	}
 
 	var candidates []*Ballot
@@ -562,7 +571,7 @@ func (d *Decree) preparedCandidates(stmt *Statement) []*Ballot {
 					candSet.Add(b)
 				}
 			default:
-				log.Fatalf("invalid ballot statement type: %d", stmt.StatementType)
+				log.Fatal(ErrUnknownStmtType)
 			}
 		}
 	}
@@ -798,6 +807,69 @@ func (d *Decree) getCommitCounters(b *Ballot) []uint32 {
 	return ctrs
 }
 
+// Confirm the commit ballot using federated voting
+func (d *Decree) confirmCommit(stmt *Statement) bool {
+	if d.currentPhase != BallotPhaseConfirm {
+		return false
+	}
+
+	if d.hBallot == nil || d.cBallot == nil {
+		return false
+	}
+
+	ballot := &Ballot{}
+	switch stmt.StatementType {
+	case ultpb.StatementType_PREPARE:
+		return false
+	case ultpb.StatementType_CONFIRM:
+		confirm := stmt.GetConfirm()
+		ballot.Value = confirm.B.Value
+		ballot.Counter = confirm.HC
+	case ultpb.StatementType_EXTERNALIZE:
+		ext := stmt.GetExternalize()
+		ballot.Value = ext.B.Value
+		ballot.Counter = ext.HC
+	default:
+		log.Fatal(ErrUnknownStmtType)
+	}
+
+	if !compatibleBallots(d.cBallot, ballot) {
+		return false
+	}
+
+	counters := d.getCommitCounters(ballot)
+
+	filter := func(l, r uint32) bool {
+		return d.federatedRatify(commitAcceptFilter(ballot, l, r), d.ballots)
+	}
+
+	lb, rb := d.findCommitInterval(counters, filter)
+	if lb != 0 {
+		cBallot := &Ballot{Value: ballot.Value, Counter: lb}
+		hBallot := &Ballot{Value: ballot.Value, Counter: rb}
+		updated := d.setConfirmCommit(cBallot, hBallot)
+		return updated
+	}
+
+	return false
+}
+
+// Update internal c and h ballots with confirmed commit ballot
+// and trigger externalization of the commit value
+func (d *Decree) setConfirmCommit(cb *Ballot, hb *Ballot) bool {
+	d.cBallot = cb
+	d.hBallot = hb
+	d.updateBallotIfNeeded(d.hBallot)
+	d.currentPhase = BallotPhaseExternalize
+
+	d.sendBallot()
+	d.nominationStart = false
+
+	// TODO(bobonovski) trigger externalization
+
+	return true
+}
+
 // Update the current ballot if needed
 func (d *Decree) updateBallotIfNeeded(b *Ballot) bool {
 	updated := false
@@ -934,7 +1006,7 @@ func (d *Decree) checkBallotInvariants() {
 			log.Fatal("higher ballot should not be nil in externalize phase")
 		}
 	default:
-		log.Fatalf("invalid ballot phase: %d", d.currentPhase)
+		log.Fatal(ErrUnknownStmtType)
 	}
 }
 
@@ -1001,7 +1073,7 @@ func (d *Decree) validateBallot(stmt *Statement) error {
 		// add value to set
 		values.Add(ext.B.Value)
 	default:
-		log.Fatalf("invalid statement type: %v", stmt.StatementType)
+		log.Fatal(ErrUnknownStmtType)
 	}
 
 	// check values against consensus constraints
