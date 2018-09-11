@@ -4,7 +4,13 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"strings"
 
+	"github.com/deckarep/golang-set"
+	lru "github.com/hashicorp/golang-lru"
+
+	"github.com/ultiledger/go-ultiledger/db"
+	"github.com/ultiledger/go-ultiledger/log"
 	"github.com/ultiledger/go-ultiledger/ultpb"
 )
 
@@ -12,35 +18,53 @@ import (
 // requests missing information of transaction and quorum
 // from other peers.
 type Validator struct {
+	store  db.DB
+	bucket string
+
+	// set of received statements
+	statements mapset.Set
+
+	// quorum hash to quorum LRU cache
+	quorumCache *lru.Cache
+	// tx list hash to tx list LRU cache
+	txListCache *lru.Cache
+
 	// ready statements map for decrees
 	readyMap map[uint64][]*Statement
-	// notify engine there are new statements ready to be processed
+	// notify engine new statements are ready
 	readyChan chan struct{}
 	// stop channel
 	stopChan chan struct{}
 }
 
 func NewValidator() *Validator {
-	return &Validator{
-		readyMap:  make(map[uint64][]*Statement),
-		readyChan: make(chan struct{}),
-		stopChan:  make(chan struct{}),
+	v := &Validator{
+		statements: mapset.NewSet(),
+		readyMap:   make(map[uint64][]*Statement),
+		readyChan:  make(chan struct{}),
+		stopChan:   make(chan struct{}),
 	}
-}
+	qc, err := lru.New(1000)
+	if err != nil {
+		log.Fatalf("create quorum LRU cache failed: %v", err)
+	}
+	v.quorumCache = qc
 
-func (v *Validator) Watch() <-chan struct{} {
-	return v.readyChan
+	tc, err := lru.New(1000)
+	if err != nil {
+		log.Fatalf("create txset LRU cache failed: %v", err)
+	}
+	v.txListCache = tc
+
+	return v
 }
 
 // Ready retrives ready statements with decree index less than
 // and equal to input idx.
-func (v *Validator) Ready(idx uint64) <-chan *Statement {
+func (v *Validator) Ready() <-chan *Statement {
 	stmtChan := make(chan *Statement)
 	go func() {
-		for i, stmts := range v.readyMap {
-			if i > idx {
-				continue
-			}
+		for _, stmts := range v.readyMap {
 			for _, s := range stmts {
 				select {
 				case stmtChan <- s:
@@ -57,9 +81,62 @@ func (v *Validator) Recv(stmt *Statement) error {
 	if stmt == nil {
 		return nil
 	}
+
+	// filter duplicate stmt
+	hash, err := ultpb.SHA256Hash(stmt)
+	if err != nil {
+		return fmt.Errorf("compute statement hash failed: %v", err)
+	}
+	if v.statements.Contains(hash) {
+		return nil
+	}
+	v.statements.Add(hash)
+
 	// TODO(bobonovski) get missing tx info
 	v.readyChan <- struct{}{}
 	return nil
+}
+
+// Get the quorum of the corresponding quorum hash,
+func (v *Validator) GetQuorum(quorumHash string) (*Quorum, error) {
+	if q, ok := v.quorumCache.Get(quorumHash); ok {
+		return q.(*Quorum), nil
+	}
+
+	qb, ok := v.store.Get(v.bucket, []byte(quorumHash))
+	if !ok {
+		return nil, fmt.Errorf("get quorum %s from db failed", quorumHash)
+	}
+
+	quorum, err := ultpb.DecodeQuorum(qb)
+	if err != nil {
+		return nil, fmt.Errorf("decode quorum failed: %v", err)
+	}
+
+	// cache the quorum
+	v.quorumCache.Add(quorumHash, quorum)
+
+	return quorum, nil
+}
+
+// Get the tx list of the corresponding tx list
+func (v *Validator) GetTxList(txListHash string) ([]string, error) {
+	if q, ok := v.txListCache.Get(txListHash); ok {
+		return q.([]string), nil
+	}
+
+	txb, ok := v.store.Get(v.bucket, []byte(txListHash))
+	if !ok {
+		return nil, fmt.Errorf("get tx list hash %s from db failed", txListHash)
+	}
+
+	// the tx list is encoded by joining hash with comma
+	txList := strings.Split(string(txb), ",")
+
+	// cache the tx list
+	v.txListCache.Add(txListHash, txList)
+
+	return txList, nil
 }
 
 // Extract quorum hash from statement

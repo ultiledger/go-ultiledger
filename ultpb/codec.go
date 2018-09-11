@@ -33,12 +33,22 @@ func DecodeTx(b []byte) (*Tx, error) {
 	return tx, nil
 }
 
+// decode pb message to account
 func DecodeAccount(b []byte) (*Account, error) {
 	acc := &Account{}
 	if err := proto.Unmarshal(b, acc); err != nil {
 		return nil, err
 	}
 	return acc, nil
+}
+
+// decode pb message to quorum
+func DecodeQuorum(b []byte) (*Quorum, error) {
+	quorum := &Quorum{}
+	if err := proto.Unmarshal(b, quorum); err != nil {
+		return nil, err
+	}
+	return quorum, nil
 }
 
 // decode pb message to consensus value

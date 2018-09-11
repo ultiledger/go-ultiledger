@@ -86,6 +86,8 @@ type Engine struct {
 
 	// decrees for each round
 	decrees map[uint64]*Decree
+	// max number of decrees to remember
+	maxDecrees uint64
 
 	// transactions status
 	txStatus *lru.Cache
@@ -163,14 +165,16 @@ func (e *Engine) Start(stopChan chan struct{}) {
 	go func() {
 		for {
 			select {
-			case <-e.sv.Watch():
+			case stmt := <-e.sv.Ready():
 				seq := e.lm.NextLedgerHeaderSeq()
-				for s := range e.sv.Ready(seq) {
-					if _, ok := e.decrees[s.Index]; !ok {
-						continue
-					}
-					e.decrees[s.Index].Recv(s)
+				if stmt.Index < seq-e.maxDecrees {
+					// skip old statement
+					continue
 				}
+				if _, ok := e.decrees[stmt.Index]; !ok {
+					continue
+				}
+				e.decrees[stmt.Index].Recv(stmt)
 			case <-stopChan:
 				return
 			}
@@ -269,6 +273,9 @@ func (e *Engine) RecvStatement(stmt *ultpb.Statement) error {
 	if stmt.NodeID == e.nodeID {
 		return nil
 	}
+
+	// send statement to validator for fetching transaction set
+	// and quorum of the correponding node
 	err := e.sv.Recv(stmt)
 	if err != nil {
 		return fmt.Errorf("send statement to validator failed: %v", err)

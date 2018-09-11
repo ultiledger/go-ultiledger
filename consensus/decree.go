@@ -56,6 +56,7 @@ type Decree struct {
 	ballots          map[string]*Statement
 	latestBallotStmt *Statement
 	nextValue        string // z
+	ballotMsgCount   int
 
 	// channel for sending statements
 	statementChan chan *Statement
@@ -68,12 +69,14 @@ func NewDecree(idx uint64, nodeID string, quorum *Quorum, quorumHash string, stm
 		quorum:          quorum,
 		quorumHash:      quorumHash,
 		nominationRound: 0,
+		nominationStart: false,
 		votes:           mapset.NewSet(),
 		accepts:         mapset.NewSet(),
 		candidates:      mapset.NewSet(),
 		nominations:     make(map[string]*Statement),
 		currentPhase:    BallotPhasePrepare,
 		ballots:         make(map[string]*Statement),
+		ballotMsgCount:  0,
 		statementChan:   stmtC,
 	}
 	return d
@@ -416,7 +419,7 @@ func (d *Decree) sendBallot() error {
 		if err := d.recvBallot(stmt); err != nil {
 			return fmt.Errorf("recv local ballot failed: %v", err)
 		}
-		if d.latestBallotStmt == nil || isNewerBallot(d.latestBallotStmt, stmt) {
+		if d.currentBallot != nil && (d.latestBallotStmt == nil || isNewerBallot(d.latestBallotStmt, stmt)) {
 			d.latestBallotStmt = stmt
 			// broadcast the ballot
 			d.statementChan <- stmt
@@ -426,9 +429,133 @@ func (d *Decree) sendBallot() error {
 	return nil
 }
 
-// try to step ballot state
+// Step the ballot state forward with the input ballot statement
 func (d *Decree) step(stmt *Statement) error {
+	d.ballotMsgCount += 1
+	if d.ballotMsgCount == 10 { // TODO(bobonovski) adaptive threshold?
+		return errors.New("max number of invoking reached in step")
+	}
+	// try to update internal ballot states bying following operations:
+	// 1. accept the prepared statement
+	// 2. confirm the prepared statement
+	// 3. accept the commit statement
+	// 4. confirm the commit statement
+	updated := false
+	updated = d.acceptPrepared(stmt) || updated
+	updated = d.confirmPrepared(stmt) || updated
+	updated = d.acceptCommit(stmt) || updated
+	updated = d.confirmCommit(stmt) || updated
+
+	if d.ballotMsgCount == 1 {
+
+	}
+
 	return nil
+}
+
+// Forward ballot counter
+func (d *Decree) update() bool {
+	if d.currentPhase != BallotPhasePrepare && d.currentPhase != BallotPhaseConfirm {
+		return false
+	}
+
+	counters := mapset.NewSet()
+	for _, s := range d.ballots {
+		switch s.StatementType {
+		case ultpb.StatementType_PREPARE:
+			prepare := s.GetPrepare()
+			counters.Add(prepare.B.Counter)
+		case ultpb.StatementType_CONFIRM:
+			confirm := s.GetConfirm()
+			counters.Add(confirm.B.Counter)
+		case ultpb.StatementType_EXTERNALIZE:
+			counters.Add(math.MaxUint32)
+		default:
+			log.Fatal(ErrUnknownStmtType)
+		}
+	}
+
+	target := uint32(0)
+	if d.currentBallot != nil {
+		target = d.currentBallot.Counter
+	}
+	counters.Add(target)
+
+	// sort the counters in descending order
+	var sortedCounters []uint32
+	for c := range counters.Iter() {
+		v := c.(uint32)
+		sortedCounters = append(sortedCounters, v)
+	}
+	sort.SliceStable(sortedCounters, func(i, j int) bool {
+		return sortedCounters[i] > sortedCounters[j]
+	})
+
+	// statement filter
+	stmtFilter := func(counter uint32) func(*Statement) bool {
+		return func(stmt *Statement) bool {
+			var cond bool
+			switch stmt.StatementType {
+			case ultpb.StatementType_PREPARE:
+				prepare := stmt.GetPrepare()
+				cond = counter < prepare.B.Counter
+			case ultpb.StatementType_CONFIRM:
+				confirm := stmt.GetConfirm()
+				cond = counter < confirm.B.Counter
+			default:
+				cond = counter != math.MaxUint32
+			}
+			return cond
+		}
+	}
+
+	// filter statements to get the nodeIDs
+	nodes := mapset.NewSet()
+	for _, c := range sortedCounters {
+		if c < target {
+			break
+		}
+
+		filter := stmtFilter(c)
+		for _, stmt := range d.ballots {
+			if filter(stmt) {
+				nodes.Add(stmt.NodeID)
+			}
+		}
+
+		// check whether the nodes form v-blocking
+		vb := isVblocking(d.quorum, nodes)
+		if vb {
+			continue
+		}
+		if c == target {
+			break
+		}
+		d.abandonBallot(c)
+
+		nodes.Clear()
+	}
+
+	return false
+}
+
+func (d *Decree) abandonBallot(c uint32) bool {
+	cv := d.latestComposite
+	updated := false
+
+	if cv == "" {
+		if d.currentBallot != nil {
+			cv = d.currentBallot.Value
+		}
+	} else {
+		if c == 0 {
+			updated = d.updateBallotPhase(cv, true)
+		} else {
+			updated = d.updateBallotPhaseWithCounter(cv, c)
+		}
+	}
+
+	return updated
 }
 
 // Accept new ballot statement as prepared using federated voting
@@ -582,6 +709,7 @@ func (d *Decree) preparedCandidates(stmt *Statement) []*Ballot {
 	}
 
 	// sort candidates in descending order
+	// TODO(bobonovski) define customized sorter for Ballot
 	sort.SliceStable(candidates, func(i, j int) bool {
 		if candidates[i].Counter > candidates[j].Counter {
 			return true
@@ -891,12 +1019,21 @@ func (d *Decree) updateBallotPhase(val string, force bool) bool {
 		counter = d.currentBallot.Counter + 1
 	}
 
+	updated := d.updateBallotPhaseWithCounter(val, counter)
+
+	return updated
+}
+
+// Update the current ballot phase with specified counter
+func (d *Decree) updateBallotPhaseWithCounter(val string, counter uint32) bool {
 	if d.currentPhase != BallotPhasePrepare && d.currentPhase != BallotPhaseConfirm {
 		return false
 	}
 
-	// TODO(bobonovski) use confirmed prepared value?
 	b := &Ballot{Counter: counter, Value: val}
+	if d.nextValue != "" {
+		b.Value = d.nextValue
+	}
 
 	updated := d.updateBallotValue(b)
 	if updated {
