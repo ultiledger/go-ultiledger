@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/deckarep/golang-set"
 	lru "github.com/hashicorp/golang-lru"
@@ -21,6 +23,10 @@ type Validator struct {
 	store  db.DB
 	bucket string
 
+	// statements which are downloading
+	rwm       sync.RWMutex
+	downloads map[string]*Statement
+
 	// set of received statements
 	statements mapset.Set
 
@@ -28,21 +34,29 @@ type Validator struct {
 	quorumCache *lru.Cache
 	// tx list hash to tx list LRU cache
 	txListCache *lru.Cache
+	// tx hash to tx LRU cache
+	txCache *lru.Cache
 
-	// ready statements map for decrees
-	readyMap map[uint64][]*Statement
+	// channel for dispatch quorum download task
+	quorumDownloadChan chan string
+	// channel for dispatch txlist download task
+	txlistDownloadChan chan string
+
 	// notify engine new statements are ready
-	readyChan chan struct{}
+	readyChan chan *Statement
+	// channel for downloding missing info of statement
+	downloadChan chan *Statement
 	// stop channel
 	stopChan chan struct{}
 }
 
 func NewValidator() *Validator {
 	v := &Validator{
-		statements: mapset.NewSet(),
-		readyMap:   make(map[uint64][]*Statement),
-		readyChan:  make(chan struct{}),
-		stopChan:   make(chan struct{}),
+		downloads:    make(map[string]*Statement),
+		statements:   mapset.NewSet(),
+		readyChan:    make(chan *Statement, 100),
+		downloadChan: make(chan *Statement, 100),
+		stopChan:     make(chan struct{}),
 	}
 	qc, err := lru.New(1000)
 	if err != nil {
@@ -52,9 +66,20 @@ func NewValidator() *Validator {
 
 	tc, err := lru.New(1000)
 	if err != nil {
-		log.Fatalf("create txset LRU cache failed: %v", err)
+		log.Fatalf("create tx list LRU cache failed: %v", err)
 	}
 	v.txListCache = tc
+
+	txc, err := lru.New(10000)
+	if err != nil {
+		log.Fatalf("create tx LRU cache failed: %v", err)
+	}
+	v.txCache = txc
+
+	// listening for download task
+	go v.download()
+	// monitor for downloaded statements
+	go v.monitor()
 
 	return v
 }
@@ -64,13 +89,11 @@ func NewValidator() *Validator {
 func (v *Validator) Ready() <-chan *Statement {
 	stmtChan := make(chan *Statement)
 	go func() {
-		for _, stmts := range v.readyMap {
-			for _, s := range stmts {
-				select {
-				case stmtChan <- s:
-				case <-v.stopChan:
-					return
-				}
+		for stmt := range v.readyChan {
+			select {
+			case stmtChan <- stmt:
+			case <-v.stopChan:
+				return
 			}
 		}
 	}()
@@ -92,42 +115,130 @@ func (v *Validator) Recv(stmt *Statement) error {
 	}
 	v.statements.Add(hash)
 
-	// TODO(bobonovski) get missing tx info
-	v.readyChan <- struct{}{}
+	// validate statement
+	valid, err := v.validate(stmt)
+	if err != nil {
+		return fmt.Errorf("validate statement failed: %v", "index", stmt.Index, "nodeID", stmt.NodeID)
+	}
+
+	if valid {
+		v.readyChan <- stmt
+	} else {
+		v.downloadChan <- stmt
+		// save statement to downloads
+		v.rwm.Lock()
+		v.downloads[hash] = stmt
+		v.rwm.Unlock()
+	}
+
 	return nil
 }
 
+// Monitor downloaded statement and dispatch to ready channel
+func (v *Validator) monitor() {
+	ticker := time.NewTicker(100 * time.Millisecond)
+	for {
+		select {
+		case <-ticker.C:
+			v.rwm.RLock()
+			for h, stmt := range v.downloads {
+				// no need to check error here
+				valid, _ := v.validate(stmt)
+				if valid {
+					log.Infof("statement %s is ready with full info", h)
+					v.readyChan <- stmt
+				}
+			}
+			v.rwm.RUnlock()
+		case <-v.stopChan:
+			return
+		}
+	}
+}
+
+// Download missing info of the statement
+func (v *Validator) download() {
+	for {
+		select {
+		case stmt := <-v.downloadChan:
+			// no need to check error since we have already passed the validate check
+			quorumHash, _ := extractQuorumHash(stmt)
+			if _, ok := v.getQuorum(quorumHash); !ok {
+				v.quorumDownloadChan <- quorumHash
+			}
+
+			txListHashes, _ := extractTxListHash(stmt)
+			for _, txListHash := range txListHashes {
+				_, ok := v.getTxList(txListHash)
+				if !ok {
+					v.txlistDownloadChan <- txListHash
+				}
+			}
+		case <-v.stopChan:
+			return
+		}
+	}
+}
+
+// Validate statement bying check whether we have its quorum and tx list.
+// If the return value is nil, it indicates the statement is ready.
+func (v *Validator) validate(stmt *Statement) (bool, error) {
+	quorumHash, err := extractQuorumHash(stmt)
+	if err != nil {
+		return false, fmt.Errorf("extract quorum hash from statement failed: %v", err)
+	}
+
+	if _, ok := v.getQuorum(quorumHash); !ok {
+		return false, nil
+	}
+
+	txListHashes, err := extractTxListHash(stmt)
+	if err != nil {
+		return false, fmt.Errorf("extract tx list hash from statement failed: %v", err)
+	}
+
+	for _, txListHash := range txListHashes {
+		_, ok := v.getTxList(txListHash)
+		if !ok {
+			return false, nil
+		}
+	}
+
+	return true, nil
+}
+
 // Get the quorum of the corresponding quorum hash,
-func (v *Validator) GetQuorum(quorumHash string) (*Quorum, error) {
+func (v *Validator) getQuorum(quorumHash string) (*Quorum, bool) {
 	if q, ok := v.quorumCache.Get(quorumHash); ok {
-		return q.(*Quorum), nil
+		return q.(*Quorum), true
 	}
 
 	qb, ok := v.store.Get(v.bucket, []byte(quorumHash))
 	if !ok {
-		return nil, fmt.Errorf("get quorum %s from db failed", quorumHash)
+		return nil, false
 	}
 
 	quorum, err := ultpb.DecodeQuorum(qb)
 	if err != nil {
-		return nil, fmt.Errorf("decode quorum failed: %v", err)
+		log.Errorf("decode quorum failed: %v", err, "quorumHash", quorumHash)
+		return nil, false
 	}
 
 	// cache the quorum
 	v.quorumCache.Add(quorumHash, quorum)
 
-	return quorum, nil
+	return quorum, true
 }
 
 // Get the tx list of the corresponding tx list
-func (v *Validator) GetTxList(txListHash string) ([]string, error) {
+func (v *Validator) getTxList(txListHash string) ([]string, bool) {
 	if q, ok := v.txListCache.Get(txListHash); ok {
-		return q.([]string), nil
+		return q.([]string), true
 	}
 
 	txb, ok := v.store.Get(v.bucket, []byte(txListHash))
 	if !ok {
-		return nil, fmt.Errorf("get tx list hash %s from db failed", txListHash)
+		return nil, false
 	}
 
 	// the tx list is encoded by joining hash with comma
@@ -136,7 +247,7 @@ func (v *Validator) GetTxList(txListHash string) ([]string, error) {
 	// cache the tx list
 	v.txListCache.Add(txListHash, txList)
 
-	return txList, nil
+	return txList, true
 }
 
 // Extract quorum hash from statement
@@ -149,14 +260,23 @@ func extractQuorumHash(stmt *Statement) (string, error) {
 	case ultpb.StatementType_NOMINATE:
 		nom := stmt.GetNominate()
 		hash = nom.QuorumHash
+	case ultpb.StatementType_PREPARE:
+		prepare := stmt.GetPrepare()
+		hash = prepare.QuorumHash
+	case ultpb.StatementType_CONFIRM:
+		confirm := stmt.GetConfirm()
+		hash = confirm.QuorumHash
+	case ultpb.StatementType_EXTERNALIZE:
+		ext := stmt.GetExternalize()
+		hash = ext.QuorumHash
 	default:
-		return "", errors.New("unknown statement type")
+		log.Fatal(ErrUnknownStmtType)
 	}
 	return hash, nil
 }
 
 // Extract list of tx list hash from statement
-func extractTxListHash(stmt *ultpb.Statement) ([]string, error) {
+func extractTxListHash(stmt *Statement) ([]string, error) {
 	if stmt == nil {
 		return nil, errors.New("statement is nil")
 	}
@@ -186,8 +306,48 @@ func extractTxListHash(stmt *ultpb.Statement) ([]string, error) {
 			}
 			hashes = append(hashes, cv.TxListHash)
 		}
+	case ultpb.StatementType_PREPARE:
+		fallthrough
+	case ultpb.StatementType_CONFIRM:
+		fallthrough
+	case ultpb.StatementType_EXTERNALIZE:
+		ballot, err := extractWorkingBallot(stmt)
+		if err != nil {
+			return nil, fmt.Errorf("extract working ballot failed: %v", err)
+		}
+		b, err := hex.DecodeString(ballot.Value)
+		if err != nil {
+			return nil, fmt.Errorf("decode hex string failed: %v", err)
+		}
+		cv, err := ultpb.DecodeConsensusValue(b)
+		if err != nil {
+			return nil, fmt.Errorf("decode consensus value failed: %v", err)
+		}
+		hashes = append(hashes, cv.TxListHash)
 	default:
 		return nil, errors.New("unknown statement type")
 	}
 	return hashes, nil
+}
+
+// Extract working ballot according to statement type
+func extractWorkingBallot(stmt *Statement) (*Ballot, error) {
+	if stmt == nil {
+		return nil, errors.New("statement is nil")
+	}
+	var ballot *Ballot
+	switch stmt.StatementType {
+	case ultpb.StatementType_PREPARE:
+		prepare := stmt.GetPrepare()
+		ballot = prepare.B
+	case ultpb.StatementType_CONFIRM:
+		confirm := stmt.GetConfirm()
+		ballot = &Ballot{Value: confirm.B.Value, Counter: confirm.LC}
+	case ultpb.StatementType_EXTERNALIZE:
+		ext := stmt.GetExternalize()
+		ballot = ext.B
+	default:
+		log.Fatal(ErrUnknownStmtType)
+	}
+	return ballot, nil
 }
