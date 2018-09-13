@@ -34,8 +34,6 @@ type Validator struct {
 	quorumCache *lru.Cache
 	// tx list hash to tx list LRU cache
 	txListCache *lru.Cache
-	// tx hash to tx LRU cache
-	txCache *lru.Cache
 
 	// channel for dispatch quorum download task
 	quorumDownloadChan chan string
@@ -70,12 +68,6 @@ func NewValidator() *Validator {
 	}
 	v.txListCache = tc
 
-	txc, err := lru.New(10000)
-	if err != nil {
-		log.Fatalf("create tx LRU cache failed: %v", err)
-	}
-	v.txCache = txc
-
 	// listening for download task
 	go v.download()
 	// monitor for downloaded statements
@@ -100,6 +92,7 @@ func (v *Validator) Ready() <-chan *Statement {
 	return stmtChan
 }
 
+// Receive new statement
 func (v *Validator) Recv(stmt *Statement) error {
 	if stmt == nil {
 		return nil
@@ -134,6 +127,40 @@ func (v *Validator) Recv(stmt *Statement) error {
 	return nil
 }
 
+// Receive downloaded quorum and save it in db and cache
+func (v *Validator) RecvQuorum(quorumHash string, quorum *Quorum) error {
+	// encode quorum to pb format
+	qb, err := ultpb.Encode(quorum)
+	if err != nil {
+		return fmt.Errorf("encode quorum failed: %v", err)
+	}
+
+	// save the quorum in db first
+	err = v.store.Set(v.bucket, []byte(quorumHash), qb)
+	if err != nil {
+		return fmt.Errorf("save quorum to db failed: %v", err)
+	}
+
+	v.quorumCache.Add(quorumHash, quorum)
+
+	return nil
+}
+
+// Receive downloaded tx list and save it to db and cache
+func (v *Validator) RecvTxList(txListHash string, txList []string) error {
+	txs := strings.Join(txList, ",")
+
+	// save the tx list in db first
+	err := v.store.Set(v.bucket, []byte(txListHash), []byte(txs))
+	if err != nil {
+		return fmt.Errorf("save tx list to db failed: %v", err)
+	}
+
+	v.txListCache.Add(txListHash, txs)
+
+	return nil
+}
+
 // Monitor downloaded statement and dispatch to ready channel
 func (v *Validator) monitor() {
 	ticker := time.NewTicker(100 * time.Millisecond)
@@ -147,6 +174,7 @@ func (v *Validator) monitor() {
 				if valid {
 					log.Infof("statement %s is ready with full info", h)
 					v.readyChan <- stmt
+					delete(v.downloads, h)
 				}
 			}
 			v.rwm.RUnlock()
