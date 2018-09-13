@@ -41,9 +41,11 @@ type Node struct {
 	stopChan chan struct{}
 
 	// futures for task with error responses
-	txFuture   chan *future.Tx
-	peerFuture chan *future.Peer
-	stmtFuture chan *future.Statement
+	txFuture     chan *future.Tx
+	peerFuture   chan *future.Peer
+	stmtFuture   chan *future.Statement
+	txsetFuture  chan *future.TxSet
+	quorumFuture chan *future.Quorum
 }
 
 // NewNode creates a Node which controls all the sub tasks
@@ -138,7 +140,7 @@ func (n *Node) Restart() error {
 	return nil
 }
 
-// event loop for dealing with various internal events
+// Event loop for processing server received messages
 func (n *Node) eventLoop() {
 	for {
 		select {
@@ -160,6 +162,18 @@ func (n *Node) eventLoop() {
 				log.Errorf("recv statement failed: %v", err)
 			}
 			sf.Respond(err)
+		case tsf := <-n.txsetFuture:
+			err := n.engine.RecvTxSet(txf.TxSetHash, txf.TxSet)
+			if err != nil {
+				log.Errorf("recv txset failed: %v", err)
+			}
+			tsf.Respond(err)
+		case qf := <-n.quorumFuture:
+			err := n.engine.RecvQuorum(qf.QuorumHash, qf.Quorum)
+			if err != nil {
+				log.Errorf("redv qf failed: %v", err)
+			}
+			qf.Respond(err)
 		case <-n.stopChan:
 			log.Info("shutdown event loop")
 			return

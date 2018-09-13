@@ -141,6 +141,7 @@ func NewEngine(ctx *EngineContext) *Engine {
 }
 
 func (e *Engine) Start(stopChan chan struct{}) {
+	// goroutine for listening broadcast tasks
 	go func() {
 		for {
 			select {
@@ -161,7 +162,7 @@ func (e *Engine) Start(stopChan chan struct{}) {
 			}
 		}
 	}()
-	// create seperate goroutine for listening ready statements
+	// goroutine for listening ready statements
 	go func() {
 		for {
 			select {
@@ -182,7 +183,7 @@ func (e *Engine) Start(stopChan chan struct{}) {
 	}()
 }
 
-// check the status of the transaction
+// Get the current status of the transaction
 func (e *Engine) GetTxStatus(txHash string) rpcpb.TxStatusEnum {
 	if tx, ok := e.txStatus.Get(txHash); ok {
 		return tx.(rpcpb.TxStatusEnum)
@@ -198,7 +199,7 @@ func (e *Engine) GetTxStatus(txHash string) rpcpb.TxStatusEnum {
 	return rpcpb.TxStatusEnum(rpcpb.TxStatusEnum_value[sname])
 }
 
-// update the status of the transaction
+// Update transaction status
 func (e *Engine) UpdateTxStatus(txHash string, status rpcpb.TxStatusEnum) error {
 	sname := rpcpb.TxStatusEnum_name[int32(status)]
 
@@ -220,7 +221,7 @@ func MaxUint64(x uint64, y uint64) uint64 {
 	return y
 }
 
-// add transaction to internal pending set
+// Add transaction to internal pending set
 func (e *Engine) RecvTx(tx *ultpb.Tx) error {
 	h, err := ultpb.SHA256Hash(tx)
 	if err != nil {
