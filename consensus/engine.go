@@ -95,7 +95,7 @@ type Engine struct {
 	// transactions waiting to be include in the ledger
 	txSet mapset.Set
 
-	// accountID to txList map
+	// accountID to txlist history map
 	txMap map[string]*TxHistory
 
 	// channel for broadcasting statement
@@ -292,9 +292,9 @@ func (e *Engine) RecvQuorum(quorumHash string, quorum *Quorum) error {
 	return nil
 }
 
-// RecvTxList receives downloaded tx list and pass it to validator
-func (e *Engine) RecvTxList(txListHash string, txList []string) error {
-	err := e.sv.RecvTxList(txListHash, txList)
+// RecvTxList receives downloaded txset and pass it to validator
+func (e *Engine) RecvTxSet(txsetHash string, txset *TxSet) error {
+	err := e.sv.RecvTxSet(txsetHash, txset)
 	if err != nil {
 		return fmt.Errorf("send tx list to validator failed: %v", err)
 	}

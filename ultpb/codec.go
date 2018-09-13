@@ -81,6 +81,15 @@ func DecodeQuorum(b []byte) (*Quorum, error) {
 	return quorum, nil
 }
 
+// Decode pb message to txset
+func DecodeTxSet(b []byte) (*TxSet, error) {
+	txset := &TxSet{}
+	if err := proto.Unmarshal(b, txset); err != nil {
+		return nil, err
+	}
+	return txset, nil
+}
+
 // Decode pb message to consensus value
 func DecodeConsensusValue(b []byte) (*ConsensusValue, error) {
 	cv := &ConsensusValue{}

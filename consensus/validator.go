@@ -4,7 +4,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"strings"
 	"sync"
 	"time"
 
@@ -32,13 +31,13 @@ type Validator struct {
 
 	// quorum hash to quorum LRU cache
 	quorumCache *lru.Cache
-	// tx list hash to tx list LRU cache
-	txListCache *lru.Cache
+	// txset hash to txset LRU cache
+	txsetCache *lru.Cache
 
 	// channel for sending quorum download task
 	quorumDownloadChan chan<- string
-	// channel for sending txlist download task
-	txlistDownloadChan chan<- string
+	// channel for sending txset download task
+	txsetDownloadChan chan<- string
 
 	// notify engine new statements are ready
 	readyChan chan *Statement
@@ -66,7 +65,7 @@ func NewValidator() *Validator {
 	if err != nil {
 		log.Fatalf("create tx list LRU cache failed: %v", err)
 	}
-	v.txListCache = tc
+	v.txsetCache = tc
 
 	// listening for download task
 	go v.download()
@@ -146,17 +145,21 @@ func (v *Validator) RecvQuorum(quorumHash string, quorum *Quorum) error {
 	return nil
 }
 
-// Receive downloaded tx list and save it to db and cache
-func (v *Validator) RecvTxList(txListHash string, txList []string) error {
-	txs := strings.Join(txList, ",")
+// Receive downloaded txset and save it to db and cache
+func (v *Validator) RecvTxSet(txsetHash string, txset *TxSet) error {
+	// encode txset to pb format
+	tb, err := ultpb.Encode(txset)
+	if err != nil {
+		return fmt.Errorf("encode txset failed: %v", err)
+	}
 
-	// save the tx list in db first
-	err := v.store.Set(v.bucket, []byte(txListHash), []byte(txs))
+	// save the txset in db first
+	err = v.store.Set(v.bucket, []byte(txsetHash), tb)
 	if err != nil {
 		return fmt.Errorf("save tx list to db failed: %v", err)
 	}
 
-	v.txListCache.Add(txListHash, txs)
+	v.txsetCache.Add(txsetHash, txset)
 
 	return nil
 }
@@ -184,24 +187,27 @@ func (v *Validator) GetQuorum(quorumHash string) (*Quorum, bool) {
 	return quorum, true
 }
 
-// Get the tx list of the corresponding tx list
-func (v *Validator) GetTxList(txListHash string) ([]string, bool) {
-	if q, ok := v.txListCache.Get(txListHash); ok {
-		return q.([]string), true
+// Get the txset of the corresponding txset hash
+func (v *Validator) GetTxSet(txsetHash string) (*TxSet, bool) {
+	if txs, ok := v.txsetCache.Get(txsetHash); ok {
+		return txs.(*TxSet), true
 	}
 
-	txb, ok := v.store.Get(v.bucket, []byte(txListHash))
+	txb, ok := v.store.Get(v.bucket, []byte(txsetHash))
 	if !ok {
 		return nil, false
 	}
 
-	// the tx list is encoded by joining hash with comma
-	txList := strings.Split(string(txb), ",")
+	txset, err := ultpb.DecodeTxSet(txb)
+	if err != nil {
+		log.Errorf("decode txset failed: %v", err, "txsetHash", txsetHash)
+		return nil, false
+	}
 
-	// cache the tx list
-	v.txListCache.Add(txListHash, txList)
+	// cache the txset
+	v.txsetCache.Add(txsetHash, txset)
 
-	return txList, true
+	return txset, true
 }
 
 // Monitor downloaded statement and dispatch to ready channel
@@ -238,11 +244,11 @@ func (v *Validator) download() {
 				v.quorumDownloadChan <- quorumHash
 			}
 
-			txListHashes, _ := extractTxListHash(stmt)
-			for _, txListHash := range txListHashes {
-				_, ok := v.GetTxList(txListHash)
+			txsetHashes, _ := extractTxSetHash(stmt)
+			for _, txsetHash := range txsetHashes {
+				_, ok := v.GetTxSet(txsetHash)
 				if !ok {
-					v.txlistDownloadChan <- txListHash
+					v.txsetDownloadChan <- txsetHash
 				}
 			}
 		case <-v.stopChan:
@@ -263,13 +269,13 @@ func (v *Validator) validate(stmt *Statement) (bool, error) {
 		return false, nil
 	}
 
-	txListHashes, err := extractTxListHash(stmt)
+	txsetHashes, err := extractTxSetHash(stmt)
 	if err != nil {
 		return false, fmt.Errorf("extract tx list hash from statement failed: %v", err)
 	}
 
-	for _, txListHash := range txListHashes {
-		_, ok := v.GetTxList(txListHash)
+	for _, txsetHash := range txsetHashes {
+		_, ok := v.GetTxSet(txsetHash)
 		if !ok {
 			return false, nil
 		}
@@ -304,7 +310,7 @@ func extractQuorumHash(stmt *Statement) (string, error) {
 }
 
 // Extract list of tx set hash from statement
-func extractTxListHash(stmt *Statement) ([]string, error) {
+func extractTxSetHash(stmt *Statement) ([]string, error) {
 	if stmt == nil {
 		return nil, errors.New("statement is nil")
 	}
