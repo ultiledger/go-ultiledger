@@ -6,6 +6,7 @@ import (
 
 	"github.com/deckarep/golang-set"
 
+	"github.com/ultiledger/go-ultiledger/log"
 	"github.com/ultiledger/go-ultiledger/ultpb"
 )
 
@@ -70,6 +71,52 @@ func compatibleBallots(lb *Ballot, rb *Ballot) bool {
 
 // check whether the latter ballot statement is newer than first one
 func isNewerBallot(lb *Statement, rb *Statement) bool {
+	// check statement type
+	if lb.StatementType != rb.StatementType {
+		return lb.StatementType < rb.StatementType
+	}
+
+	switch rb.StatementType {
+	case ultpb.StatementType_PREPARE:
+		lp := lb.GetPrepare()
+		rp := rb.GetPrepare()
+		// compare working ballot
+		cmp := compareBallots(lp.B, rp.B)
+		if cmp < 0 {
+			return true
+		} else if cmp == 0 {
+			// compare p ballot
+			cmpp := compareBallots(lp.P, rp.P)
+			if cmpp < 0 {
+				return true
+			} else if cmpp == 0 {
+				// compare q ballot
+				cmpq := compareBallots(lp.Q, rp.Q)
+				if cmpq < 0 {
+					return true
+				} else if cmpq == 0 {
+					return lp.HC < rp.HC
+				}
+			}
+		}
+	case ultpb.StatementType_CONFIRM:
+		lc := lb.GetConfirm()
+		rc := lb.GetConfirm()
+		cmp := compareBallots(lc.B, rc.B)
+		if cmp < 0 {
+			return true
+		} else if cmp == 0 {
+			if lc.PC == rc.PC {
+				return lc.HC < rc.HC
+			}
+			return lc.PC < rc.PC
+		}
+	case ultpb.StatementType_EXTERNALIZE:
+		return false
+	default:
+		log.Fatal(ErrUnknownStmtType)
+	}
+
 	return false
 }
 
