@@ -35,10 +35,10 @@ type Validator struct {
 	// tx list hash to tx list LRU cache
 	txListCache *lru.Cache
 
-	// channel for dispatch quorum download task
-	quorumDownloadChan chan string
-	// channel for dispatch txlist download task
-	txlistDownloadChan chan string
+	// channel for sending quorum download task
+	quorumDownloadChan chan<- string
+	// channel for sending txlist download task
+	txlistDownloadChan chan<- string
 
 	// notify engine new statements are ready
 	readyChan chan *Statement
@@ -161,6 +161,49 @@ func (v *Validator) RecvTxList(txListHash string, txList []string) error {
 	return nil
 }
 
+// Get the quorum of the corresponding quorum hash,
+func (v *Validator) GetQuorum(quorumHash string) (*Quorum, bool) {
+	if q, ok := v.quorumCache.Get(quorumHash); ok {
+		return q.(*Quorum), true
+	}
+
+	qb, ok := v.store.Get(v.bucket, []byte(quorumHash))
+	if !ok {
+		return nil, false
+	}
+
+	quorum, err := ultpb.DecodeQuorum(qb)
+	if err != nil {
+		log.Errorf("decode quorum failed: %v", err, "quorumHash", quorumHash)
+		return nil, false
+	}
+
+	// cache the quorum
+	v.quorumCache.Add(quorumHash, quorum)
+
+	return quorum, true
+}
+
+// Get the tx list of the corresponding tx list
+func (v *Validator) GetTxList(txListHash string) ([]string, bool) {
+	if q, ok := v.txListCache.Get(txListHash); ok {
+		return q.([]string), true
+	}
+
+	txb, ok := v.store.Get(v.bucket, []byte(txListHash))
+	if !ok {
+		return nil, false
+	}
+
+	// the tx list is encoded by joining hash with comma
+	txList := strings.Split(string(txb), ",")
+
+	// cache the tx list
+	v.txListCache.Add(txListHash, txList)
+
+	return txList, true
+}
+
 // Monitor downloaded statement and dispatch to ready channel
 func (v *Validator) monitor() {
 	ticker := time.NewTicker(100 * time.Millisecond)
@@ -191,13 +234,13 @@ func (v *Validator) download() {
 		case stmt := <-v.downloadChan:
 			// no need to check error since we have already passed the validate check
 			quorumHash, _ := extractQuorumHash(stmt)
-			if _, ok := v.getQuorum(quorumHash); !ok {
+			if _, ok := v.GetQuorum(quorumHash); !ok {
 				v.quorumDownloadChan <- quorumHash
 			}
 
 			txListHashes, _ := extractTxListHash(stmt)
 			for _, txListHash := range txListHashes {
-				_, ok := v.getTxList(txListHash)
+				_, ok := v.GetTxList(txListHash)
 				if !ok {
 					v.txlistDownloadChan <- txListHash
 				}
@@ -216,7 +259,7 @@ func (v *Validator) validate(stmt *Statement) (bool, error) {
 		return false, fmt.Errorf("extract quorum hash from statement failed: %v", err)
 	}
 
-	if _, ok := v.getQuorum(quorumHash); !ok {
+	if _, ok := v.GetQuorum(quorumHash); !ok {
 		return false, nil
 	}
 
@@ -226,56 +269,13 @@ func (v *Validator) validate(stmt *Statement) (bool, error) {
 	}
 
 	for _, txListHash := range txListHashes {
-		_, ok := v.getTxList(txListHash)
+		_, ok := v.GetTxList(txListHash)
 		if !ok {
 			return false, nil
 		}
 	}
 
 	return true, nil
-}
-
-// Get the quorum of the corresponding quorum hash,
-func (v *Validator) getQuorum(quorumHash string) (*Quorum, bool) {
-	if q, ok := v.quorumCache.Get(quorumHash); ok {
-		return q.(*Quorum), true
-	}
-
-	qb, ok := v.store.Get(v.bucket, []byte(quorumHash))
-	if !ok {
-		return nil, false
-	}
-
-	quorum, err := ultpb.DecodeQuorum(qb)
-	if err != nil {
-		log.Errorf("decode quorum failed: %v", err, "quorumHash", quorumHash)
-		return nil, false
-	}
-
-	// cache the quorum
-	v.quorumCache.Add(quorumHash, quorum)
-
-	return quorum, true
-}
-
-// Get the tx list of the corresponding tx list
-func (v *Validator) getTxList(txListHash string) ([]string, bool) {
-	if q, ok := v.txListCache.Get(txListHash); ok {
-		return q.([]string), true
-	}
-
-	txb, ok := v.store.Get(v.bucket, []byte(txListHash))
-	if !ok {
-		return nil, false
-	}
-
-	// the tx list is encoded by joining hash with comma
-	txList := strings.Split(string(txb), ",")
-
-	// cache the tx list
-	v.txListCache.Add(txListHash, txList)
-
-	return txList, true
 }
 
 // Extract quorum hash from statement
