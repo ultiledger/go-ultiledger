@@ -19,6 +19,7 @@ type Externalize = ultpb.Externalize
 type Quorum = ultpb.Quorum
 type Ballot = ultpb.Ballot
 type TxSet = ultpb.TxSet
+type ConsensusValue = ultpb.ConsensusValue
 
 // ballots compare utilities
 func lessAndCompatibleBallots(lb *Ballot, rb *Ballot) bool {

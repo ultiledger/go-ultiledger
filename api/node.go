@@ -163,7 +163,7 @@ func (n *Node) eventLoop() {
 			}
 			sf.Respond(err)
 		case tsf := <-n.txsetFuture:
-			err := n.engine.RecvTxSet(txf.TxSetHash, txf.TxSet)
+			err := n.engine.RecvTxSet(tsf.TxSetHash, tsf.TxSet)
 			if err != nil {
 				log.Errorf("recv txset failed: %v", err)
 			}

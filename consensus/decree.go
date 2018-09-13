@@ -1,6 +1,7 @@
 package consensus
 
 import (
+	"bytes"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -11,6 +12,8 @@ import (
 	"github.com/deckarep/golang-set"
 	pb "github.com/golang/protobuf/proto"
 
+	"github.com/ultiledger/go-ultiledger/crypto"
+	"github.com/ultiledger/go-ultiledger/ledger"
 	"github.com/ultiledger/go-ultiledger/log"
 	"github.com/ultiledger/go-ultiledger/ultpb"
 )
@@ -35,6 +38,11 @@ type Decree struct {
 	quorum          *Quorum
 	quorumHash      string
 	latestCloseTime uint64
+
+	// ledger manager
+	lm *ledger.Manager
+	// validator
+	validator *Validator
 
 	// for nomination protocol
 	votes            mapset.Set
@@ -332,8 +340,107 @@ func (d *Decree) promoteVotes(newNom *Nominate) (bool, bool, error) {
 	return acceptUpdated, candidateUpdated, nil
 }
 
+// Combine the candidates set into a single candidate value
 func (d *Decree) combineCandidates() (string, error) {
-	return "", nil
+	// query lastest closed ledger header
+	headerHash := d.lm.CurrLedgerHeaderHash()
+
+	candidate := &ConsensusValue{}
+	var hash string
+
+	var vals []*ConsensusValue
+	for cs := range d.candidates.Iter() {
+		cand := cs.(string)
+		canb, err := hex.DecodeString(cand)
+		if err != nil {
+			return "", fmt.Errorf("decode candidate failed: %v", err)
+		}
+
+		// accumulate hash
+		hash = bytesOr(hash, crypto.SHA256Hash(canb))
+
+		cv, err := ultpb.DecodeConsensusValue(canb)
+		if err != nil {
+			return "", fmt.Errorf("decode consensus value failed: %v", err)
+		}
+		if cv.CloseTime > candidate.CloseTime {
+			candidate.CloseTime = cv.CloseTime
+		}
+
+		vals = append(vals, cv)
+	}
+
+	// find the txset contains the largest number of tx
+	var txset *TxSet
+	var txsetHash string
+	for _, cv := range vals {
+		ts, ok := d.validator.GetTxSet(cv.TxSetHash)
+		if !ok {
+			continue
+		}
+		if ts.PrevLedgerHash != headerHash {
+			continue
+		}
+		if txset == nil || len(ts.TxHashList) > len(txset.TxHashList) ||
+			((len(ts.TxHashList) == len(txset.TxHashList)) && lessBytesOr(txsetHash, cv.TxSetHash, hash)) {
+			txset = ts
+			txsetHash = cv.TxSetHash
+		}
+	}
+
+	// deep copy a new txset
+	newTxSet := &TxSet{
+		PrevLedgerHash: txset.PrevLedgerHash,
+		TxHashList:     make([]string, len(txset.TxHashList)),
+	}
+	copy(newTxSet.TxHashList, txset.TxHashList)
+
+	// TODO(bobonovski) trim invalid tx
+
+	newTxSetHash, err := ultpb.GetTxSetHash(newTxSet)
+	if err != nil {
+		return "", fmt.Errorf("compute tx set hash failed: %v", err)
+	}
+
+	candidate.TxSetHash = newTxSetHash
+
+	candb, err := ultpb.Encode(candidate)
+	if err != nil {
+		return "", fmt.Errorf("encode combine consensus value failed: %v", err)
+	}
+	candStr := hex.EncodeToString(candb)
+
+	return candStr, nil
+}
+
+// Check whether the first input string is smaller than the second one
+// after byte-wise OR
+func lessBytesOr(l string, r string, h string) bool {
+	lb, _ := hex.DecodeString(l)
+	rb, _ := hex.DecodeString(r)
+	hb, _ := hex.DecodeString(h)
+
+	lbuf := bytes.NewBuffer(nil)
+	rbuf := bytes.NewBuffer(nil)
+	for i, _ := range hb {
+		lbuf.WriteByte(lb[i] ^ hb[i])
+		rbuf.WriteByte(rb[i] ^ hb[i])
+	}
+
+	return lbuf.String() < rbuf.String()
+}
+
+// Compute the byte-wise OR bit operation between input bytes
+func bytesOr(l string, r string) string {
+	lb, _ := hex.DecodeString(l)
+	rb, _ := hex.DecodeString(r)
+
+	buf := bytes.NewBuffer(nil)
+	for i, _ := range lb {
+		buf.WriteByte(lb[i] ^ rb[i])
+	}
+
+	return buf.String()
 }
 
 /* Ballot Protocol */
