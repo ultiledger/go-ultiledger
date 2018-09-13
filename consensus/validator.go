@@ -303,7 +303,7 @@ func extractQuorumHash(stmt *Statement) (string, error) {
 	return hash, nil
 }
 
-// Extract list of tx list hash from statement
+// Extract list of tx set hash from statement
 func extractTxListHash(stmt *Statement) ([]string, error) {
 	if stmt == nil {
 		return nil, errors.New("statement is nil")
@@ -321,7 +321,7 @@ func extractTxListHash(stmt *Statement) ([]string, error) {
 			if err != nil {
 				return nil, fmt.Errorf("decode consensus value failed: %v", err)
 			}
-			hashes = append(hashes, cv.TxListHash)
+			hashes = append(hashes, cv.TxSetHash)
 		}
 		for _, a := range nom.AcceptList {
 			b, err := hex.DecodeString(a)
@@ -332,7 +332,7 @@ func extractTxListHash(stmt *Statement) ([]string, error) {
 			if err != nil {
 				return nil, fmt.Errorf("decode consensus value failed: %v", err)
 			}
-			hashes = append(hashes, cv.TxListHash)
+			hashes = append(hashes, cv.TxSetHash)
 		}
 	case ultpb.StatementType_PREPARE:
 		fallthrough
@@ -351,7 +351,7 @@ func extractTxListHash(stmt *Statement) ([]string, error) {
 		if err != nil {
 			return nil, fmt.Errorf("decode consensus value failed: %v", err)
 		}
-		hashes = append(hashes, cv.TxListHash)
+		hashes = append(hashes, cv.TxSetHash)
 	default:
 		return nil, errors.New("unknown statement type")
 	}

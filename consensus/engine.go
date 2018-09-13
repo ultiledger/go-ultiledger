@@ -370,7 +370,7 @@ func (e *Engine) Propose() error {
 
 	// construct new consensus value
 	cv := &ultpb.ConsensusValue{
-		TxListHash:  hash,
+		TxSetHash:   hash,
 		ProposeTime: time.Now().Unix(),
 	}
 

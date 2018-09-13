@@ -5,8 +5,8 @@ package ultpb;
 // ConsensusValue is used for reaching consensus in 
 // Federated Byzantine Agreement
 message ConsensusValue {
-  // hash of the transaction list
-  string TxListHash = 1;
+  // hash of the transaction set
+  string TxSetHash = 1;
   // propose time
   int64 ProposeTime = 2;
   // close time
