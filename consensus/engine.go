@@ -283,6 +283,24 @@ func (e *Engine) RecvStatement(stmt *ultpb.Statement) error {
 	return nil
 }
 
+// RecvQuorum receives downloaded quorum and pass it to validator
+func (e *Engine) RecvQuorum(quorumHash string, quorum *Quorum) error {
+	err := e.sv.RecvQuorum(quorumHash, quorum)
+	if err != nil {
+		return fmt.Errorf("send quorum to validator failed: %v", err)
+	}
+	return nil
+}
+
+// RecvTxList receives downloaded tx list and pass it to validator
+func (e *Engine) RecvTxList(txListHash string, txList []string) error {
+	err := e.sv.RecvTxList(txListHash, txList)
+	if err != nil {
+		return fmt.Errorf("send tx list to validator failed: %v", err)
+	}
+	return nil
+}
+
 // broadcast transaction through rpc broadcast
 func (e *Engine) broadcastTx(tx *ultpb.Tx) error {
 	clients := e.pm.GetLiveClients()
