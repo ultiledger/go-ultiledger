@@ -1,3 +1,5 @@
+// Package future defines some futures as messages
+// to communicate between rpc server and node.
 package future
 
 import (
@@ -8,20 +10,22 @@ type Future interface {
 	Error() error
 }
 
-// allow a future to respond an error in the future
+// Allow a future to respond an error in the future
 type deferError struct {
 	err       error
 	errChan   chan error
 	responded bool
 }
 
-// every future should call this method to initialize
+// Every future should call this method to initialize
 // underlying error channel
 func (d *deferError) Init() {
 	d.errChan = make(chan error, 1)
 }
 
-// each future can only respond error once
+// Each future should respond error once and multiple
+// calling with different error on the same future will
+// have no effects.
 func (d *deferError) Respond(err error) {
 	if d.errChan == nil || d.responded {
 		return
@@ -31,6 +35,7 @@ func (d *deferError) Respond(err error) {
 	d.responded = true
 }
 
+// Error always return the first responded error
 func (d *deferError) Error() error {
 	if d.err != nil {
 		return d.err
@@ -42,19 +47,19 @@ func (d *deferError) Error() error {
 	return d.err
 }
 
-// future for adding transaction
+// Future for node server to add received tx to consensus engine
 type Tx struct {
 	deferError
 	Tx *ultpb.Tx
 }
 
-// future for adding peer
+// Future for node server to add new discovered peer address to peer manager
 type Peer struct {
 	deferError
 	Addr string
 }
 
-// future for adding consensus statement
+// Future for node server to add consensus statement to consensus engine
 type Statement struct {
 	deferError
 	Stmt *ultpb.Statement
