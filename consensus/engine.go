@@ -350,7 +350,7 @@ func (e *Engine) broadcastStatement(stmt *ultpb.Statement) error {
 // Try to propose current transaction set for consensus
 func (e *Engine) Propose() error {
 	// TODO(bobonovski) use sync.Pool
-	txSet := TxSet{
+	txSet := &TxSet{
 		PrevLedgerHash: e.lm.CurrLedgerHeaderHash(),
 		TxHashList:     make([]string, 0),
 	}
@@ -363,7 +363,7 @@ func (e *Engine) Propose() error {
 	}
 
 	// compute hash
-	hash, err := txSet.GetHash()
+	hash, err := ultpb.GetTxSetHash(txSet)
 	if err != nil {
 		return fmt.Errorf("get tx set hash failed: %v", err)
 	}

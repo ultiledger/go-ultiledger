@@ -4,14 +4,14 @@ package ultpb;
 
 import "asset.proto";
 
-// every operation is related to a specific account and 
+// Every operation is related to a specific account and 
 // each transaction could contain one or more operations
 enum OpType {
   CREATE_ACCOUNT = 0;
   PAYMENT = 1;
 }
 
-// operation
+// Operation
 message Op {
   // operation type of this transaction
   OpType OpType = 1;
@@ -19,7 +19,7 @@ message Op {
   bytes Data = 2;
 }
 
-// transaction
+// Transaction
 message Tx {
   // the source account for sending asset to the new account
   string AccountID = 1;
@@ -33,14 +33,15 @@ message Tx {
   repeated Op OpList = 5;
 }
 
-message TxList {
+// Transaction set for consensus
+message TxSet {
   // hash of previous closed ledger header
   string PrevLedgerHash = 1;
-  // list of transactions
-  repeated Tx Txs = 2;  
+  // list of transaction hashes
+  repeated string TxHashList = 2;  
 }
 
-// create a new account by sending asset to it
+// Create a new account by sending asset to it
 message CreateAccountOp {
   // destination account
   string AccountID = 1;
@@ -48,7 +49,7 @@ message CreateAccountOp {
   uint64 Balance = 2;
 }
 
-// peer to peer payment
+// Peer to peer payment
 message PaymentOp {
   // destination account of the payment
   string AccountID = 1;

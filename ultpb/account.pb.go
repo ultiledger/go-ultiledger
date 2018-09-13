@@ -25,7 +25,7 @@ It has these top-level messages:
 	LedgerHeader
 	Op
 	Tx
-	TxList
+	TxSet
 	CreateAccountOp
 	PaymentOp
 */

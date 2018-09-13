@@ -1,12 +1,8 @@
 package consensus
 
 import (
-	"bytes"
-	"encoding/hex"
 	"fmt"
-	"sort"
 
-	"github.com/ultiledger/go-ultiledger/crypto"
 	"github.com/ultiledger/go-ultiledger/ultpb"
 )
 
@@ -42,36 +38,4 @@ func (th *TxHistory) AddTx(tx *ultpb.Tx, hash string) error {
 	th.TxList = append(th.TxList, tx)
 	th.TxHashList = append(th.TxHashList, hash)
 	return nil
-}
-
-// TxSet is used for making a transaction set for consensus
-type TxSet struct {
-	PrevLedgerHash string
-	TxHashList     []string
-}
-
-// Compute the overall hash of transaction set
-func (ts *TxSet) GetHash() (string, error) {
-	// sort transaction hash list
-	sort.Strings(ts.TxHashList)
-
-	// append all the hash to buffer
-	buf := bytes.NewBuffer(nil)
-	b, err := hex.DecodeString(ts.PrevLedgerHash)
-	if err != nil {
-		return "", nil
-	}
-	buf.Write(b)
-
-	for _, tx := range ts.TxHashList {
-		txb, err := hex.DecodeString(tx)
-		if err != nil {
-			return "", err
-		}
-		buf.Write(txb)
-	}
-
-	hash := crypto.SHA256Hash(buf.Bytes())
-
-	return hash, nil
 }

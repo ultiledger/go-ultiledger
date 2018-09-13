@@ -9,7 +9,7 @@ import (
 	"github.com/ultiledger/go-ultiledger/ultpb"
 )
 
-// type alias for convenience
+// type alias for proto types
 type Statement = ultpb.Statement
 type Nominate = ultpb.Nominate
 type Prepare = ultpb.Prepare
@@ -17,6 +17,7 @@ type Confirm = ultpb.Confirm
 type Externalize = ultpb.Externalize
 type Quorum = ultpb.Quorum
 type Ballot = ultpb.Ballot
+type TxSet = ultpb.TxSet
 
 // ballots compare utilities
 func lessAndCompatibleBallots(lb *Ballot, rb *Ballot) bool {
