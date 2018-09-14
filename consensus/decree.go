@@ -30,6 +30,38 @@ const (
 	BallotPhaseExternalize
 )
 
+// DecreeContext contains contextual information Decree needs
+type DecreeContext struct {
+	Index     uint64  // decree index
+	NodeID    string  // local node ID
+	Quorum    *Quorum // local node quorum
+	LM        *ledger.Manager
+	Validator *Validator
+	StmtChan  chan<- *Statement // channel for broadcasting statement
+}
+
+func ValidateDecreeContext(dc *DecreeContext) error {
+	if dc == nil {
+		return fmt.Errorf("decree context is nil")
+	}
+	if dc.NodeID == "" {
+		return fmt.Errorf("empty node ID")
+	}
+	if dc.Quorum == nil {
+		return fmt.Errorf("initial quorum is nil")
+	}
+	if dc.LM == nil {
+		return fmt.Errorf("ledger manager is nil")
+	}
+	if dc.Validator == nil {
+		return fmt.Errorf("validator is nil")
+	}
+	if dc.StmtChan == nil {
+		return fmt.Errorf("statement chan is nil")
+	}
+	return nil
+}
+
 // Decree is an abstractive decision the consensus engine
 // should reach in each round
 type Decree struct {
@@ -67,14 +99,21 @@ type Decree struct {
 	ballotMsgCount   int
 
 	// channel for sending statements
-	statementChan chan *Statement
+	statementChan chan<- *Statement
 }
 
-func NewDecree(idx uint64, nodeID string, quorum *Quorum, quorumHash string, stmtC chan *Statement) *Decree {
+func NewDecree(ctx *DecreeContext) *Decree {
+	if err := ValidateDecreeContext(ctx); err != nil {
+		log.Fatalf("decree context is invalid: %v", err)
+	}
+	quorumHash, err := ultpb.SHA256Hash(ctx.Quorum)
+	if err != nil {
+		log.Fatalf("compute quorum hash failed: %v", err)
+	}
 	d := &Decree{
-		index:           idx,
-		nodeID:          nodeID,
-		quorum:          quorum,
+		index:           ctx.Index,
+		nodeID:          ctx.NodeID,
+		quorum:          ctx.Quorum,
 		quorumHash:      quorumHash,
 		nominationRound: 0,
 		nominationStart: false,
@@ -85,7 +124,7 @@ func NewDecree(idx uint64, nodeID string, quorum *Quorum, quorumHash string, stm
 		currentPhase:    BallotPhasePrepare,
 		ballots:         make(map[string]*Statement),
 		ballotMsgCount:  0,
-		statementChan:   stmtC,
+		statementChan:   ctx.StmtChan,
 	}
 	return d
 }

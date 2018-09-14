@@ -15,6 +15,29 @@ import (
 	"github.com/ultiledger/go-ultiledger/ultpb"
 )
 
+// ValidatorContext contains contextual information validator needs
+type ValidatorContext struct {
+	Store              db.DB // database instance
+	QuorumDownloadChan chan<- string
+	TxSetDownloadChan  chan<- string
+}
+
+func ValidateValidatorContext(vc *ValidatorContext) error {
+	if vc == nil {
+		return fmt.Errorf("validator context is nil")
+	}
+	if vc.Store == nil {
+		return fmt.Errorf("db instance is nil")
+	}
+	if vc.QuorumDownloadChan == nil {
+		return fmt.Errorf("quorum download chan is nil")
+	}
+	if vc.TxSetDownloadChan == nil {
+		return fmt.Errorf("txset download chan is nil")
+	}
+	return nil
+}
+
 // Validator validates incoming consensus messages and
 // requests missing information of transaction and quorum
 // from other peers.
@@ -38,22 +61,29 @@ type Validator struct {
 	quorumDownloadChan chan<- string
 	// channel for sending txset download task
 	txsetDownloadChan chan<- string
+	// stop channel
+	stopChan chan struct{}
 
 	// notify engine new statements are ready
 	readyChan chan *Statement
 	// channel for downloding missing info of statement
 	downloadChan chan *Statement
-	// stop channel
-	stopChan chan struct{}
 }
 
-func NewValidator() *Validator {
+func NewValidator(ctx *ValidatorContext) *Validator {
+	if err := ValidateValidatorContext(ctx); err != nil {
+		log.Fatalf("validator context is invalid: %v", err)
+	}
 	v := &Validator{
-		downloads:    make(map[string]*Statement),
-		statements:   mapset.NewSet(),
-		readyChan:    make(chan *Statement, 100),
-		downloadChan: make(chan *Statement, 100),
-		stopChan:     make(chan struct{}),
+		store:              ctx.Store,
+		bucket:             "VALIDATOR",
+		downloads:          make(map[string]*Statement),
+		statements:         mapset.NewSet(),
+		quorumDownloadChan: ctx.QuorumDownloadChan,
+		txsetDownloadChan:  ctx.TxSetDownloadChan,
+		stopChan:           make(chan struct{}),
+		readyChan:          make(chan *Statement, 100),
+		downloadChan:       make(chan *Statement, 100),
 	}
 	qc, err := lru.New(1000)
 	if err != nil {
@@ -73,6 +103,11 @@ func NewValidator() *Validator {
 	go v.monitor()
 
 	return v
+}
+
+// Stop the validator
+func (v *Validator) Stop() {
+	close(v.stopChan)
 }
 
 // Ready retrives ready statements with decree index less than
@@ -238,7 +273,7 @@ func (v *Validator) download() {
 	for {
 		select {
 		case stmt := <-v.downloadChan:
-			// no need to check error since we have already passed the validate check
+			// no need to check error since we have already passed the validity check
 			quorumHash, _ := extractQuorumHash(stmt)
 			if _, ok := v.GetQuorum(quorumHash); !ok {
 				v.quorumDownloadChan <- quorumHash

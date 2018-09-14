@@ -72,7 +72,7 @@ func NewManager(ps []string, addr string, nodeID string) *Manager {
 	}
 }
 
-func (pm *Manager) Start(stopChan chan struct{}) {
+func (pm *Manager) Start() {
 	go func() {
 		// connect to inital peers
 		for _, addr := range pm.initPeers {
@@ -101,20 +101,21 @@ func (pm *Manager) Start(stopChan chan struct{}) {
 					pm.nodeIDs.Remove(p.NodeID)
 				}
 				pm.peerLock.Unlock()
-			case <-stopChan:
-				log.Infof("received stop signal")
-				close(pm.stopChan) // stop retry first
-				pm.pendingPeers = nil
-				pm.peerLock.Lock()
-				for _, p := range pm.livePeers {
-					p.Close()
-				}
-				pm.livePeers = nil
-				pm.peerLock.Unlock()
-				return
 			}
 		}
 	}()
+}
+
+// Stop the peer manager
+func (pm *Manager) Stop() {
+	close(pm.stopChan)
+	pm.pendingPeers = nil
+	pm.peerLock.Lock()
+	for _, p := range pm.livePeers {
+		p.Close()
+	}
+	pm.livePeers = nil
+	pm.peerLock.Unlock()
 }
 
 // Get a list of rpc clients from live peers

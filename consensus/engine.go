@@ -77,7 +77,7 @@ type Engine struct {
 	lm *ledger.Manager
 
 	// statement validator
-	sv *Validator
+	validator *Validator
 
 	// consensus quorum
 	// each time quorum is updated, its quorum hash should be recomputed accordingly
@@ -102,6 +102,13 @@ type Engine struct {
 	statementChan chan *ultpb.Statement
 	// channel for broadcasting tx
 	txChan chan *ultpb.Tx
+	// channel for downloading txset
+	txsetDownloadChan chan string
+	// channel for downloading quorum
+	quorumDownloadChan chan string
+
+	// channel for stopping goroutines
+	stopChan chan struct{}
 }
 
 // NewEngine creates an instance of Engine with EngineContext
@@ -110,20 +117,29 @@ func NewEngine(ctx *EngineContext) *Engine {
 		log.Fatalf("engine context is invalid: %v", err)
 	}
 	e := &Engine{
-		store:         ctx.Store,
-		bucket:        "ENGINE",
-		statusBucket:  "TXSTATUS",
-		seed:          ctx.Seed,
-		pm:            ctx.PM,
-		am:            ctx.AM,
-		lm:            ctx.LM,
-		sv:            NewValidator(),
-		decrees:       make(map[uint64]*Decree),
-		txSet:         mapset.NewSet(),
-		txMap:         make(map[string]*TxHistory),
-		statementChan: make(chan *ultpb.Statement),
-		txChan:        make(chan *ultpb.Tx),
+		store:              ctx.Store,
+		bucket:             "ENGINE",
+		statusBucket:       "TXSTATUS",
+		seed:               ctx.Seed,
+		pm:                 ctx.PM,
+		am:                 ctx.AM,
+		lm:                 ctx.LM,
+		decrees:            make(map[uint64]*Decree),
+		txSet:              mapset.NewSet(),
+		txMap:              make(map[string]*TxHistory),
+		statementChan:      make(chan *ultpb.Statement),
+		txChan:             make(chan *ultpb.Tx),
+		txsetDownloadChan:  make(chan string),
+		quorumDownloadChan: make(chan string),
+		stopChan:           make(chan struct{}),
 	}
+	// create validator
+	vctx := &ValidatorContext{
+		Store:              e.store,
+		TxSetDownloadChan:  e.txsetDownloadChan,
+		QuorumDownloadChan: e.quorumDownloadChan,
+	}
+	e.validator = NewValidator(vctx)
 	err := e.store.CreateBucket(e.bucket)
 	if err != nil {
 		log.Fatalf("create db bucket %s failed: %v", e.bucket, err)
@@ -140,7 +156,7 @@ func NewEngine(ctx *EngineContext) *Engine {
 	return e
 }
 
-func (e *Engine) Start(stopChan chan struct{}) {
+func (e *Engine) Start() {
 	// goroutine for listening broadcast tasks
 	go func() {
 		for {
@@ -157,7 +173,9 @@ func (e *Engine) Start(stopChan chan struct{}) {
 					log.Errorf("broadcast tx failed: %v", err)
 					continue
 				}
-			case <-stopChan:
+			// case txsetHash := <-e.txsetChan:
+			// case quorumHash := <-e.quorumChan:
+			case <-e.stopChan:
 				return
 			}
 		}
@@ -166,7 +184,7 @@ func (e *Engine) Start(stopChan chan struct{}) {
 	go func() {
 		for {
 			select {
-			case stmt := <-e.sv.Ready():
+			case stmt := <-e.validator.Ready():
 				seq := e.lm.NextLedgerHeaderSeq()
 				if stmt.Index < seq-e.maxDecrees {
 					// skip old statement
@@ -176,11 +194,17 @@ func (e *Engine) Start(stopChan chan struct{}) {
 					continue
 				}
 				e.decrees[stmt.Index].Recv(stmt)
-			case <-stopChan:
+			case <-e.stopChan:
 				return
 			}
 		}
 	}()
+}
+
+// Stop the consensus engine
+func (e *Engine) Stop() {
+	close(e.stopChan)
+	e.validator.Stop()
 }
 
 // Get the current status of the transaction
@@ -277,7 +301,7 @@ func (e *Engine) RecvStatement(stmt *ultpb.Statement) error {
 
 	// send statement to validator for fetching transaction set
 	// and quorum of the correponding node
-	err := e.sv.Recv(stmt)
+	err := e.validator.Recv(stmt)
 	if err != nil {
 		return fmt.Errorf("send statement to validator failed: %v", err)
 	}
@@ -286,7 +310,7 @@ func (e *Engine) RecvStatement(stmt *ultpb.Statement) error {
 
 // RecvQuorum receives downloaded quorum and pass it to validator
 func (e *Engine) RecvQuorum(quorumHash string, quorum *Quorum) error {
-	err := e.sv.RecvQuorum(quorumHash, quorum)
+	err := e.validator.RecvQuorum(quorumHash, quorum)
 	if err != nil {
 		return fmt.Errorf("send quorum to validator failed: %v", err)
 	}
@@ -295,7 +319,7 @@ func (e *Engine) RecvQuorum(quorumHash string, quorum *Quorum) error {
 
 // RecvTxList receives downloaded txset and pass it to validator
 func (e *Engine) RecvTxSet(txsetHash string, txset *TxSet) error {
-	err := e.sv.RecvTxSet(txsetHash, txset)
+	err := e.validator.RecvTxSet(txsetHash, txset)
 	if err != nil {
 		return fmt.Errorf("send tx list to validator failed: %v", err)
 	}
@@ -387,7 +411,14 @@ func (e *Engine) Propose() error {
 func (e *Engine) nominate(idx uint64, prevValue *ultpb.ConsensusValue, currValue *ultpb.ConsensusValue) error {
 	// get new slot
 	if _, ok := e.decrees[idx]; !ok {
-		e.decrees[idx] = NewDecree(idx, "", e.quorum, e.quorumHash, e.statementChan)
+		decreeCtx := &DecreeContext{
+			Index:     idx,
+			NodeID:    e.nodeID,
+			LM:        e.lm,
+			Validator: e.validator,
+			StmtChan:  e.statementChan,
+		}
+		e.decrees[idx] = NewDecree(decreeCtx)
 	}
 
 	prevEnc, err := ultpb.Encode(prevValue)

@@ -41,11 +41,9 @@ type Node struct {
 	stopChan chan struct{}
 
 	// futures for task with error responses
-	txFuture     chan *future.Tx
-	peerFuture   chan *future.Peer
-	stmtFuture   chan *future.Statement
-	txsetFuture  chan *future.TxSet
-	quorumFuture chan *future.Quorum
+	txFuture   chan *future.Tx
+	peerFuture chan *future.Peer
+	stmtFuture chan *future.Statement
 }
 
 // NewNode creates a Node which controls all the sub tasks
@@ -73,6 +71,8 @@ func NewNode(conf *Config) *Node {
 	lm := ledger.NewManager(store)
 	am := account.NewManager(store)
 
+	stopChan := make(chan struct{})
+
 	// construct consensus engine context and create consensus engine
 	engineCtx := &consensus.EngineContext{
 		Store:  store,
@@ -91,12 +91,12 @@ func NewNode(conf *Config) *Node {
 
 	// construct node server context and create node server
 	serverCtx := &rpc.ServerContext{
-		Addr:   addr,
-		NodeID: nodeID,
-		Seed:   seed,
-		PF:     peerFuture,
-		TF:     txFuture,
-		SF:     stmtFuture,
+		Addr:       addr,
+		NodeID:     nodeID,
+		Seed:       seed,
+		PeerFuture: peerFuture,
+		TxFuture:   txFuture,
+		StmtFuture: stmtFuture,
 	}
 	nodeServer := rpc.NewNodeServer(serverCtx)
 
@@ -112,7 +112,7 @@ func NewNode(conf *Config) *Node {
 		addr:      addr,
 		nodeID:    nodeID,
 		startTime: time.Now().Unix(),
-		stopChan:  make(chan struct{}),
+		stopChan:  stopChan,
 	}
 
 	return node
@@ -128,7 +128,10 @@ func (n *Node) Start() error {
 	go n.eventLoop()
 
 	// start peer manager
-	n.pm.Start(n.stopChan)
+	n.pm.Start()
+
+	// start consensus engine
+	n.engine.Start()
 
 	select {}
 	return nil
@@ -138,6 +141,13 @@ func (n *Node) Start() error {
 // it will trigger sub goroutines to do the sub tasks.
 func (n *Node) Restart() error {
 	return nil
+}
+
+// Close node by signaling all the goroutines to stop
+func (n *Node) Stop() {
+	close(n.stopChan)
+	n.pm.Stop()
+	n.engine.Stop()
 }
 
 // Event loop for processing server received messages
@@ -162,18 +172,6 @@ func (n *Node) eventLoop() {
 				log.Errorf("recv statement failed: %v", err)
 			}
 			sf.Respond(err)
-		case tsf := <-n.txsetFuture:
-			err := n.engine.RecvTxSet(tsf.TxSetHash, tsf.TxSet)
-			if err != nil {
-				log.Errorf("recv txset failed: %v", err)
-			}
-			tsf.Respond(err)
-		case qf := <-n.quorumFuture:
-			err := n.engine.RecvQuorum(qf.QuorumHash, qf.Quorum)
-			if err != nil {
-				log.Errorf("redv qf failed: %v", err)
-			}
-			qf.Respond(err)
 		case <-n.stopChan:
 			log.Info("shutdown event loop")
 			return

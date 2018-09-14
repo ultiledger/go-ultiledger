@@ -38,12 +38,12 @@ type NodeServer struct {
 
 // ServerContext represents contextual information for running server
 type ServerContext struct {
-	Addr   string                 // local network address
-	NodeID string                 // local node ID
-	Seed   string                 // local node seed
-	PF     chan *future.Peer      // channel for peer future
-	TF     chan *future.Tx        // channel for tx future
-	SF     chan *future.Statement // channel for statement future
+	Addr       string                 // local network address
+	NodeID     string                 // local node ID
+	Seed       string                 // local node seed
+	PeerFuture chan *future.Peer      // channel for sending discovered peer to node
+	TxFuture   chan *future.Tx        // channel for sending received tx to node
+	StmtFuture chan *future.Statement // channel for sending received statement to node
 }
 
 func ValidateServerContext(sc *ServerContext) error {
@@ -59,13 +59,13 @@ func ValidateServerContext(sc *ServerContext) error {
 	if sc.Seed == "" {
 		return errors.New("empty local node seed")
 	}
-	if sc.PF == nil {
+	if sc.PeerFuture == nil {
 		return errors.New("peer future channel is nil")
 	}
-	if sc.TF == nil {
+	if sc.TxFuture == nil {
 		return errors.New("tx future channel is nil")
 	}
-	if sc.SF == nil {
+	if sc.StmtFuture == nil {
 		return errors.New("statemetn future channel is nil")
 	}
 	return nil
@@ -80,9 +80,9 @@ func NewNodeServer(ctx *ServerContext) *NodeServer {
 		addr:       ctx.Addr,
 		nodeID:     ctx.NodeID,
 		seed:       ctx.Seed,
-		peerFuture: ctx.PF,
-		txFuture:   ctx.TF,
-		stmtFuture: ctx.SF,
+		peerFuture: ctx.PeerFuture,
+		txFuture:   ctx.TxFuture,
+		stmtFuture: ctx.StmtFuture,
 	}
 	return server
 }
