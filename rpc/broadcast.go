@@ -17,7 +17,7 @@ var (
 	ErrEmptySignature = errors.New("empty digital signature")
 )
 
-// for reusing broadcast signal type
+// For reusing broadcast signal type
 var taskPool *sync.Pool
 
 func init() {
@@ -28,7 +28,7 @@ func init() {
 	}
 }
 
-// broadcast consensus statements
+// Broadcast consensus statements
 func BroadcastStatement(clients []rpcpb.NodeClient, md metadata.MD, payload []byte, signature string) error {
 	if len(payload) == 0 {
 		return ErrEmptyPayload
@@ -48,7 +48,7 @@ func BroadcastStatement(clients []rpcpb.NodeClient, md metadata.MD, payload []by
 	return nil
 }
 
-// broadcast transaction
+// Broadcast transaction
 func BroadcastTx(clients []rpcpb.NodeClient, md metadata.MD, payload []byte, signature string) error {
 	if len(payload) == 0 {
 		return ErrEmptyPayload
@@ -68,7 +68,7 @@ func BroadcastTx(clients []rpcpb.NodeClient, md metadata.MD, payload []byte, sig
 	return nil
 }
 
-// broadcast supplied request concurrently
+// Broadcast supplied request concurrently
 func broadcast(clients []rpcpb.NodeClient, md metadata.MD, req *rpcpb.NotifyRequest) error {
 	done := make(chan bool)
 	tasks := prepareTask(done, clients, md, req)
@@ -83,14 +83,14 @@ func broadcast(clients []rpcpb.NodeClient, md metadata.MD, req *rpcpb.NotifyRequ
 	return nil
 }
 
-// internal concurrent broadcast task
+// Internal concurrent broadcast task
 type task struct {
 	client   rpcpb.NodeClient
 	metadata metadata.MD
 	req      *rpcpb.NotifyRequest
 }
 
-// prepare broadcast task for concurrent processing
+// Prepare broadcast task for concurrent processing
 func prepareTask(done <-chan bool, clients []rpcpb.NodeClient, md metadata.MD, req *rpcpb.NotifyRequest) <-chan *task {
 	taskChan := make(chan *task)
 	go func() {
@@ -109,7 +109,7 @@ func prepareTask(done <-chan bool, clients []rpcpb.NodeClient, md metadata.MD, r
 	return taskChan
 }
 
-// run task by invoking notify method
+// Run task by invoking notify method
 func runTask(done <-chan bool, taskChan <-chan *task) <-chan *rpcpb.NotifyResponse {
 	responseChan := make(chan *rpcpb.NotifyResponse)
 	notify := func(t *task) *rpcpb.NotifyResponse {
@@ -135,7 +135,7 @@ func runTask(done <-chan bool, taskChan <-chan *task) <-chan *rpcpb.NotifyRespon
 	return responseChan
 }
 
-// merge responses from multiple workers to return a merged response channel
+// Merge responses from multiple workers to return a merged response channel
 func mergeResponse(done <-chan bool, responseChans ...<-chan *rpcpb.NotifyResponse) <-chan *rpcpb.NotifyResponse {
 	var wg sync.WaitGroup
 	wg.Add(len(responseChans))

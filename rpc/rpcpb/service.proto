@@ -6,6 +6,7 @@ service Node {
   rpc Hello(HelloRequest) returns (HelloResponse) {}
   rpc SubmitTx(SubmitTxRequest) returns (SubmitTxResponse) {}
   rpc Notify(NotifyRequest) returns (NotifyResponse) {}
+  rpc Query(QueryRequest) returns (QueryResponse) {}
 }
 
 message HelloRequest {}
@@ -53,3 +54,23 @@ message NotifyRequest {
 }
 
 message NotifyResponse {}
+
+enum QueryMsgType {
+  QUORUM = 0; // query quorum information
+  TXSET = 1;  // query txset information
+}
+
+message QueryRequest {
+  // type of message
+  QueryMsgType MsgType = 1;
+  // message payload in pb format
+  bytes Data = 2;
+  // digital signature of the data signed by
+  // the private key of peer node
+  string Signature = 3;
+}
+
+message QueryResponse {
+  // requested data encoded in pb format
+  bytes Data = 1;
+}
