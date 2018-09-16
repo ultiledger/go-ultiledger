@@ -173,8 +173,28 @@ func (e *Engine) Start() {
 					log.Errorf("broadcast tx failed: %v", err)
 					continue
 				}
-			// case txsetHash := <-e.txsetChan:
-			// case quorumHash := <-e.quorumChan:
+			case txsetHash := <-e.txsetDownloadChan:
+				txset, err := e.queryTxSet(txsetHash)
+				if err != nil {
+					log.Errorf("query txset failed: %v", err)
+					continue
+				}
+				err = e.validator.RecvTxSet(txsetHash, txset)
+				if err != nil {
+					log.Errorf("send txset to validator failed: %v", err)
+					continue
+				}
+			case quorumHash := <-e.quorumDownloadChan:
+				quorum, err := e.queryQuorum(quorumHash)
+				if err != nil {
+					log.Errorf("query quorum failed: %v", err)
+					continue
+				}
+				err = e.validator.RecvQuorum(quorumHash, quorum)
+				if err != nil {
+					log.Errorf("send quorum to validator failed: %v", err)
+					continue
+				}
 			case <-e.stopChan:
 				return
 			}
@@ -308,25 +328,7 @@ func (e *Engine) RecvStatement(stmt *ultpb.Statement) error {
 	return nil
 }
 
-// RecvQuorum receives downloaded quorum and pass it to validator
-func (e *Engine) RecvQuorum(quorumHash string, quorum *Quorum) error {
-	err := e.validator.RecvQuorum(quorumHash, quorum)
-	if err != nil {
-		return fmt.Errorf("send quorum to validator failed: %v", err)
-	}
-	return nil
-}
-
-// RecvTxList receives downloaded txset and pass it to validator
-func (e *Engine) RecvTxSet(txsetHash string, txset *TxSet) error {
-	err := e.validator.RecvTxSet(txsetHash, txset)
-	if err != nil {
-		return fmt.Errorf("send tx list to validator failed: %v", err)
-	}
-	return nil
-}
-
-// broadcast transaction through rpc broadcast
+// Broadcast transaction through rpc broadcast
 func (e *Engine) broadcastTx(tx *ultpb.Tx) error {
 	clients := e.pm.GetLiveClients()
 	metadata := e.pm.GetMetadata()
@@ -343,13 +345,13 @@ func (e *Engine) broadcastTx(tx *ultpb.Tx) error {
 
 	err = rpc.BroadcastTx(clients, metadata, payload, sign)
 	if err != nil {
-		return fmt.Errorf("broadcast tx failed: %v", err)
+		return fmt.Errorf("rpc broadcas failed: %v", err)
 	}
 
 	return nil
 }
 
-// broadcast consensus message through rpc broadcast
+// Broadcast consensus message through rpc broadcast
 func (e *Engine) broadcastStatement(stmt *ultpb.Statement) error {
 	clients := e.pm.GetLiveClients()
 	metadata := e.pm.GetMetadata()
@@ -366,10 +368,68 @@ func (e *Engine) broadcastStatement(stmt *ultpb.Statement) error {
 
 	err = rpc.BroadcastStatement(clients, metadata, payload, sign)
 	if err != nil {
-		return fmt.Errorf("broadcast statement failed: %v", err)
+		return fmt.Errorf("rpc broadcast failed: %v", err)
 	}
 
 	return nil
+}
+
+// Query quorum infomation from peers
+func (e *Engine) queryQuorum(quorumHash string) (*Quorum, error) {
+	clients := e.pm.GetLiveClients()
+	metadata := e.pm.GetMetadata()
+
+	payload := []byte(quorumHash)
+
+	sign, err := crypto.Sign(e.seed, payload)
+	if err != nil {
+		return nil, fmt.Errorf("sign statement failed: %v", err)
+	}
+
+	quorum, err := rpc.QueryQuorum(clients, metadata, payload, sign)
+	if err != nil {
+		return nil, fmt.Errorf("rpc query failed: %v", err)
+	}
+
+	// check compatibility of quorum and its hash
+	hash, err := ultpb.SHA256Hash(quorum)
+	if err != nil {
+		return nil, fmt.Errorf("compute quorum hash failed: %v", err)
+	}
+	if hash != quorumHash {
+		return nil, fmt.Errorf("hash of quorum is incompatible to quorumhash")
+	}
+
+	return quorum, nil
+}
+
+// Query txset infomation from peers
+func (e *Engine) queryTxSet(txsetHash string) (*TxSet, error) {
+	clients := e.pm.GetLiveClients()
+	metadata := e.pm.GetMetadata()
+
+	payload := []byte(txsetHash)
+
+	sign, err := crypto.Sign(e.seed, payload)
+	if err != nil {
+		return nil, fmt.Errorf("sign statement failed: %v", err)
+	}
+
+	txset, err := rpc.QueryTxSet(clients, metadata, payload, sign)
+	if err != nil {
+		return nil, fmt.Errorf("rpc query failed: %v", err)
+	}
+
+	// check compatibility of quorum and its hash
+	hash, err := ultpb.SHA256Hash(txset)
+	if err != nil {
+		return nil, fmt.Errorf("compute txset hash failed: %v", err)
+	}
+	if hash != txsetHash {
+		return nil, fmt.Errorf("hash of txset is incompatible to quorumhash")
+	}
+
+	return txset, nil
 }
 
 // Try to propose current transaction set for consensus
