@@ -29,26 +29,28 @@ type NodeServer struct {
 	nodeKey map[string]*crypto.ULTKey
 
 	// future for adding peer addr
-	peerFuture chan *future.Peer
+	peerFuture chan<- *future.Peer
 	// future for adding tx
-	txFuture chan *future.Tx
+	txFuture chan<- *future.Tx
 	// future for adding consensus statement
-	stmtFuture chan *future.Statement
+	stmtFuture chan<- *future.Statement
 
 	// future for query quorum
-	quorumFuture chan *future.Quorum
+	quorumFuture chan<- *future.Quorum
 	// future for query txset
-	txsetFuture chan *future.TxSet
+	txsetFuture chan<- *future.TxSet
 }
 
 // ServerContext represents contextual information for running server
 type ServerContext struct {
-	Addr       string                 // local network address
-	NodeID     string                 // local node ID
-	Seed       string                 // local node seed
-	PeerFuture chan *future.Peer      // channel for sending discovered peer to node
-	TxFuture   chan *future.Tx        // channel for sending received tx to node
-	StmtFuture chan *future.Statement // channel for sending received statement to node
+	Addr         string                 // local network address
+	NodeID       string                 // local node ID
+	Seed         string                 // local node seed
+	PeerFuture   chan *future.Peer      // channel for sending discovered peer to node
+	TxFuture     chan *future.Tx        // channel for sending received tx to node
+	StmtFuture   chan *future.Statement // channel for sending received statement to node
+	QuorumFuture chan *future.Quorum    // channel for sending quorum query to consensus engine
+	TxSetFuture  chan *future.TxSet     // channel for sending txset query to consensus engine
 }
 
 func ValidateServerContext(sc *ServerContext) error {
@@ -71,7 +73,13 @@ func ValidateServerContext(sc *ServerContext) error {
 		return errors.New("tx future channel is nil")
 	}
 	if sc.StmtFuture == nil {
-		return errors.New("statemetn future channel is nil")
+		return errors.New("statement future channel is nil")
+	}
+	if sc.QuorumFuture == nil {
+		return errors.New("quorum future channel is nil")
+	}
+	if sc.TxSetFuture == nil {
+		return errors.New("txset future channel is nil")
 	}
 	return nil
 }
@@ -82,12 +90,14 @@ func NewNodeServer(ctx *ServerContext) *NodeServer {
 		log.Fatalf("validate server context failed: %v", err)
 	}
 	server := &NodeServer{
-		addr:       ctx.Addr,
-		nodeID:     ctx.NodeID,
-		seed:       ctx.Seed,
-		peerFuture: ctx.PeerFuture,
-		txFuture:   ctx.TxFuture,
-		stmtFuture: ctx.StmtFuture,
+		addr:         ctx.Addr,
+		nodeID:       ctx.NodeID,
+		seed:         ctx.Seed,
+		peerFuture:   ctx.PeerFuture,
+		txFuture:     ctx.TxFuture,
+		stmtFuture:   ctx.StmtFuture,
+		quorumFuture: ctx.QuorumFuture,
+		txsetFuture:  ctx.TxSetFuture,
 	}
 	return server
 }

@@ -257,6 +257,24 @@ func (e *Engine) UpdateTxStatus(txHash string, status rpcpb.TxStatusEnum) error 
 	return nil
 }
 
+// Get the quorum of the quorum hash
+func (e *Engine) GetQuorum(quorumHash string) (*Quorum, error) {
+	q, ok := e.validator.GetQuorum(quorumHash)
+	if !ok {
+		return nil, fmt.Errorf("quorum of quorum hash %s not exist", quorumHash)
+	}
+	return q, nil
+}
+
+// Get the txset of the txset hash
+func (e *Engine) GetTxSet(txsetHash string) (*TxSet, error) {
+	txs, ok := e.validator.GetTxSet(txsetHash)
+	if !ok {
+		return nil, fmt.Errorf("txset of txset hash %s not exist", txsetHash)
+	}
+	return txs, nil
+}
+
 // Find the max between two uint64 values
 func MaxUint64(x uint64, y uint64) uint64 {
 	if x >= y {
