@@ -11,15 +11,17 @@ import (
 )
 
 // type alias for proto types
-type Statement = ultpb.Statement
-type Nominate = ultpb.Nominate
-type Prepare = ultpb.Prepare
-type Confirm = ultpb.Confirm
-type Externalize = ultpb.Externalize
-type Quorum = ultpb.Quorum
-type Ballot = ultpb.Ballot
-type TxSet = ultpb.TxSet
-type ConsensusValue = ultpb.ConsensusValue
+type (
+	Statement      = ultpb.Statement
+	Nominate       = ultpb.Nominate
+	Prepare        = ultpb.Prepare
+	Confirm        = ultpb.Confirm
+	Externalize    = ultpb.Externalize
+	Quorum         = ultpb.Quorum
+	Ballot         = ultpb.Ballot
+	TxSet          = ultpb.TxSet
+	ConsensusValue = ultpb.ConsensusValue
+)
 
 // ballots compare utilities
 func lessAndCompatibleBallots(lb *Ballot, rb *Ballot) bool {
@@ -122,7 +124,7 @@ func isNewerBallot(lb *Statement, rb *Statement) bool {
 }
 
 // Check whether the first set is the proper subset of the second subset
-func IsProperSubset(a []string, b []string) bool {
+func isProperSubset(a []string, b []string) bool {
 	if len(a) > len(b) {
 		return false
 	}
@@ -146,12 +148,12 @@ func isNewerNomination(anom *ultpb.Nominate, bnom *ultpb.Nominate) bool {
 		return true
 	}
 
-	if !IsProperSubset(anom.VoteList, bnom.VoteList) {
+	if !isProperSubset(anom.VoteList, bnom.VoteList) {
 		// TODO(bobonovski) more elaborate check like interset?
 		return false
 	}
 
-	if !IsProperSubset(anom.AcceptList, bnom.AcceptList) {
+	if !isProperSubset(anom.AcceptList, bnom.AcceptList) {
 		return false
 	}
 
@@ -208,4 +210,13 @@ func isQuorumSlice(quorum *ultpb.Quorum, nodeSet mapset.Set) bool {
 	}
 
 	return false
+}
+
+// build a quorum with one node
+func getSingletonQuorum(nodeID string) *Quorum {
+	quorum := &Quorum{
+		Threshold:  1.0,
+		Validators: []string{nodeID},
+	}
+	return quorum
 }

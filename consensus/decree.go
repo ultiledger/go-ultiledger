@@ -260,8 +260,37 @@ func (d *Decree) federatedRatify(filter func(*Statement) bool, stmts map[string]
 
 // Get the quorum from statement
 func (d *Decree) getStatementQuorum(stmt *Statement) *Quorum {
-	// TODO(bobonovski) get quorum from validator
-	return nil
+	var quorum *Quorum
+	// extract quorum hash
+	var hash string
+	switch stmt.StatementType {
+	case ultpb.StatementType_NOMINATE:
+		nominate := stmt.GetNominate()
+		hash = nominate.QuorumHash
+	case ultpb.StatementType_PREPARE:
+		prepare := stmt.GetPrepare()
+		hash = prepare.QuorumHash
+	case ultpb.StatementType_CONFIRM:
+		confirm := stmt.GetConfirm()
+		hash = confirm.QuorumHash
+	case ultpb.StatementType_EXTERNALIZE:
+		quorum = getSingletonQuorum(d.nodeID)
+	default:
+		log.Fatal(ErrUnknownStmtType)
+	}
+
+	if quorum == nil && hash != "" {
+		quorum, ok := d.validator.GetQuorum(hash)
+		if !ok {
+			// this should not happen as we will only receive
+			// validated statements with full information in
+			// consensus protocol
+			log.Fatalf("failed to get quorum of hash: %s", hash)
+		}
+		return quorum
+	}
+
+	return quorum
 }
 
 /* Nomination Protocol */
