@@ -65,14 +65,14 @@ type Statement struct {
 	Stmt *ultpb.Statement
 }
 
-// Future for adding received txset to consensus engine
+// Future for node server to query txset from consensus engine
 type TxSet struct {
 	deferError
 	TxSetHash string
 	TxSet     *ultpb.TxSet
 }
 
-// Future for adding received quorum to consensus engine
+// Future for node server to query quorum from consensus engine
 type Quorum struct {
 	deferError
 	QuorumHash string
