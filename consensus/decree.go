@@ -642,7 +642,9 @@ func (d *Decree) step(stmt *Statement) error {
 
 	d.ballotMsgCount -= 1
 
-	// TODO(bobonovski) send latest envelope
+	if d.ballotMsgCount == 0 && d.latestBallotStmt != nil {
+		d.statementChan <- d.latestBallotStmt
+	}
 
 	return nil
 }
