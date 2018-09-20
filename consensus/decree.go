@@ -533,8 +533,15 @@ func (d *Decree) recvBallot(stmt *Statement) error {
 
 	if d.currentPhase != BallotPhaseExternalize {
 		d.ballots[stmt.NodeID] = stmt
+		// try to advance current ballot state
+		if err := d.step(stmt); err != nil {
+			return fmt.Errorf("step forward ballot state failed: %v", err)
+		}
 	} else {
-
+		wb := getWorkingBallot(stmt)
+		if d.cBallot.Value != wb.Value {
+			return errors.New("incompatible working ballot value")
+		}
 	}
 
 	return nil
@@ -623,8 +630,19 @@ func (d *Decree) step(stmt *Statement) error {
 	updated = d.confirmCommit(stmt) || updated
 
 	if d.ballotMsgCount == 1 {
-
+		counterUpdated := false
+		for {
+			counterUpdated = d.update()
+			updated = counterUpdated || updated
+			if counterUpdated == false {
+				break
+			}
+		}
 	}
+
+	d.ballotMsgCount -= 1
+
+	// TODO(bobonovski) send latest envelope
 
 	return nil
 }

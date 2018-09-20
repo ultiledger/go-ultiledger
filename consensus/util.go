@@ -220,3 +220,24 @@ func getSingletonQuorum(nodeID string) *Quorum {
 	}
 	return quorum
 }
+
+// Get current working ballot
+func getWorkingBallot(stmt *Statement) *Ballot {
+	var wb *Ballot
+
+	switch stmt.StatementType {
+	case ultpb.StatementType_PREPARE:
+		prepare := stmt.GetPrepare()
+		wb = prepare.B
+	case ultpb.StatementType_CONFIRM:
+		confirm := stmt.GetConfirm()
+		wb = &Ballot{Value: confirm.B.Value, Counter: confirm.LC}
+	case ultpb.StatementType_EXTERNALIZE:
+		ext := stmt.GetExternalize()
+		wb = ext.B
+	default:
+		log.Fatal(ErrUnknownStmtType)
+	}
+
+	return wb
+}
