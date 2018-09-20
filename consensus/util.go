@@ -10,7 +10,7 @@ import (
 	"github.com/ultiledger/go-ultiledger/ultpb"
 )
 
-// type alias for proto types
+// Type alias for proto types
 type (
 	Statement      = ultpb.Statement
 	Nominate       = ultpb.Nominate
@@ -23,7 +23,7 @@ type (
 	ConsensusValue = ultpb.ConsensusValue
 )
 
-// ballots compare utilities
+// Ballots compare utilities
 func lessAndCompatibleBallots(lb *Ballot, rb *Ballot) bool {
 	if compareBallots(lb, rb) <= 0 && compatibleBallots(lb, rb) {
 		return true
@@ -38,7 +38,7 @@ func lessAndIncompatibleBallots(lb *Ballot, rb *Ballot) bool {
 	return false
 }
 
-// compare two ballots by counter then value
+// Compare two ballots by counter then value
 func compareBallots(lb *Ballot, rb *Ballot) int {
 	// check input with nil ballot
 	if lb == nil && rb == nil {
@@ -59,7 +59,7 @@ func compareBallots(lb *Ballot, rb *Ballot) int {
 	return strings.Compare(lb.Value, rb.Value)
 }
 
-// check whether the two ballots has the same value
+// Check whether the two ballots has the same value
 func compatibleBallots(lb *Ballot, rb *Ballot) bool {
 	if lb == nil || rb == nil {
 		return false
@@ -72,7 +72,7 @@ func compatibleBallots(lb *Ballot, rb *Ballot) bool {
 	return false
 }
 
-// check whether the latter ballot statement is newer than first one
+// Check whether the latter ballot statement is newer than the first one
 func isNewerBallot(lb *Statement, rb *Statement) bool {
 	// check statement type
 	if lb.StatementType != rb.StatementType {
@@ -80,7 +80,7 @@ func isNewerBallot(lb *Statement, rb *Statement) bool {
 	}
 
 	switch rb.StatementType {
-	case ultpb.StatementType_PREPARE:
+	case ultpb.StatementType_PREPARE: // compare order: b, p, q, h
 		lp := lb.GetPrepare()
 		rp := rb.GetPrepare()
 		// compare working ballot
@@ -142,7 +142,7 @@ func isProperSubset(a []string, b []string) bool {
 	return false
 }
 
-// check whether the latter nomination contains all the information of the first one
+// Check whether the latter nomination contains all the information of the first one
 func isNewerNomination(anom *ultpb.Nominate, bnom *ultpb.Nominate) bool {
 	if anom == nil && bnom != nil {
 		return true
@@ -160,7 +160,7 @@ func isNewerNomination(anom *ultpb.Nominate, bnom *ultpb.Nominate) bool {
 	return true
 }
 
-// check whether the input node set form V-blocking for input quorum
+// Check whether the input node set form V-blocking for input quorum
 func isVblocking(quorum *ultpb.Quorum, nodeSet mapset.Set) bool {
 	qsize := float64(len(quorum.Validators) + len(quorum.NestQuorums))
 	threshold := int(math.Ceil(qsize * (1.0 - quorum.Threshold)))
@@ -186,7 +186,7 @@ func isVblocking(quorum *ultpb.Quorum, nodeSet mapset.Set) bool {
 	return false
 }
 
-// check whether the input node set form quorum slice for input quorum
+// Check whether the input node set form quorum slice for input quorum
 func isQuorumSlice(quorum *ultpb.Quorum, nodeSet mapset.Set) bool {
 	qsize := float64(len(quorum.Validators) + len(quorum.NestQuorums))
 	threshold := int(math.Ceil(qsize * quorum.Threshold))
@@ -212,7 +212,7 @@ func isQuorumSlice(quorum *ultpb.Quorum, nodeSet mapset.Set) bool {
 	return false
 }
 
-// build a quorum with one node
+// Build a quorum with one node
 func getSingletonQuorum(nodeID string) *Quorum {
 	quorum := &Quorum{
 		Threshold:  1.0,

@@ -338,7 +338,7 @@ func (e *Engine) RecvStatement(stmt *ultpb.Statement) error {
 	}
 
 	// send statement to validator for fetching transaction set
-	// and quorum of the correponding node
+	// and quorum of the corresponding node
 	err := e.validator.Recv(stmt)
 	if err != nil {
 		return fmt.Errorf("send statement to validator failed: %v", err)

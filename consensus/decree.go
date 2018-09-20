@@ -514,8 +514,9 @@ func bytesOr(l string, r string) string {
 /* Ballot Protocol */
 // Receive ballot statement from peer or local nodes
 func (d *Decree) recvBallot(stmt *Statement) error {
+	// make sure we received statement with the same decree index
 	if stmt.Index != d.index {
-		log.Fatalf("received incompatible ballot index: local %d, recv %d", d.index, stmt.Index)
+		log.Errorf("received incompatible ballot index: local %d, recv %d", d.index, stmt.Index)
 	}
 
 	// skip outdated statement without returning error

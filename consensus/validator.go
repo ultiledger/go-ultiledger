@@ -145,7 +145,7 @@ func (v *Validator) Recv(stmt *Statement) error {
 	// validate statement
 	valid, err := v.validate(stmt)
 	if err != nil {
-		return fmt.Errorf("validate statement failed: %v", "index", stmt.Index, "nodeID", stmt.NodeID)
+		return fmt.Errorf("validate statement failed: %v", err)
 	}
 
 	if valid {
