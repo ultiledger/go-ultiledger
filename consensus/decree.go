@@ -1323,7 +1323,7 @@ func (d *Decree) checkBallotInvariants() {
 	}
 }
 
-// validate ballot by checking:
+// Validate ballot by checking:
 // 1. ballot counters are in expected states
 // 2. ballot values are normal and satisfy consensus constraints
 func (d *Decree) validateBallot(stmt *Statement) error {
@@ -1336,7 +1336,11 @@ func (d *Decree) validateBallot(stmt *Statement) error {
 	// value set for checking validity of ballot value
 	values := mapset.NewSet()
 
-	// TODO(bobonovski) check quorum sanity
+	// validate quorum
+	quorum := d.getStatementQuorum(stmt)
+	if err := d.validateQuorum(quorum, 0); err != nil {
+		return fmt.Errorf("validate quorum failed: %v", err)
+	}
 
 	switch stmt.StatementType {
 	case ultpb.StatementType_PREPARE:
@@ -1400,7 +1404,7 @@ func (d *Decree) validateBallot(stmt *Statement) error {
 	return valueErr
 }
 
-// validate consensus value
+// Validate consensus value
 func (d *Decree) validateConsensusValue(val string) error {
 	vb, err := hex.DecodeString(val)
 	if err != nil {
@@ -1413,6 +1417,38 @@ func (d *Decree) validateConsensusValue(val string) error {
 	}
 
 	// TODO(bobonovski) define maybe validate state
+
+	return nil
+}
+
+// Validate statement quorum
+func (d *Decree) validateQuorum(quorum *Quorum, depth int) error {
+	if depth > 2 {
+		return errors.New("quorum nesting too deep")
+	}
+
+	if quorum.Threshold <= 0.0 && quorum.Threshold > 1.0 {
+		return fmt.Errorf("quorum threshold out of range in depth %d", depth)
+	}
+
+	// qsize := float64(len(quorum.Validators) + len(quorum.NestQuorums))
+	// threshold := int(math.Ceil(qsize * (1.0 - quorum.Threshold)))
+
+	// check whether there exists duplicate validator in quorum
+	vset := mapset.NewSet()
+	for _, v := range quorum.Validators {
+		if vset.Contains(v) {
+			return fmt.Errorf("duplicate quorum validator %s exists", v)
+		}
+		vset.Add(v)
+	}
+
+	// check nested quorum
+	for _, nq := range quorum.NestQuorums {
+		if err := d.validateQuorum(nq, depth+1); err != nil {
+			return fmt.Errorf("validate nest quorum in depth %d failed: %v", depth+1, err)
+		}
+	}
 
 	return nil
 }

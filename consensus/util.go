@@ -166,20 +166,20 @@ func isVblocking(quorum *ultpb.Quorum, nodeSet mapset.Set) bool {
 	threshold := int(math.Ceil(qsize * (1.0 - quorum.Threshold)))
 
 	for _, vid := range quorum.Validators {
-		if nodeSet.Contains(vid) {
-			threshold = threshold - 1
-		}
 		if threshold == 0 {
 			return true
+		}
+		if nodeSet.Contains(vid) {
+			threshold = threshold - 1
 		}
 	}
 
 	for _, nq := range quorum.NestQuorums {
-		if isVblocking(nq, nodeSet) {
-			threshold = threshold - 1
-		}
 		if threshold == 0 {
 			return true
+		}
+		if isVblocking(nq, nodeSet) {
+			threshold = threshold - 1
 		}
 	}
 
@@ -192,20 +192,20 @@ func isQuorumSlice(quorum *ultpb.Quorum, nodeSet mapset.Set) bool {
 	threshold := int(math.Ceil(qsize * quorum.Threshold))
 
 	for _, vid := range quorum.Validators {
-		if nodeSet.Contains(vid) {
-			threshold = threshold - 1
-		}
 		if threshold == 0 {
 			return true
+		}
+		if nodeSet.Contains(vid) {
+			threshold = threshold - 1
 		}
 	}
 
 	for _, nq := range quorum.NestQuorums {
-		if isVblocking(nq, nodeSet) {
-			threshold = threshold - 1
-		}
 		if threshold == 0 {
 			return true
+		}
+		if isVblocking(nq, nodeSet) {
+			threshold = threshold - 1
 		}
 	}
 
