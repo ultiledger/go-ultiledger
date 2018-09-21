@@ -834,7 +834,7 @@ func (d *Decree) setAcceptPrepared(b *Ballot) bool {
 
 // Extract unique prepared candidate ballots from statement
 func (d *Decree) preparedCandidates(stmt *Statement) []*Ballot {
-	// filter ballots with the same value
+	// filter duplicate ballots with the same values
 	ballots := mapset.NewSet()
 
 	switch stmt.StatementType {
@@ -872,7 +872,7 @@ func (d *Decree) preparedCandidates(stmt *Statement) []*Ballot {
 			case ultpb.StatementType_PREPARE:
 				prepare := stmt.GetPrepare()
 				if lessAndCompatibleBallots(prepare.B, &b) {
-					candSet.Add(b)
+					candSet.Add(*prepare.B)
 				}
 				if prepare.P != nil && lessAndCompatibleBallots(prepare.P, &b) {
 					candSet.Add(*prepare.P)
@@ -884,6 +884,7 @@ func (d *Decree) preparedCandidates(stmt *Statement) []*Ballot {
 				confirm := stmt.GetConfirm()
 				if compatibleBallots(confirm.B, &b) {
 					candSet.Add(b)
+					// check the highest accepted prepared ballot counter
 					if confirm.PC < b.Counter {
 						candSet.Add(Ballot{Value: b.Value, Counter: confirm.PC})
 					}
@@ -905,18 +906,7 @@ func (d *Decree) preparedCandidates(stmt *Statement) []*Ballot {
 	}
 
 	// sort candidates in descending order
-	// TODO(bobonovski) define customized sorter for Ballot
-	sort.SliceStable(candidates, func(i, j int) bool {
-		if candidates[i].Counter > candidates[j].Counter {
-			return true
-		} else if candidates[i].Counter == candidates[j].Counter {
-			cmp := strings.Compare(candidates[i].Value, candidates[j].Value)
-			if cmp >= 0 {
-				return true
-			}
-		}
-		return false
-	})
+	sort.Sort(BallotSlice(candidates))
 
 	return candidates
 }
