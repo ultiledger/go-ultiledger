@@ -292,8 +292,7 @@ func (v *Validator) download() {
 	}
 }
 
-// Validate statement bying check whether we have its quorum and tx list.
-// If the return value is nil, it indicates the statement is ready.
+// Validate statement by checking whether we have its quorum and tx list
 func (v *Validator) validate(stmt *Statement) (bool, error) {
 	quorumHash, err := extractQuorumHash(stmt)
 	if err != nil {
