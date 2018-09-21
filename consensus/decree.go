@@ -766,35 +766,36 @@ func (d *Decree) acceptPrepared(stmt *Statement) bool {
 
 	for _, cand := range candidates {
 		if d.currentPhase == BallotPhaseConfirm {
+			// skip old or incompatible ballots
 			if !lessAndCompatibleBallots(d.pBallot, cand) {
 				continue
 			}
+			// we should not have accepted prepared ballot that
+			// is incompatible with current commit ballot
 			if !compatibleBallots(d.cBallot, cand) {
 				log.Fatal("candidate ballot and commit ballot are not compatible")
 			}
 		}
 
-		// skip checked ballot
+		// skip prepared ballot
 		if d.qBallot != nil && compareBallots(cand, d.qBallot) <= 0 {
 			continue
 		}
-
 		if d.pBallot != nil && lessAndCompatibleBallots(cand, d.pBallot) {
 			continue
 		}
 
 		accepted := d.federatedAccept(prepareVoteFilter(cand), prepareAcceptFilter(cand), d.ballots)
 		if accepted {
-			// try to update prepared ballot
+			// update prepared ballot
 			updated := d.setAcceptPrepared(cand)
 			if d.cBallot != nil && d.hBallot != nil {
 				if (d.pBallot != nil && lessAndIncompatibleBallots(d.hBallot, d.pBallot)) ||
 					(d.qBallot != nil && lessAndIncompatibleBallots(d.hBallot, d.qBallot)) {
-					if d.currentPhase != BallotPhasePrepare {
-						log.Fatal("current ballot phase is not prepare")
+					if d.currentPhase == BallotPhasePrepare {
+						d.cBallot.Reset()
+						updated = true
 					}
-					d.cBallot.Reset()
-					updated = true
 				}
 			}
 			if updated {
@@ -925,6 +926,8 @@ func (d *Decree) confirmPrepared(stmt *Statement) bool {
 	i := 0
 	for ; i < len(candidates); i++ {
 		cand := candidates[i]
+		// skip the ballot if it is impossible to find
+		// a higher confirmed prepared ballot
 		if d.hBallot != nil && compareBallots(cand, d.hBallot) <= 0 {
 			continue
 		}
@@ -942,12 +945,16 @@ func (d *Decree) confirmPrepared(stmt *Statement) bool {
 		if curb == nil {
 			curb = &Ballot{}
 		}
+		// find a new commit ballot
 		if d.cBallot != nil &&
 			(d.pBallot != nil && !lessAndIncompatibleBallots(hCandidate, d.pBallot) &&
 				(d.qBallot != nil && !lessAndIncompatibleBallots(hCandidate, d.qBallot))) {
 			for ; i < len(candidates); i++ {
 				cand := candidates[i]
-				if compareBallots(cand, curb) < 0 || !lessAndCompatibleBallots(cand, hCandidate) {
+				if compareBallots(cand, curb) < 0 {
+					break
+				}
+				if !lessAndCompatibleBallots(cand, hCandidate) {
 					continue
 				}
 				if d.federatedRatify(prepareAcceptFilter(cand), d.ballots) {
@@ -975,10 +982,7 @@ func (d *Decree) setConfirmPrepared(cb *Ballot, hb *Ballot) bool {
 			d.hBallot = hb
 			updated = true
 		}
-		if cb.Counter != 0 {
-			if d.cBallot != nil {
-				log.Fatal("commit ballot is not nil")
-			}
+		if d.cBallot == nil || compareBallots(cb, d.cBallot) < 0 {
 			d.cBallot = cb
 			updated = true
 		}
@@ -1077,7 +1081,24 @@ func (d *Decree) setAcceptCommit(cb *Ballot, hb *Ballot) bool {
 
 // Find lower and higher counter for commit ballot
 func (d *Decree) findCommitInterval(counters []uint32, filter func(l, r uint32) bool) (uint32, uint32) {
-	return 0, 0
+	var lb, rb uint32
+
+	for _, c := range counters {
+		l, r := uint32(0), uint32(0)
+		if lb == 0 {
+			l, r = c, c
+		} else {
+			l, r = c, rb
+		}
+
+		if filter(l, r) {
+			lb, rb = l, r
+		} else if lb != 0 {
+			break
+		}
+	}
+
+	return lb, rb
 }
 
 // Extract commit lower and higher counters
@@ -1117,6 +1138,9 @@ func (d *Decree) getCommitCounters(b *Ballot) []uint32 {
 		counter := c.(uint32)
 		ctrs = append(ctrs, counter)
 	}
+	sort.SliceStable(ctrs, func(i, j int) bool {
+		return ctrs[i] > ctrs[j]
+	})
 
 	return ctrs
 }
@@ -1171,12 +1195,18 @@ func (d *Decree) confirmCommit(stmt *Statement) bool {
 // Update internal c and h ballots with confirmed commit ballot
 // and trigger externalization of the commit value
 func (d *Decree) setConfirmCommit(cb *Ballot, hb *Ballot) bool {
+	// update commit and higher ballot
 	d.cBallot = cb
 	d.hBallot = hb
+
 	d.updateBallotIfNeeded(d.hBallot)
+
+	// change phase to externalize
 	d.currentPhase = BallotPhaseExternalize
 
 	d.sendBallot()
+
+	// stop nomination protocol
 	d.nominationStart = false
 
 	// TODO(bobonovski) trigger externalization
