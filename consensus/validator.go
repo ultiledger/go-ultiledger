@@ -379,10 +379,7 @@ func extractTxSetHash(stmt *Statement) ([]string, error) {
 	case ultpb.StatementType_CONFIRM:
 		fallthrough
 	case ultpb.StatementType_EXTERNALIZE:
-		ballot, err := extractWorkingBallot(stmt)
-		if err != nil {
-			return nil, fmt.Errorf("extract working ballot failed: %v", err)
-		}
+		ballot := getWorkingBallot(stmt)
 		b, err := hex.DecodeString(ballot.Value)
 		if err != nil {
 			return nil, fmt.Errorf("decode hex string failed: %v", err)
@@ -396,26 +393,4 @@ func extractTxSetHash(stmt *Statement) ([]string, error) {
 		return nil, errors.New("unknown statement type")
 	}
 	return hashes, nil
-}
-
-// Extract working ballot according to statement type
-func extractWorkingBallot(stmt *Statement) (*Ballot, error) {
-	if stmt == nil {
-		return nil, errors.New("statement is nil")
-	}
-	var ballot *Ballot
-	switch stmt.StatementType {
-	case ultpb.StatementType_PREPARE:
-		prepare := stmt.GetPrepare()
-		ballot = prepare.B
-	case ultpb.StatementType_CONFIRM:
-		confirm := stmt.GetConfirm()
-		ballot = &Ballot{Value: confirm.B.Value, Counter: confirm.LC}
-	case ultpb.StatementType_EXTERNALIZE:
-		ext := stmt.GetExternalize()
-		ballot = ext.B
-	default:
-		log.Fatal(ErrUnknownStmtType)
-	}
-	return ballot, nil
 }
