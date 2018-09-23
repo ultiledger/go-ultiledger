@@ -32,12 +32,13 @@ const (
 
 // DecreeContext contains contextual information Decree needs
 type DecreeContext struct {
-	Index     uint64  // decree index
-	NodeID    string  // local node ID
-	Quorum    *Quorum // local node quorum
-	LM        *ledger.Manager
-	Validator *Validator
-	StmtChan  chan<- *Statement // channel for broadcasting statement
+	Index           uint64  // decree index
+	NodeID          string  // local node ID
+	Quorum          *Quorum // local node quorum
+	LM              *ledger.Manager
+	Validator       *Validator
+	StmtChan        chan<- *Statement        // channel for broadcasting statement
+	ExternalizeChan chan<- *ExternalizeValue // channel for notifying externlized value
 }
 
 func ValidateDecreeContext(dc *DecreeContext) error {
@@ -58,6 +59,9 @@ func ValidateDecreeContext(dc *DecreeContext) error {
 	}
 	if dc.StmtChan == nil {
 		return fmt.Errorf("statement chan is nil")
+	}
+	if dc.ExternalizeChan == nil {
+		return fmt.Errorf("externalize chan is nil")
 	}
 	return nil
 }
@@ -100,6 +104,8 @@ type Decree struct {
 
 	// channel for sending statements
 	statementChan chan<- *Statement
+	// channel for sending externalized value
+	externalizeChan chan<- *ExternalizeValue
 }
 
 func NewDecree(ctx *DecreeContext) *Decree {
@@ -1209,7 +1215,11 @@ func (d *Decree) setConfirmCommit(cb *Ballot, hb *Ballot) bool {
 	// stop nomination protocol
 	d.nominationStart = false
 
-	// TODO(bobonovski) trigger externalization
+	// trigger externalization
+	d.externalizeChan <- &ExternalizeValue{
+		Index: d.index,
+		Value: d.cBallot.Value,
+	}
 
 	return true
 }

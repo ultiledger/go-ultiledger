@@ -107,6 +107,9 @@ type Engine struct {
 	// channel for downloading quorum
 	quorumDownloadChan chan string
 
+	// channel for listening externalized value
+	externalizeChan chan *ExternalizeValue
+
 	// channel for stopping goroutines
 	stopChan chan struct{}
 }
@@ -490,11 +493,12 @@ func (e *Engine) nominate(idx uint64, prevValue *ultpb.ConsensusValue, currValue
 	// get new slot
 	if _, ok := e.decrees[idx]; !ok {
 		decreeCtx := &DecreeContext{
-			Index:     idx,
-			NodeID:    e.nodeID,
-			LM:        e.lm,
-			Validator: e.validator,
-			StmtChan:  e.statementChan,
+			Index:           idx,
+			NodeID:          e.nodeID,
+			LM:              e.lm,
+			Validator:       e.validator,
+			StmtChan:        e.statementChan,
+			ExternalizeChan: e.externalizeChan,
 		}
 		e.decrees[idx] = NewDecree(decreeCtx)
 	}

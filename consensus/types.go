@@ -39,3 +39,9 @@ func (th *TxHistory) AddTx(tx *ultpb.Tx, hash string) error {
 	th.TxHashList = append(th.TxHashList, hash)
 	return nil
 }
+
+// Information about externalized value
+type ExternalizeValue struct {
+	Index uint64 // index of decree
+	Value string // consensus value
+}
