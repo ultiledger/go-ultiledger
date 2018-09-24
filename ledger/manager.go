@@ -3,6 +3,7 @@ package ledger
 import (
 	"errors"
 	"fmt"
+	"sort"
 	"time"
 
 	lru "github.com/hashicorp/golang-lru"
@@ -13,11 +14,20 @@ import (
 	"github.com/ultiledger/go-ultiledger/ultpb"
 )
 
+// LedgerState represents the current states of ledger,
+// the ledger is synced if it complies with the states
+// received from peers or we need to trigger catch up
+// process to sync with the newest states.
 type LedgerState uint8
 
 const (
 	LedgerStateSynced LedgerState = iota
+	LedgerStateSyncing
 	LedgerStateNotSynced
+)
+
+var (
+	ErrUnknownLedgerState = errors.New("unknown ledger state")
 )
 
 var (
@@ -43,8 +53,8 @@ type Manager struct {
 
 	// start timestamp of the manager
 	startTime int64
-	// timestamp of last ledger update
-	lastUpdateTime int64
+	// timestamp of last ledger close
+	lastCloseTime int64
 
 	// the number of ledgers processed
 	ledgerHeaderCount int64
@@ -81,28 +91,10 @@ func NewManager(d db.DB) *Manager {
 
 // Start the genesis ledger and initialize master account
 func (lm *Manager) CreateGenesisLedger() error {
-	genesis := &ultpb.LedgerHeader{
-		Version:       GenesisVersion,
-		MaxTxListSize: GenesisMaxTxListSize,
-		SeqNum:        GenesisSeqNum,
-		TotalTokens:   GenesisTotalTokens,
-		BaseFee:       GenesisBaseFee,
-		BaseReserve:   GenesisBaseReserve,
-		CloseTime:     time.Now().Unix(),
-	}
-	// compute hash of the ledger and save to db
-	b, err := ultpb.Encode(genesis)
+	err := lm.advanceLedger(GenesisSeqNum, "", "", "")
 	if err != nil {
-		return err
+		return fmt.Errorf("advance ledger failed: %v", err)
 	}
-	h := crypto.SHA256Hash(b)
-	lm.store.Set(lm.bucket, []byte(h), b)
-
-	lm.currLedgerHeader = genesis
-	lm.currLedgerHeaderHash = h
-
-	lm.ledgerHeaderCount += 1
-
 	return nil
 }
 
@@ -133,9 +125,46 @@ func (lm *Manager) NextLedgerHeaderSeq() uint64 {
 	return lm.currLedgerHeader.SeqNum + 1
 }
 
+// Receive externalized consensus value and do appropriate operations
+func (lm *Manager) RecvExtVal(index uint64, value string, txset *ultpb.TxSet) error {
+	log.Infow("recv ext value", "seq", index, "value", value, "prevhash", txset.PrevLedgerHash, "txcount", len(txset.TxList))
+
+	switch lm.ledgerState {
+	case LedgerStateSynced:
+		if lm.NextLedgerHeaderSeq() == index+1 { // normal case
+			if lm.CurrLedgerHeaderHash() == txset.PrevLedgerHash {
+				// closeLedger
+			} else {
+				log.Fatalw("ledger inconsistent", "currhash", lm.CurrLedgerHeaderHash())
+			}
+		} else if index <= lm.NextLedgerHeaderSeq() { // old case
+			log.Warnw("received value is old", "nextseq", lm.NextLedgerHeaderSeq())
+		} else { // new case
+			// init catch up
+		}
+	case LedgerStateSyncing:
+	case LedgerStateNotSynced:
+		// TODO(bobonovski) catch up
+	}
+
+	return nil
+}
+
+// CloseLedger closes current ledger with new consensus value
+func (lm *Manager) closeLedger(index uint64, value string, txset *ultpb.TxSet) error {
+	// TODO(bobonovski) support ledger version upgrades
+
+	// sort tx by sequence number
+	sort.Sort(TxSlice(txset.TxList))
+
+	// charge fees
+
+	return nil
+}
+
 // Append the committed transaction list to current ledger, the operation
 // is only valid when the ledger manager in synced state.
-func (lm *Manager) AppendTxList(seq uint64, prevHeaderHash string, txHash string) error {
+func (lm *Manager) advanceLedger(seq uint64, prevHeaderHash string, txHash string, cv string) error {
 	if lm.ledgerState != LedgerStateSynced {
 		return errors.New("ledger is not synced")
 	}
@@ -156,6 +185,7 @@ func (lm *Manager) AppendTxList(seq uint64, prevHeaderHash string, txHash string
 		SeqNum:         seq,
 		PrevLedgerHash: prevHeaderHash,
 		TxListHash:     txHash,
+		ConsensusValue: cv,
 		// global configs below
 		Version:       GenesisVersion,
 		MaxTxListSize: GenesisMaxTxListSize,
@@ -176,6 +206,8 @@ func (lm *Manager) AppendTxList(seq uint64, prevHeaderHash string, txHash string
 	lm.prevLedgerHeaderHash = lm.currLedgerHeaderHash
 	lm.currLedgerHeader = header
 	lm.currLedgerHeaderHash = h
+
+	lm.ledgerHeaderCount += 1
 
 	return nil
 }

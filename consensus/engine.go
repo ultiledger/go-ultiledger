@@ -203,7 +203,7 @@ func (e *Engine) Start() {
 			}
 		}
 	}()
-	// goroutine for listening ready statements
+	// goroutine for dealing with internal events
 	go func() {
 		for {
 			select {
@@ -217,6 +217,12 @@ func (e *Engine) Start() {
 					continue
 				}
 				e.decrees[stmt.Index].Recv(stmt)
+			case ext := <-e.externalizeChan:
+				err := e.Externalize(ext.Index, ext.Value)
+				if err != nil {
+					log.Errorf("externalize value failed: %v", err, "index", ext.Index, "value", ext.Value)
+					continue
+				}
 			case <-e.stopChan:
 				return
 			}
@@ -458,13 +464,12 @@ func (e *Engine) Propose() error {
 	// TODO(bobonovski) use sync.Pool
 	txSet := &TxSet{
 		PrevLedgerHash: e.lm.CurrLedgerHeaderHash(),
-		TxHashList:     make([]string, 0),
 	}
 
 	// append pending transactions to propose list
 	for _, th := range e.txMap {
-		for i, _ := range th.TxList {
-			txSet.TxHashList = append(txSet.TxHashList, th.TxHashList[i])
+		for _, tx := range th.TxList {
+			txSet.TxList = append(txSet.TxList, tx)
 		}
 	}
 
@@ -479,17 +484,22 @@ func (e *Engine) Propose() error {
 		TxSetHash:   hash,
 		ProposeTime: time.Now().Unix(),
 	}
+	cvb, err := ultpb.Encode(cv)
+	if err != nil {
+		return fmt.Errorf("encode consensus value failed: %v", err)
+	}
+	cvStr := hex.EncodeToString(cvb)
 
 	// nominate new consensus value
 	slotIdx := e.lm.NextLedgerHeaderSeq()
 	currHeader := e.lm.CurrLedgerHeader()
-	e.nominate(slotIdx, currHeader.ConsensusValue, cv)
+	e.nominate(slotIdx, currHeader.ConsensusValue, cvStr)
 
 	return nil
 }
 
-// nominate a new consensus value for specified decree
-func (e *Engine) nominate(idx uint64, prevValue *ultpb.ConsensusValue, currValue *ultpb.ConsensusValue) error {
+// Nominate a new consensus value for specified decree
+func (e *Engine) nominate(idx uint64, prevValue string, currValue string) error {
 	// get new slot
 	if _, ok := e.decrees[idx]; !ok {
 		decreeCtx := &DecreeContext{
@@ -503,21 +513,41 @@ func (e *Engine) nominate(idx uint64, prevValue *ultpb.ConsensusValue, currValue
 		e.decrees[idx] = NewDecree(decreeCtx)
 	}
 
-	prevEnc, err := ultpb.Encode(prevValue)
-	if err != nil {
-		return fmt.Errorf("encode prev consensus value failed: %v", err)
-	}
-
-	currEnc, err := ultpb.Encode(currValue)
-	if err != nil {
-		return fmt.Errorf("encode curr consensus value failed: %v", err)
-	}
-
-	prevEncStr := hex.EncodeToString(prevEnc)
-	currEncStr := hex.EncodeToString(currEnc)
-
 	// nominate new value for the slot
-	e.decrees[idx].Nominate(prevEncStr, currEncStr)
+	e.decrees[idx].Nominate(prevValue, currValue)
+
+	return nil
+}
+
+// Externalize a consensus value with decree index
+func (e *Engine) Externalize(idx uint64, value string) error {
+	// skip old externalized value
+	if idx < e.lm.NextLedgerHeaderSeq() {
+		return nil
+	}
+
+	// decode consensus value
+	b, err := hex.DecodeString(value)
+	if err != nil {
+		return fmt.Errorf("hex decode consensus value failed: %v", err)
+	}
+	cv, err := ultpb.DecodeConsensusValue(b)
+	if err != nil {
+		return fmt.Errorf("decode consensus value failed: %v", err)
+	}
+
+	txset, ok := e.validator.GetTxSet(cv.TxSetHash)
+	if !ok {
+		return fmt.Errorf("get txset %s failed", cv.TxSetHash)
+	}
+
+	// send value to ledger manager
+	err = e.lm.RecvExtVal(idx, value, txset)
+	if err != nil {
+		return fmt.Errorf("externalize value in ledger manager failed: %v", err)
+	}
+
+	// TODO(bobonovski) change the status of pending transactions
 
 	return nil
 }

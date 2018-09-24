@@ -455,19 +455,15 @@ func (d *Decree) combineCandidates() (string, error) {
 		if ts.PrevLedgerHash != headerHash {
 			continue
 		}
-		if txset == nil || len(ts.TxHashList) > len(txset.TxHashList) ||
-			((len(ts.TxHashList) == len(txset.TxHashList)) && lessBytesOr(txsetHash, cv.TxSetHash, hash)) {
+		if txset == nil || len(ts.TxList) > len(txset.TxList) ||
+			((len(ts.TxList) == len(txset.TxList)) && lessBytesOr(txsetHash, cv.TxSetHash, hash)) {
 			txset = ts
 			txsetHash = cv.TxSetHash
 		}
 	}
 
 	// deep copy a new txset
-	newTxSet := &TxSet{
-		PrevLedgerHash: txset.PrevLedgerHash,
-		TxHashList:     make([]string, len(txset.TxHashList)),
-	}
-	copy(newTxSet.TxHashList, txset.TxHashList)
+	newTxSet := (pb.Clone(txset)).(*TxSet)
 
 	// TODO(bobonovski) trim invalid tx
 
