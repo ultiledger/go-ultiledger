@@ -45,6 +45,18 @@ func Fatalw(msg string, keysAndValues ...interface{}) {
 	rootLogger.Fatalw(msg, keysAndValues)
 }
 
+func Warn(args ...interface{}) {
+	rootLogger.Warn(args)
+}
+
+func Warnf(template string, args ...interface{}) {
+	rootLogger.Warnf(template, args)
+}
+
+func Warnw(msg string, keysAndValues ...interface{}) {
+	rootLogger.Warnw(msg, keysAndValues)
+}
+
 func Info(args ...interface{}) {
 	rootLogger.Info(args)
 }

@@ -11,4 +11,7 @@ func TestLogger(t *testing.T) {
 	rootLogger.Info("test info level")
 	rootLogger.Infof("test info level %s", "format")
 	rootLogger.Infow("test info level", "ctx", "info")
+	rootLogger.Warn("test info level")
+	rootLogger.Warnf("test info level %s", "format")
+	rootLogger.Warnw("test info level", "ctx", "info")
 }
