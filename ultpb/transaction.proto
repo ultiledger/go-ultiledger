@@ -15,8 +15,11 @@ enum OpType {
 message Op {
   // operation type of this transaction
   OpType OpType = 1;
-  // operation details in wire format
-  bytes Data = 2;
+  // defacto operation
+  oneof Op {
+    CreateAccountOp CreateAccount = 2;
+    PaymentOp Payment = 3;
+  }
 }
 
 // Transaction
