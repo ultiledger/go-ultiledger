@@ -38,7 +38,7 @@ message TxSet {
   // hash of previous closed ledger header
   string PrevLedgerHash = 1;
   // list of transaction hashes
-  repeated string TxHashList = 2;  
+  repeated Tx TxList = 2;  
 }
 
 // Create a new account by sending asset to it
