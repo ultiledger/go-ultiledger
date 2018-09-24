@@ -48,12 +48,36 @@ func (am *Manager) CreateMasterAccount(networkID []byte, balance uint64) error {
 	}
 	log.Infof("master private key (seed) is %s", privKey)
 
+	err = am.CreateAccount(pubKey, balance, pubKey)
+	if err != nil {
+		return fmt.Errorf("create master account failed: %v", err)
+	}
+
+	return nil
+}
+
+// Create a new account with initial balance
+func (am *Manager) CreateAccount(accountID string, balance uint64, signer string) error {
 	acc := &ultpb.Account{
-		AccountID: pubKey,
+		AccountID: accountID,
 		Balance:   balance,
-		Signer:    pubKey,
+		Signer:    signer,
 	}
 	am.master = acc
+
+	accb, err := ultpb.Encode(acc)
+	if err != nil {
+		return fmt.Errorf("encode account failed: %v", err)
+	}
+
+	// save the account in db
+	err = am.store.Set(am.bucket, []byte(acc.AccountID), accb)
+	if err != nil {
+		return fmt.Errorf("save account in db failed: %v", err)
+	}
+
+	// save the account in cache
+	am.accounts.Add(acc.AccountID, acc)
 
 	return nil
 }
@@ -64,6 +88,7 @@ func (am *Manager) GetAccount(accountID string) (*ultpb.Account, error) {
 	if acc, ok := am.accounts.Get(accountID); ok {
 		return acc.(*ultpb.Account), nil
 	}
+
 	// then check database
 	b, ok := am.store.Get(am.bucket, []byte(accountID))
 	if !ok {
@@ -73,7 +98,9 @@ func (am *Manager) GetAccount(accountID string) (*ultpb.Account, error) {
 	if err != nil {
 		return nil, fmt.Errorf("account %s decode failed: %v", accountID, err)
 	}
+
 	// cache the account
 	am.accounts.Add(accountID, acc)
+
 	return acc, nil
 }
