@@ -3,6 +3,7 @@ package ultpb
 import (
 	"bytes"
 	"encoding/hex"
+	"fmt"
 	"sort"
 
 	"github.com/golang/protobuf/proto"
@@ -30,8 +31,19 @@ func SHA256Hash(msg proto.Message) (string, error) {
 
 // Compute the overall hash of transaction set
 func GetTxSetHash(ts *TxSet) (string, error) {
-	// sort transaction hash list
-	sort.Strings(ts.TxHashList)
+	// compute tx hashes
+	var hashes []string
+	for _, tx := range ts.TxList {
+		txhash, err := SHA256Hash(tx)
+		if err != nil {
+			return "", fmt.Errorf("compute tx hash failed: %v", err)
+		}
+		hashes = append(hashes, txhash)
+	}
+
+	// argsort by hash
+	hashSlice := NewStringSlice(false, hashes...)
+	sort.Sort(hashSlice)
 
 	// append all the hash to buffer
 	buf := bytes.NewBuffer(nil)
@@ -41,8 +53,9 @@ func GetTxSetHash(ts *TxSet) (string, error) {
 	}
 	buf.Write(b)
 
-	for _, tx := range ts.TxHashList {
-		txb, err := hex.DecodeString(tx)
+	for _, idx := range hashSlice.Idx {
+		tx := ts.TxList[idx]
+		txb, err := Encode(tx)
 		if err != nil {
 			return "", err
 		}
