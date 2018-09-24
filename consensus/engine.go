@@ -326,7 +326,7 @@ func (e *Engine) RecvTx(tx *ultpb.Tx) error {
 	}
 
 	// check whether the accounts has sufficient balance
-	balance := acc.Balance - ledger.GenesisBaseReserve*uint64(acc.ItemCount)
+	balance := acc.Balance - ledger.GenesisBaseReserve*uint64(acc.EntryCount)
 	if balance < totalFees {
 		return fmt.Errorf("account %s insufficient balance", tx.AccountID)
 	}

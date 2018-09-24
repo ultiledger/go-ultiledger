@@ -70,8 +70,8 @@ func NewNode(conf *Config) *Node {
 	store := ctor(conf.DBPath)
 
 	pm := peer.NewManager(conf.Peers, addr, nodeID)
-	lm := ledger.NewManager(store)
 	am := account.NewManager(store)
+	lm := ledger.NewManager(store, am)
 
 	stopChan := make(chan struct{})
 

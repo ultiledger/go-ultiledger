@@ -8,6 +8,7 @@ import (
 
 	lru "github.com/hashicorp/golang-lru"
 
+	"github.com/ultiledger/go-ultiledger/account"
 	"github.com/ultiledger/go-ultiledger/crypto"
 	"github.com/ultiledger/go-ultiledger/db"
 	"github.com/ultiledger/go-ultiledger/log"
@@ -45,6 +46,9 @@ type Manager struct {
 	store  db.DB
 	bucket string
 
+	// account manager
+	am *account.Manager
+
 	// LRU cache for ledger headers
 	headers *lru.Cache
 
@@ -70,10 +74,11 @@ type Manager struct {
 	currLedgerHeaderHash string
 }
 
-func NewManager(d db.DB) *Manager {
+func NewManager(d db.DB, am *account.Manager) *Manager {
 	lm := &Manager{
 		store:       d,
 		bucket:      "LEDGERS",
+		am:          am,
 		ledgerState: LedgerStateNotSynced,
 		startTime:   time.Now().Unix(),
 	}
