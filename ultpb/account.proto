@@ -11,8 +11,8 @@ message Account {
   string Signer = 3;
   // latest transaction sequence number
   uint64 SequenceNumber = 4;
-  // number of items belong to this account
-  uint32 ItemCount = 5;
+  // number of entries belong to this account
+  uint32 EntryCount = 5;
   // hashes of transactions belongs to this account
   repeated string TxHashList = 6;  
 }
