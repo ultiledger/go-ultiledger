@@ -84,7 +84,6 @@ type Quorum struct {
 // Future for node server to query tx status
 type TxStatus struct {
 	deferError
-	TxKey        string
-	ErrorMessage string
-	StatusCode   rpcpb.TxStatusEnum
+	TxKey    string
+	TxStatus *rpcpb.TxStatus
 }

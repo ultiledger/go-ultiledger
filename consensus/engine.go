@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/deckarep/golang-set"
+	pb "github.com/golang/protobuf/proto"
 	lru "github.com/hashicorp/golang-lru"
 
 	"github.com/ultiledger/go-ultiledger/account"
@@ -237,26 +238,40 @@ func (e *Engine) Stop() {
 }
 
 // Get the status of tx
-func (e *Engine) GetTxStatus(txHash string) rpcpb.TxStatusEnum {
-	if tx, ok := e.txStatus.Get(txHash); ok {
-		return tx.(rpcpb.TxStatusEnum)
+func (e *Engine) GetTxStatus(txKey string) (*rpcpb.TxStatus, error) {
+	if tx, ok := e.txStatus.Get(txKey); ok {
+		return tx.(*rpcpb.TxStatus), nil
 	}
-	b, ok := e.store.Get(e.statusBucket, []byte(txHash))
+
+	status := &rpcpb.TxStatus{}
+	b, ok := e.store.Get(e.statusBucket, []byte(txKey))
 	if !ok {
-		return rpcpb.TxStatusEnum_NOTEXIST
+		status.StatusCode = rpcpb.TxStatusCode_NOTEXIST
+		return status, nil
 	}
-	sname := string(b)
-	return rpcpb.TxStatusEnum(rpcpb.TxStatusEnum_value[sname])
+
+	err := pb.Unmarshal(b, status)
+	if err != nil {
+		return nil, err
+	}
+
+	return status, nil
 }
 
 // Update the status of tx
-func (e *Engine) UpdateTxStatus(txHash string, status rpcpb.TxStatusEnum) error {
-	sname := rpcpb.TxStatusEnum_name[int32(status)]
-	e.txStatus.Add(txHash, status)
-	err := e.store.Set(e.statusBucket, []byte(txHash), []byte(sname))
+func (e *Engine) UpdateTxStatus(txKey string, status *rpcpb.TxStatus) error {
+	e.txStatus.Add(txKey, status)
+
+	b, err := ultpb.Encode(status)
 	if err != nil {
-		return err
+		return fmt.Errorf("encode status failed: %v", err)
 	}
+
+	err = e.store.Set(e.statusBucket, []byte(txKey), b)
+	if err != nil {
+		return fmt.Errorf("save status in db failed: %v", err)
+	}
+
 	return nil
 }
 
