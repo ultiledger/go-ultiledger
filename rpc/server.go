@@ -85,6 +85,9 @@ func ValidateServerContext(sc *ServerContext) error {
 	if sc.TxSetFuture == nil {
 		return errors.New("txset future channel is nil")
 	}
+	if sc.TxStatusFuture == nil {
+		return errors.New("txstatus future channel is nil")
+	}
 	return nil
 }
 
@@ -102,6 +105,7 @@ func NewNodeServer(ctx *ServerContext) *NodeServer {
 		stmtFuture:   ctx.StmtFuture,
 		quorumFuture: ctx.QuorumFuture,
 		txsetFuture:  ctx.TxSetFuture,
+		txsFuture:    ctx.TxStatusFuture,
 	}
 	return server
 }

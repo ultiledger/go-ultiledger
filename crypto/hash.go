@@ -24,3 +24,8 @@ func SHA256Hash(b []byte) string {
 	v := sha256.Sum256(b)
 	return fmt.Sprintf("%x", v)
 }
+
+// compute sha256 checksum (32 bytes)
+func SHA256HashBytes(b []byte) [32]byte {
+	return sha256.Sum256(b)
+}

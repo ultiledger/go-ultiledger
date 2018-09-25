@@ -46,6 +46,7 @@ type Node struct {
 	stmtFuture   chan *future.Statement
 	quorumFuture chan *future.Quorum
 	txsetFuture  chan *future.TxSet
+	txsFuture    chan *future.TxStatus
 }
 
 // NewNode creates a Node which controls all the sub tasks
@@ -90,15 +91,21 @@ func NewNode(conf *Config) *Node {
 	txFuture := make(chan *future.Tx)
 	peerFuture := make(chan *future.Peer)
 	stmtFuture := make(chan *future.Statement)
+	txsFuture := make(chan *future.TxStatus)
+	quorumFuture := make(chan *future.Quorum)
+	txsetFuture := make(chan *future.TxSet)
 
 	// construct node server context and create node server
 	serverCtx := &rpc.ServerContext{
-		Addr:       addr,
-		NodeID:     nodeID,
-		Seed:       seed,
-		PeerFuture: peerFuture,
-		TxFuture:   txFuture,
-		StmtFuture: stmtFuture,
+		Addr:           addr,
+		NodeID:         nodeID,
+		Seed:           seed,
+		PeerFuture:     peerFuture,
+		TxFuture:       txFuture,
+		StmtFuture:     stmtFuture,
+		TxStatusFuture: txsFuture,
+		QuorumFuture:   quorumFuture,
+		TxSetFuture:    txsetFuture,
 	}
 	nodeServer := rpc.NewNodeServer(serverCtx)
 
@@ -126,8 +133,11 @@ func (n *Node) Start() error {
 	// start node server
 	go n.serveNode()
 
-	// start node event loop
+	// start node server event loop
 	go n.eventLoop()
+
+	// start tx result event loop
+	go n.txResultLoop()
 
 	// start peer manager
 	n.pm.Start()
@@ -152,12 +162,24 @@ func (n *Node) Stop() {
 	n.engine.Stop()
 }
 
+func (n *Node) txResultLoop() {
+	for {
+		select {
+		case tr := <-n.lm.Ready():
+		case <-n.stopChan:
+			log.Info("shutdown event loop")
+			return
+		}
+	}
+}
+
 // Event loop for processing server received messages
 func (n *Node) eventLoop() {
+	// listening for node server events
 	for {
 		select {
 		case txf := <-n.txFuture:
-			err := n.engine.RecvTx(txf.Tx)
+			err := n.engine.RecvTx(txf.TxKey, txf.Tx)
 			if err != nil {
 				log.Errorf("add tx failed: %v", err)
 			}
@@ -188,6 +210,14 @@ func (n *Node) eventLoop() {
 			}
 			txf.TxSet = txset
 			txf.Respond(err)
+		case txs := <-n.txsFuture:
+			txstatus, msg, err := n.engine.GetTxStatus(txs.TxKey)
+			if err != nil {
+				log.Errorf("query tx status failed: %v", err)
+			}
+			txs.StatusCode = txstatus
+			txs.ErrorMessage = msg
+			txs.Respond(err)
 		case <-n.stopChan:
 			log.Info("shutdown event loop")
 			return

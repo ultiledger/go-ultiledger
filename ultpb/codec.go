@@ -29,6 +29,15 @@ func SHA256Hash(msg proto.Message) (string, error) {
 	return crypto.SHA256Hash(b), nil
 }
 
+// Compute sha256 checksum of proto message in bytes
+func SHA256HashBytes(msg proto.Message) ([32]byte, error) {
+	b, err := Encode(msg)
+	if err != nil {
+		return [32]byte{}, err
+	}
+	return crypto.SHA256HashBytes(b), nil
+}
+
 // Compute the overall hash of transaction set
 func GetTxSetHash(ts *TxSet) (string, error) {
 	// compute tx hashes

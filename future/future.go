@@ -51,7 +51,8 @@ func (d *deferError) Error() error {
 // Future for node server to add received tx to consensus engine
 type Tx struct {
 	deferError
-	Tx *ultpb.Tx
+	TxKey string
+	Tx    *ultpb.Tx
 }
 
 // Future for node server to add new discovered peer address to peer manager
@@ -83,6 +84,7 @@ type Quorum struct {
 // Future for node server to query tx status
 type TxStatus struct {
 	deferError
+	TxKey        string
 	ErrorMessage string
 	StatusCode   rpcpb.TxStatusEnum
 }
