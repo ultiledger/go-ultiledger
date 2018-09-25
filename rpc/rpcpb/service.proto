@@ -13,12 +13,17 @@ message HelloRequest {}
 
 message HelloResponse {}
 
-enum TxStatusEnum {
+enum TxStatusCode {
   NOTEXIST = 0;  // transaction not exist
   REJECTED = 1;  // rejected because of some immediate error checking
   ACCEPTED = 2;  // transaction accepted but not yet confirmed by consensus
   CONFIRMED = 3; // transaction is valid and confirmed by consensus
   FAILED = 4;    // failed because of some error
+}
+
+message TxStatus {
+  TxStatusCode StatusCode = 1;
+  string ErrorMessage = 2;
 }
 
 message SubmitTxRequest {
@@ -32,9 +37,7 @@ message SubmitTxRequest {
 }
 
 message SubmitTxResponse {
-  TxStatusEnum TxStatus = 1;
-  // error message for REJECTED transaction
-  string ErrorMessage = 3;
+  TxStatus TxStatus = 1;
 }
 
 enum NotifyMsgType {
