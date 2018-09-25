@@ -3,6 +3,7 @@
 package future
 
 import (
+	"github.com/ultiledger/go-ultiledger/rpc/rpcpb"
 	"github.com/ultiledger/go-ultiledger/ultpb"
 )
 
@@ -77,4 +78,11 @@ type Quorum struct {
 	deferError
 	QuorumHash string
 	Quorum     *ultpb.Quorum
+}
+
+// Future for node server to query tx status
+type TxStatus struct {
+	deferError
+	ErrorMessage string
+	StatusCode   rpcpb.TxStatusEnum
 }
