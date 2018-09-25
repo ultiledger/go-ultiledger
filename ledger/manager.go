@@ -29,6 +29,8 @@ const (
 
 var (
 	ErrUnknownLedgerState = errors.New("unknown ledger state")
+	ErrInsufficientForFee = errors.New("insufficient balance for fee")
+	ErrInsufficientForTx  = errors.New("insufficient balance for tx")
 )
 
 var (
@@ -39,6 +41,15 @@ var (
 	GenesisBaseFee       = uint64(1000)
 	GenesisBaseReserve   = uint64(1000000000)
 )
+
+// TxResult represents the status of each tx,
+// the tx is successfully applied if the err
+// is nil or the error message will contains
+// details about the error.
+type TxResult struct {
+	Err error
+	Tx  *ultpb.Tx
+}
 
 // ledger manager is responsible for all the operations on ledgers
 type Manager struct {
@@ -72,15 +83,23 @@ type Manager struct {
 	currLedgerHeader *ultpb.LedgerHeader
 	// hash of current latest committed ledger header
 	currLedgerHeaderHash string
+
+	// internal channel for tx result
+	txResultChan chan *TxResult
+
+	// stop channel
+	stopChan chan struct{}
 }
 
 func NewManager(d db.DB, am *account.Manager) *Manager {
 	lm := &Manager{
-		store:       d,
-		bucket:      "LEDGERS",
-		am:          am,
-		ledgerState: LedgerStateNotSynced,
-		startTime:   time.Now().Unix(),
+		store:        d,
+		bucket:       "LEDGERS",
+		am:           am,
+		ledgerState:  LedgerStateNotSynced,
+		startTime:    time.Now().Unix(),
+		txResultChan: make(chan *TxResult, 10),
+		stopChan:     make(chan struct{}),
 	}
 	cache, err := lru.New(1000)
 	if err != nil {
@@ -92,6 +111,14 @@ func NewManager(d db.DB, am *account.Manager) *Manager {
 		log.Fatalf("create db bucket %s failed: %v", lm.bucket, err)
 	}
 	return lm
+}
+
+// Start the ledger manager
+func (lm *Manager) Start() {}
+
+// Stop the ledger manager
+func (lm *Manager) Stop() {
+	close(lm.stopChan)
 }
 
 // Start the genesis ledger and initialize master account
@@ -128,6 +155,11 @@ func (lm *Manager) NextLedgerHeaderSeq() uint64 {
 		log.Fatal("current ledger header is nil")
 	}
 	return lm.currLedgerHeader.SeqNum + 1
+}
+
+// Ready returns transaction status with error messages
+func (lm *Manager) Ready() <-chan *TxResult {
+	return lm.txResultChan
 }
 
 // Receive externalized consensus value and do appropriate operations
@@ -169,7 +201,46 @@ func (lm *Manager) closeLedger(index uint64, value string, txset *ultpb.TxSet) e
 		accTxMap[tx.AccountID] = append(accTxMap[tx.AccountID], tx)
 	}
 
-	// charge fees
+	// charge tx fees
+	for id, txs := range accTxMap {
+		acc, err := lm.am.GetAccount(id)
+		if err != nil {
+			return fmt.Errorf("get account failed: %v", err)
+		}
+
+		// check sufficiency of balance
+		i := 0
+		for ; i < len(txs); i++ {
+			if acc.Balance < txs[i].Fee {
+				lm.txResultChan <- &TxResult{
+					Tx:  txs[i],
+					Err: ErrInsufficientForFee,
+				}
+				break
+			}
+			acc.Balance -= txs[i].Fee
+		}
+
+		// shrink txs of accounts to only maintain tx with
+		// sufficient balance for tx fee
+		accTxMap[id] = accTxMap[id][0:i]
+
+		// the rest txs will all have insufficient balance
+		for ; i < len(txs); i++ {
+			lm.txResultChan <- &TxResult{
+				Tx:  txs[i],
+				Err: ErrInsufficientForFee,
+			}
+		}
+
+		// update account
+		err = lm.am.UpdateAccount(acc)
+		if err != nil {
+			return fmt.Errorf("update account %s failed: %v", id)
+		}
+	}
+
+	// TODO(bobonovski) apply tx ops
 
 	return nil
 }
