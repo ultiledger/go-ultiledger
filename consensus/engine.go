@@ -330,7 +330,7 @@ func (e *Engine) RecvTx(tx *ultpb.Tx) error {
 	if balance < totalFees {
 		return fmt.Errorf("account %s insufficient balance", tx.AccountID)
 	}
-	e.txMap[tx.AccountID].AddTx(tx, h)
+	e.txMap[tx.AccountID].AddTx(tx)
 	e.txSet.Add(h)
 
 	// add tx to broadcast channel

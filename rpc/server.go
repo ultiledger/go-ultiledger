@@ -167,10 +167,27 @@ func (s *NodeServer) Hello(ctx context.Context, req *rpcpb.HelloRequest) (*rpcpb
 
 func (s *NodeServer) SubmitTx(ctx context.Context, req *rpcpb.SubmitTxRequest) (*rpcpb.SubmitTxResponse, error) {
 	resp := &rpcpb.SubmitTxResponse{}
+
+	// decode pb to tx
 	tx, err := ultpb.DecodeTx(req.Data)
 	if err != nil {
 		return resp, err
 	}
+
+	// get account key
+	accKey, err := crypto.DecodeKey(tx.AccountID)
+	if err != nil {
+		return resp, err
+	}
+	if accKey.Code != crypto.KeyTypeAccountID {
+		return resp, errors.New("invalid account ID")
+	}
+
+	// verify signature
+	if !crypto.VerifyByKey(accKey, req.Signature, req.Data) {
+		return resp, errors.New("invalid signature")
+	}
+
 	f := &future.Tx{Tx: tx}
 	f.Init()
 	s.txFuture <- f

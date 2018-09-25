@@ -14,8 +14,6 @@ type TxHistory struct {
 	TotalFees uint64
 	// list of transactions
 	TxList []*ultpb.Tx
-	// list of hash of corresponding transactions
-	TxHashList []string
 }
 
 func NewTxHistory() *TxHistory {
@@ -30,13 +28,12 @@ func NewTxHistory() *TxHistory {
 // Add transaction to pending list, note that before
 // adding any transaction, it should be checked against
 // signature correctness, sufficient balance of account, etc.
-func (th *TxHistory) AddTx(tx *ultpb.Tx, hash string) error {
+func (th *TxHistory) AddTx(tx *ultpb.Tx) error {
 	if tx.SequenceNumber < th.MaxSeqNum {
 		return fmt.Errorf("tx seqnum mismatch: max %d, input %d", th.MaxSeqNum, tx.SequenceNumber)
 	}
 	th.TotalFees += tx.Fee
 	th.TxList = append(th.TxList, tx)
-	th.TxHashList = append(th.TxHashList, hash)
 	return nil
 }
 

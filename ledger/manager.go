@@ -162,6 +162,13 @@ func (lm *Manager) closeLedger(index uint64, value string, txset *ultpb.TxSet) e
 	// sort tx by sequence number
 	sort.Sort(TxSlice(txset.TxList))
 
+	// group tx by account and txs of each account is sorted
+	// by sequence number in increasing order
+	accTxMap := make(map[string][]*ultpb.Tx)
+	for _, tx := range txset.TxList {
+		accTxMap[tx.AccountID] = append(accTxMap[tx.AccountID], tx)
+	}
+
 	// charge fees
 
 	return nil
