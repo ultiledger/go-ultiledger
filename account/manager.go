@@ -3,6 +3,7 @@ package account
 import (
 	"fmt"
 
+	pb "github.com/golang/protobuf/proto"
 	lru "github.com/hashicorp/golang-lru"
 
 	"github.com/ultiledger/go-ultiledger/crypto"
@@ -84,9 +85,12 @@ func (am *Manager) CreateAccount(accountID string, balance uint64, signer string
 
 // Get account information from accountID
 func (am *Manager) GetAccount(accountID string) (*ultpb.Account, error) {
-	// first check the LRU cache
+	// first check the LRU cache, if the account is in the cache
+	// we return a deep copy of the account
 	if acc, ok := am.accounts.Get(accountID); ok {
-		return acc.(*ultpb.Account), nil
+		a := acc.(*ultpb.Account)
+		accCopy := pb.Clone(a)
+		return accCopy.(*ultpb.Account), nil
 	}
 
 	// then check database
@@ -103,4 +107,32 @@ func (am *Manager) GetAccount(accountID string) (*ultpb.Account, error) {
 	am.accounts.Add(accountID, acc)
 
 	return acc, nil
+}
+
+// Update account information
+func (am *Manager) UpdateAccount(acc *ultpb.Account) error {
+	oldAcc, err := am.GetAccount(acc.AccountID)
+	if err != nil {
+		return fmt.Errorf("get account failed: %v", err)
+	}
+
+	// we cannot change the signer of the account
+	if oldAcc.Signer != acc.Signer {
+		return fmt.Errorf("cannot update account signer")
+	}
+
+	accb, err := ultpb.Encode(acc)
+	if err != nil {
+		return fmt.Errorf("encode account failed: %v", err)
+	}
+
+	// update account in db
+	err = am.store.Set(am.bucket, []byte(acc.AccountID), accb)
+	if err != nil {
+		return fmt.Errorf("save account in db failed: %v", err)
+	}
+
+	am.accounts.Add(acc.AccountID, acc)
+
+	return nil
 }
