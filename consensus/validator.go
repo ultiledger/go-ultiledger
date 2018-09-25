@@ -113,17 +113,7 @@ func (v *Validator) Stop() {
 // Ready retrives ready statements with decree index less than
 // and equal to input idx.
 func (v *Validator) Ready() <-chan *Statement {
-	stmtChan := make(chan *Statement)
-	go func() {
-		for stmt := range v.readyChan {
-			select {
-			case stmtChan <- stmt:
-			case <-v.stopChan:
-				return
-			}
-		}
-	}()
-	return stmtChan
+	return v.readyChan
 }
 
 // Receive new statement
