@@ -16,7 +16,6 @@ import (
 	"github.com/ultiledger/go-ultiledger/log"
 	"github.com/ultiledger/go-ultiledger/peer"
 	"github.com/ultiledger/go-ultiledger/rpc"
-	"github.com/ultiledger/go-ultiledger/rpc/rpcpb"
 	"github.com/ultiledger/go-ultiledger/ultpb"
 )
 
@@ -66,8 +65,6 @@ func ValidateEngineContext(ec *EngineContext) error {
 type Engine struct {
 	store  db.DB
 	bucket string
-	// for saving transaction status
-	statusBucket string
 
 	seed   string
 	nodeID string
@@ -122,7 +119,6 @@ func NewEngine(ctx *EngineContext) *Engine {
 	e := &Engine{
 		store:              ctx.Store,
 		bucket:             "ENGINE",
-		statusBucket:       "TXSTATUS",
 		seed:               ctx.Seed,
 		pm:                 ctx.PM,
 		am:                 ctx.AM,
@@ -147,15 +143,6 @@ func NewEngine(ctx *EngineContext) *Engine {
 	if err != nil {
 		log.Fatalf("create db bucket %s failed: %v", e.bucket, err)
 	}
-	err = e.store.CreateBucket(e.statusBucket)
-	if err != nil {
-		log.Fatalf("create db bucket %s failed: %v", e.statusBucket, err)
-	}
-	cache, err := lru.New(10000)
-	if err != nil {
-		log.Fatalf("create consensus engine LRU cache failed: %v", err)
-	}
-	e.txStatus = cache
 	return e
 }
 
@@ -234,36 +221,6 @@ func (e *Engine) Start() {
 func (e *Engine) Stop() {
 	close(e.stopChan)
 	e.validator.Stop()
-}
-
-// Get the current status of the transaction
-func (e *Engine) GetTxStatus(txHash string) rpcpb.TxStatusEnum {
-	if tx, ok := e.txStatus.Get(txHash); ok {
-		return tx.(rpcpb.TxStatusEnum)
-	}
-
-	b, ok := e.store.Get(e.statusBucket, []byte(txHash))
-	if !ok {
-		return rpcpb.TxStatusEnum_NOTEXIST
-	}
-
-	sname := string(b)
-
-	return rpcpb.TxStatusEnum(rpcpb.TxStatusEnum_value[sname])
-}
-
-// Update transaction status
-func (e *Engine) UpdateTxStatus(txHash string, status rpcpb.TxStatusEnum) error {
-	sname := rpcpb.TxStatusEnum_name[int32(status)]
-
-	e.txStatus.Add(txHash, status)
-
-	err := e.store.Set(e.statusBucket, []byte(txHash), []byte(sname))
-	if err != nil {
-		return err
-	}
-
-	return nil
 }
 
 // Get the quorum of the quorum hash
