@@ -31,6 +31,7 @@ var (
 	ErrUnknownLedgerState = errors.New("unknown ledger state")
 	ErrInsufficientForFee = errors.New("insufficient balance for fee")
 	ErrInsufficientForTx  = errors.New("insufficient balance for tx")
+	ErrInvalidSeqNum      = errors.New("invalid sequence number")
 )
 
 var (
@@ -208,30 +209,32 @@ func (lm *Manager) closeLedger(index uint64, value string, txset *ultpb.TxSet) e
 			return fmt.Errorf("get account failed: %v", err)
 		}
 
-		// check sufficiency of balance
+		// cache normal tx
+		txList := make([]*ultpb.Tx, 0)
+
 		i := 0
 		for ; i < len(txs); i++ {
+			// check validity of sequence number
+			if acc.SequenceNumber > txs[i].SequenceNumber {
+				lm.txResultChan <- &TxResult{
+					Tx:  txs[i],
+					Err: ErrInvalidSeqNum,
+				}
+			}
+			// check sufficiency of balance
 			if acc.Balance < txs[i].Fee {
 				lm.txResultChan <- &TxResult{
 					Tx:  txs[i],
 					Err: ErrInsufficientForFee,
 				}
-				break
 			}
 			acc.Balance -= txs[i].Fee
+			acc.SequenceNumber = txs[i].SequenceNumber
+			txList = append(txList, txs[i])
 		}
 
-		// shrink txs of accounts to only maintain tx with
-		// sufficient balance for tx fee
-		accTxMap[id] = accTxMap[id][0:i]
-
-		// the rest txs will all have insufficient balance
-		for ; i < len(txs); i++ {
-			lm.txResultChan <- &TxResult{
-				Tx:  txs[i],
-				Err: ErrInsufficientForFee,
-			}
-		}
+		// shrink txs of accounts to only maintain normal tx
+		accTxMap[id] = txList
 
 		// update account
 		err = lm.am.UpdateAccount(acc)
