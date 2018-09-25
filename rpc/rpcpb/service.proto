@@ -18,22 +18,21 @@ enum TxStatusEnum {
   REJECTED = 1;  // rejected because of some immediate error checking
   ACCEPTED = 2;  // transaction accepted but not yet confirmed by consensus
   CONFIRMED = 3; // transaction is valid and confirmed by consensus
-  FAILED = 4;    // failed because of consensus 
+  FAILED = 4;    // failed because of some error
 }
 
 message SubmitTxRequest {
   // transaction data in pb format
   bytes Data = 1;
+  // transaction ULTKey
+  string TxKey = 2;
   // digital signature of the data signed by 
   // the source account private key
-  string Signature = 2;
+  string Signature = 3;
 }
 
 message SubmitTxResponse {
   TxStatusEnum TxStatus = 1;
-  // the transaction hash is only valid when the response
-  // status is ACCEPTED or CONFIRMED 
-  string TxHash = 2;
   // error message for REJECTED transaction
   string ErrorMessage = 3;
 }

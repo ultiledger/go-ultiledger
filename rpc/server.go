@@ -1,6 +1,7 @@
 package rpc
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -39,18 +40,21 @@ type NodeServer struct {
 	quorumFuture chan<- *future.Quorum
 	// future for query txset
 	txsetFuture chan<- *future.TxSet
+	// future for query tx status
+	txsFuture chan<- *future.TxStatus
 }
 
 // ServerContext represents contextual information for running server
 type ServerContext struct {
-	Addr         string                 // local network address
-	NodeID       string                 // local node ID
-	Seed         string                 // local node seed
-	PeerFuture   chan *future.Peer      // channel for sending discovered peer to node
-	TxFuture     chan *future.Tx        // channel for sending received tx to node
-	StmtFuture   chan *future.Statement // channel for sending received statement to node
-	QuorumFuture chan *future.Quorum    // channel for sending quorum query to consensus engine
-	TxSetFuture  chan *future.TxSet     // channel for sending txset query to consensus engine
+	Addr           string                 // local network address
+	NodeID         string                 // local node ID
+	Seed           string                 // local node seed
+	PeerFuture     chan *future.Peer      // channel for sending discovered peer to node
+	TxFuture       chan *future.Tx        // channel for sending received tx to node
+	StmtFuture     chan *future.Statement // channel for sending received statement to node
+	QuorumFuture   chan *future.Quorum    // channel for sending quorum query to consensus engine
+	TxSetFuture    chan *future.TxSet     // channel for sending txset query to consensus engine
+	TxStatusFuture chan *future.TxStatus  // channel for sending txstatus query to consensus engine
 }
 
 func ValidateServerContext(sc *ServerContext) error {
@@ -188,13 +192,26 @@ func (s *NodeServer) SubmitTx(ctx context.Context, req *rpcpb.SubmitTxRequest) (
 		return resp, errors.New("invalid signature")
 	}
 
-	f := &future.Tx{Tx: tx}
+	// verify tx key
+	txKey, err := crypto.DecodeKey(req.TxKey)
+	if err != nil {
+		return resp, errors.New("decode tx key failed")
+	}
+	txHash, err := ultpb.SHA256HashBytes(tx)
+	if err != nil {
+		return resp, errors.New("compute tx hash failed")
+	}
+	if !bytes.Equal(txHash[:], txKey.Hash[:]) {
+		return resp, errors.New("tx key hash mismatch")
+	}
+
+	f := &future.Tx{Tx: tx, TxKey: req.TxKey}
 	f.Init()
 	s.txFuture <- f
 	if err := f.Error(); err != nil {
 		return resp, err
 	}
-	return nil, nil
+	return resp, nil
 }
 
 // Query accepts information query requests from peers and
