@@ -1,4 +1,4 @@
-package api
+package node
 
 import (
 	"net"
@@ -16,6 +16,7 @@ import (
 	"github.com/ultiledger/go-ultiledger/peer"
 	"github.com/ultiledger/go-ultiledger/rpc"
 	"github.com/ultiledger/go-ultiledger/rpc/rpcpb"
+	"github.com/ultiledger/go-ultiledger/tx"
 	"github.com/ultiledger/go-ultiledger/ultpb"
 )
 
@@ -37,6 +38,7 @@ type Node struct {
 	pm     *peer.Manager
 	lm     *ledger.Manager
 	am     *account.Manager
+	tm     *tx.Manager
 	engine *consensus.Engine
 
 	// channel for stopping all the subroutines
@@ -72,9 +74,22 @@ func NewNode(conf *Config) *Node {
 	}
 	store := ctor(conf.DBPath)
 
+	// peer and account managers are independent
 	pm := peer.NewManager(conf.Peers, addr, nodeID)
 	am := account.NewManager(store)
-	lm := ledger.NewManager(store, am)
+
+	// tx manager depends on peer and account manager
+	txCtx := &tx.ManagerContext{
+		Store:       store,
+		PM:          pm,
+		AM:          am,
+		BaseReserve: ledger.GenesisBaseReserve,
+		Seed:        seed,
+	}
+	tm := tx.NewManager(txCtx)
+
+	// ledger manager depends on account and tx manager
+	lm := ledger.NewManager(store, am, tm)
 
 	stopChan := make(chan struct{})
 
@@ -86,6 +101,7 @@ func NewNode(conf *Config) *Node {
 		PM:     pm,
 		AM:     am,
 		LM:     lm,
+		TM:     tm,
 		Quorum: conf.Quorum,
 	}
 	engine := consensus.NewEngine(engineCtx)
@@ -119,6 +135,7 @@ func NewNode(conf *Config) *Node {
 		pm:        pm,
 		lm:        lm,
 		am:        am,
+		tm:        tm,
 		engine:    engine,
 		addr:      addr,
 		nodeID:    nodeID,
@@ -185,7 +202,7 @@ func (n *Node) txResultLoop() {
 				status.StatusCode = rpcpb.TxStatusCode_CONFIRMED
 			}
 
-			err := n.engine.UpdateTxStatus(txKey, status)
+			err := n.tm.UpdateTxStatus(txKey, status)
 			if err != nil {
 				log.Errorw("update tx status failed: %v", err, "tx", txKey)
 			}
@@ -202,7 +219,7 @@ func (n *Node) eventLoop() {
 	for {
 		select {
 		case txf := <-n.txFuture:
-			err := n.engine.RecvTx(txf.TxKey, txf.Tx)
+			err := n.tm.AddTx(txf.TxKey, txf.Tx)
 			if err != nil {
 				log.Errorf("add tx failed: %v", err)
 			}
@@ -234,7 +251,7 @@ func (n *Node) eventLoop() {
 			txf.TxSet = txset
 			txf.Respond(err)
 		case txs := <-n.txsFuture:
-			txstatus, err := n.engine.GetTxStatus(txs.TxKey)
+			txstatus, err := n.tm.GetTxStatus(txs.TxKey)
 			if err != nil {
 				log.Errorw("query tx status failed: %v", err, "tx", txs.TxKey)
 			}

@@ -21,7 +21,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	"github.com/ultiledger/go-ultiledger/api"
+	"github.com/ultiledger/go-ultiledger/node"
 )
 
 var startCmd = &cobra.Command{
@@ -39,12 +39,12 @@ var startCmd = &cobra.Command{
 			log.Fatal(err)
 		}
 		// init node config from viper
-		c, err := api.NewConfig(v)
+		c, err := node.NewConfig(v)
 		if err != nil {
 			log.Fatal(err)
 		}
 		// bootstrap a new ULTNode
-		n := api.NewNode(c)
+		n := node.NewNode(c)
 		n.Start()
 	},
 }

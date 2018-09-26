@@ -30,6 +30,12 @@ const (
 	BallotPhaseExternalize
 )
 
+// Information about externalized value
+type ExternalizeValue struct {
+	Index uint64 // index of decree
+	Value string // consensus value
+}
+
 // DecreeContext contains contextual information Decree needs
 type DecreeContext struct {
 	Index           uint64  // decree index

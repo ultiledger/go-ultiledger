@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/deckarep/golang-set"
-	pb "github.com/golang/protobuf/proto"
 	lru "github.com/hashicorp/golang-lru"
 
 	"github.com/ultiledger/go-ultiledger/account"
@@ -17,7 +16,7 @@ import (
 	"github.com/ultiledger/go-ultiledger/log"
 	"github.com/ultiledger/go-ultiledger/peer"
 	"github.com/ultiledger/go-ultiledger/rpc"
-	"github.com/ultiledger/go-ultiledger/rpc/rpcpb"
+	"github.com/ultiledger/go-ultiledger/tx"
 	"github.com/ultiledger/go-ultiledger/ultpb"
 )
 
@@ -35,6 +34,7 @@ type EngineContext struct {
 	PM     *peer.Manager    // peer manager
 	AM     *account.Manager // account manager
 	LM     *ledger.Manager  // ledger manager
+	TM     *tx.Manager      // tx manager
 	Quorum *ultpb.Quorum    // initial quorum parsed from config
 }
 
@@ -57,6 +57,9 @@ func ValidateEngineContext(ec *EngineContext) error {
 	if ec.LM == nil {
 		return fmt.Errorf("ledger manager is nil")
 	}
+	if ec.TM == nil {
+		return fmt.Errorf("tx manager is nil")
+	}
 	if ec.Quorum == nil {
 		return fmt.Errorf("initial quorum is nil")
 	}
@@ -76,6 +79,7 @@ type Engine struct {
 	pm *peer.Manager
 	am *account.Manager
 	lm *ledger.Manager
+	tm *tx.Manager
 
 	// statement validator
 	validator *Validator
@@ -95,9 +99,6 @@ type Engine struct {
 
 	// transactions waiting to be include in the ledger
 	txSet mapset.Set
-
-	// accountID to txlist history map
-	txMap map[string]*TxHistory
 
 	// channel for broadcasting statement
 	statementChan chan *ultpb.Statement
@@ -128,9 +129,9 @@ func NewEngine(ctx *EngineContext) *Engine {
 		pm:                 ctx.PM,
 		am:                 ctx.AM,
 		lm:                 ctx.LM,
+		tm:                 ctx.TM,
 		decrees:            make(map[uint64]*Decree),
 		txSet:              mapset.NewSet(),
-		txMap:              make(map[string]*TxHistory),
 		statementChan:      make(chan *ultpb.Statement),
 		txChan:             make(chan *ultpb.Tx),
 		txsetDownloadChan:  make(chan string),
@@ -169,12 +170,6 @@ func (e *Engine) Start() {
 				err := e.broadcastStatement(stmt)
 				if err != nil {
 					log.Errorf("broadcast statement failed: %v", err)
-					continue
-				}
-			case tx := <-e.txChan:
-				err := e.broadcastTx(tx)
-				if err != nil {
-					log.Errorf("broadcast tx failed: %v", err)
 					continue
 				}
 			case txsetHash := <-e.txsetDownloadChan:
@@ -237,44 +232,6 @@ func (e *Engine) Stop() {
 	e.validator.Stop()
 }
 
-// Get the status of tx
-func (e *Engine) GetTxStatus(txKey string) (*rpcpb.TxStatus, error) {
-	if tx, ok := e.txStatus.Get(txKey); ok {
-		return tx.(*rpcpb.TxStatus), nil
-	}
-
-	status := &rpcpb.TxStatus{}
-	b, ok := e.store.Get(e.statusBucket, []byte(txKey))
-	if !ok {
-		status.StatusCode = rpcpb.TxStatusCode_NOTEXIST
-		return status, nil
-	}
-
-	err := pb.Unmarshal(b, status)
-	if err != nil {
-		return nil, err
-	}
-
-	return status, nil
-}
-
-// Update the status of tx
-func (e *Engine) UpdateTxStatus(txKey string, status *rpcpb.TxStatus) error {
-	e.txStatus.Add(txKey, status)
-
-	b, err := ultpb.Encode(status)
-	if err != nil {
-		return fmt.Errorf("encode status failed: %v", err)
-	}
-
-	err = e.store.Set(e.statusBucket, []byte(txKey), b)
-	if err != nil {
-		return fmt.Errorf("save status in db failed: %v", err)
-	}
-
-	return nil
-}
-
 // Get the quorum of the quorum hash
 func (e *Engine) GetQuorum(quorumHash string) (*Quorum, error) {
 	q, ok := e.validator.GetQuorum(quorumHash)
@@ -301,48 +258,6 @@ func MaxUint64(x uint64, y uint64) uint64 {
 	return y
 }
 
-// Add transaction to internal pending set
-func (e *Engine) RecvTx(txKey string, tx *ultpb.Tx) error {
-	if e.txSet.Contains(txKey) {
-		// directly return for duplicate tx
-		return nil
-	}
-
-	// get the account information
-	acc, err := e.am.GetAccount(tx.AccountID)
-	if err != nil {
-		return fmt.Errorf("get account %s failed: %v", tx.AccountID, err)
-	}
-
-	// compute the total fees and max sequence number
-	totalFees := tx.Fee
-	maxSeq := tx.SequenceNumber
-	if history, ok := e.txMap[tx.AccountID]; ok {
-		totalFees += history.TotalFees
-		maxSeq = MaxUint64(maxSeq, history.MaxSeqNum)
-	} else {
-		e.txMap[tx.AccountID] = NewTxHistory()
-	}
-
-	// check whether tx sequence number is larger than existing one
-	if maxSeq > tx.SequenceNumber {
-		return fmt.Errorf("account %s seqnum mismatch: max %d, input %d", tx.AccountID, maxSeq, tx.SequenceNumber)
-	}
-
-	// check whether the accounts has sufficient balance
-	balance := acc.Balance - ledger.GenesisBaseReserve*uint64(acc.EntryCount)
-	if balance < totalFees {
-		return fmt.Errorf("account %s insufficient balance", tx.AccountID)
-	}
-	e.txMap[tx.AccountID].AddTx(tx)
-	e.txSet.Add(txKey)
-
-	// add tx to broadcast channel
-	go func() { e.txChan <- tx }()
-
-	return nil
-}
-
 // RecvStatement deals with received broadcast statement
 func (e *Engine) RecvStatement(stmt *ultpb.Statement) error {
 	// ignore own message
@@ -356,29 +271,6 @@ func (e *Engine) RecvStatement(stmt *ultpb.Statement) error {
 	if err != nil {
 		return fmt.Errorf("send statement to validator failed: %v", err)
 	}
-	return nil
-}
-
-// Broadcast transaction through rpc broadcast
-func (e *Engine) broadcastTx(tx *ultpb.Tx) error {
-	clients := e.pm.GetLiveClients()
-	metadata := e.pm.GetMetadata()
-
-	payload, err := ultpb.Encode(tx)
-	if err != nil {
-		return fmt.Errorf("encode tx failed: %v", err)
-	}
-
-	sign, err := crypto.Sign(e.seed, payload)
-	if err != nil {
-		return fmt.Errorf("sign tx failed: %v", err)
-	}
-
-	err = rpc.BroadcastTx(clients, metadata, payload, sign)
-	if err != nil {
-		return fmt.Errorf("rpc broadcas failed: %v", err)
-	}
-
 	return nil
 }
 
@@ -465,16 +357,9 @@ func (e *Engine) queryTxSet(txsetHash string) (*TxSet, error) {
 
 // Try to propose current transaction set for consensus
 func (e *Engine) Propose() error {
-	// TODO(bobonovski) use sync.Pool
 	txSet := &TxSet{
 		PrevLedgerHash: e.lm.CurrLedgerHeaderHash(),
-	}
-
-	// append pending transactions to propose list
-	for _, th := range e.txMap {
-		for _, tx := range th.TxList {
-			txSet.TxList = append(txSet.TxList, tx)
-		}
+		TxList:         e.tm.GetTxList(),
 	}
 
 	// compute hash

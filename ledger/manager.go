@@ -12,6 +12,7 @@ import (
 	"github.com/ultiledger/go-ultiledger/crypto"
 	"github.com/ultiledger/go-ultiledger/db"
 	"github.com/ultiledger/go-ultiledger/log"
+	"github.com/ultiledger/go-ultiledger/tx"
 	"github.com/ultiledger/go-ultiledger/ultpb"
 )
 
@@ -61,6 +62,9 @@ type Manager struct {
 	// account manager
 	am *account.Manager
 
+	// tx manager
+	tm *tx.Manager
+
 	// LRU cache for ledger headers
 	headers *lru.Cache
 
@@ -92,11 +96,12 @@ type Manager struct {
 	stopChan chan struct{}
 }
 
-func NewManager(d db.DB, am *account.Manager) *Manager {
+func NewManager(d db.DB, am *account.Manager, tm *tx.Manager) *Manager {
 	lm := &Manager{
 		store:        d,
 		bucket:       "LEDGERS",
 		am:           am,
+		tm:           tm,
 		ledgerState:  LedgerStateNotSynced,
 		startTime:    time.Now().Unix(),
 		txResultChan: make(chan *TxResult, 10),
@@ -243,7 +248,16 @@ func (lm *Manager) closeLedger(index uint64, value string, txset *ultpb.TxSet) e
 		}
 	}
 
-	// TODO(bobonovski) apply tx ops
+	// apply tx ops
+	/*
+		for id, txs := range accTxMap {
+			acc, _ := lm.am.GetAccount(id) // we already checked the error in fee charge
+
+			for _, tx := range txs {
+
+			}
+		}
+	*/
 
 	return nil
 }
@@ -270,7 +284,7 @@ func (lm *Manager) advanceLedger(seq uint64, prevHeaderHash string, txHash strin
 	header := &ultpb.LedgerHeader{
 		SeqNum:         seq,
 		PrevLedgerHash: prevHeaderHash,
-		TxListHash:     txHash,
+		TxSetHash:      txHash,
 		ConsensusValue: cv,
 		// global configs below
 		Version:       GenesisVersion,
