@@ -115,6 +115,7 @@ func (lm *Manager) Stop() {
 
 // Start the genesis ledger and initialize master account
 func (lm *Manager) CreateGenesisLedger() error {
+	// close genesis ledger
 	err := lm.advanceLedger(GenesisSeqNum, "", "", "")
 	if err != nil {
 		return fmt.Errorf("advance ledger failed: %v", err)
