@@ -550,6 +550,7 @@ func (d *Decree) recvBallot(stmt *Statement) error {
 		if d.cBallot.Value != wb.Value {
 			return errors.New("incompatible working ballot value")
 		}
+		d.ballots[stmt.NodeID] = stmt
 	}
 
 	return nil
