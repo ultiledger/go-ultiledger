@@ -20,6 +20,19 @@ func Encode(msg proto.Message) ([]byte, error) {
 	return b, nil
 }
 
+// Hash tx and encode to tx ULTKey
+func GetTxKey(tx *Tx) (string, error) {
+	hash, err := SHA256HashBytes(tx)
+	if err != nil {
+		return "", err
+	}
+	key := &crypto.ULTKey{
+		Hash: hash,
+		Code: crypto.KeyTypeTransaction,
+	}
+	return crypto.EncodeKey(key), nil
+}
+
 // Compute sha256 checksum of proto message
 func SHA256Hash(msg proto.Message) (string, error) {
 	b, err := Encode(msg)

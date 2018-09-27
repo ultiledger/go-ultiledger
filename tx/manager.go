@@ -65,7 +65,11 @@ type Manager struct {
 	txSet mapset.Set
 
 	// accountID to tx history map
-	txMap map[string]*TxHistory
+	accTxMap map[string]*TxHistory
+
+	// tx to accountID map for convenient handling
+	// tx that need to be deleted
+	txAccMap map[string]string
 
 	// channel for broadcasting tx
 	txChan chan *ultpb.Tx
@@ -85,7 +89,7 @@ func NewManager(ctx *ManagerContext) *Manager {
 		baseReserve: ctx.BaseReserve,
 		am:          ctx.AM,
 		pm:          ctx.PM,
-		txMap:       make(map[string]*TxHistory),
+		accTxMap:    make(map[string]*TxHistory),
 		txChan:      make(chan *ultpb.Tx),
 		stopChan:    make(chan struct{}),
 	}
@@ -148,11 +152,11 @@ func (m *Manager) AddTx(txKey string, tx *ultpb.Tx) error {
 	// compute the total fees and max sequence number
 	totalFees := tx.Fee
 	maxSeq := tx.SequenceNumber
-	if h, ok := m.txMap[tx.AccountID]; ok {
+	if h, ok := m.accTxMap[tx.AccountID]; ok {
 		totalFees += h.TotalFees
 		maxSeq = MaxUint64(maxSeq, h.MaxSeqNum)
 	} else {
-		m.txMap[tx.AccountID] = NewTxHistory()
+		m.accTxMap[tx.AccountID] = NewTxHistory()
 	}
 
 	// check whether tx sequence number is larger than existing one
@@ -165,7 +169,8 @@ func (m *Manager) AddTx(txKey string, tx *ultpb.Tx) error {
 	if balance < totalFees {
 		return fmt.Errorf("account %s insufficient balance", tx.AccountID)
 	}
-	m.txMap[tx.AccountID].AddTx(txKey, tx)
+	m.accTxMap[tx.AccountID].AddTx(txKey, tx)
+	m.txAccMap[txKey] = tx.AccountID
 	m.txSet.Add(txKey)
 
 	// change tx status
@@ -187,12 +192,29 @@ func (m *Manager) AddTx(txKey string, tx *ultpb.Tx) error {
 func (m *Manager) GetTxList() []*ultpb.Tx {
 	var txList []*ultpb.Tx
 
-	for _, txh := range m.txMap {
+	for _, txh := range m.accTxMap {
 		txs := txh.GetTxList()
 		txList = append(txList, txs...)
 	}
 
 	return txList
+}
+
+// Delete tx list from the manager and update internal fields
+func (m *Manager) DeleteTxList(txList []*ultpb.Tx) {
+	accTxMap := make(map[string][]string)
+	for _, tx := range txList {
+		txKey, _ := ultpb.GetTxKey(tx)
+		accTxMap[tx.AccountID] = append(accTxMap[tx.AccountID], txKey)
+	}
+
+	for acc, txList := range accTxMap {
+		th, ok := m.accTxMap[acc]
+		if !ok {
+			continue
+		}
+		th.DeleteTxList(txList)
+	}
 }
 
 // Get the status of tx

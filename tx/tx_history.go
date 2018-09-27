@@ -38,10 +38,36 @@ func (th *TxHistory) AddTx(txKey string, tx *ultpb.Tx) error {
 	th.TotalFees += tx.Fee
 
 	th.rw.Lock()
+	defer th.rw.Unlock()
+
 	th.txMap[txKey] = tx
-	th.rw.Unlock()
 
 	return nil
+}
+
+// Delete transactions and update fields
+func (th *TxHistory) DeleteTxList(txKeys []string) {
+	th.rw.Lock()
+	defer th.rw.Unlock()
+
+	for _, txKey := range txKeys {
+		if _, ok := th.txMap[txKey]; !ok {
+			continue
+		}
+		delete(th.txMap, txKey)
+	}
+
+	// recalculate total fees and max seq
+	maxseq := uint64(0)
+	totalFees := uint64(0)
+	for _, tx := range th.txMap {
+		if tx.SequenceNumber > maxseq {
+			maxseq = tx.SequenceNumber
+		}
+		totalFees += tx.Fee
+	}
+	th.MaxSeqNum = maxseq
+	th.TotalFees = totalFees
 }
 
 // Get the flattened tx list
@@ -55,4 +81,9 @@ func (th *TxHistory) GetTxList() []*ultpb.Tx {
 	th.rw.RUnlock()
 
 	return txList
+}
+
+// Delete the tx in the list
+func (th *TxHistory) DelTxList(txList []*ultpb.Tx) {
+
 }
