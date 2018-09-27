@@ -214,6 +214,11 @@ func (m *Manager) DeleteTxList(txList []*ultpb.Tx) {
 			continue
 		}
 		th.DeleteTxList(txList)
+
+		// clear empty tx history
+		if th.Size() == 0 {
+			delete(m.accTxMap, acc)
+		}
 	}
 }
 

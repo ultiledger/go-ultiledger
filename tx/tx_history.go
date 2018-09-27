@@ -83,7 +83,7 @@ func (th *TxHistory) GetTxList() []*ultpb.Tx {
 	return txList
 }
 
-// Delete the tx in the list
-func (th *TxHistory) DelTxList(txList []*ultpb.Tx) {
-
+// Get the size of internal tx map
+func (th *TxHistory) Size() int {
+	return len(th.txMap)
 }
