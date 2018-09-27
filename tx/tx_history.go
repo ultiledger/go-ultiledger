@@ -2,7 +2,6 @@ package tx
 
 import (
 	"fmt"
-	"sync"
 
 	"github.com/ultiledger/go-ultiledger/ultpb"
 )
@@ -14,7 +13,6 @@ type TxHistory struct {
 	// total fees of the tx list
 	TotalFees uint64
 	// transaction map
-	rw    sync.RWMutex
 	txMap map[string]*ultpb.Tx
 }
 
@@ -37,9 +35,6 @@ func (th *TxHistory) AddTx(txKey string, tx *ultpb.Tx) error {
 	th.MaxSeqNum = tx.SequenceNumber
 	th.TotalFees += tx.Fee
 
-	th.rw.Lock()
-	defer th.rw.Unlock()
-
 	th.txMap[txKey] = tx
 
 	return nil
@@ -47,9 +42,6 @@ func (th *TxHistory) AddTx(txKey string, tx *ultpb.Tx) error {
 
 // Delete transactions and update fields
 func (th *TxHistory) DeleteTxList(txKeys []string) {
-	th.rw.Lock()
-	defer th.rw.Unlock()
-
 	for _, txKey := range txKeys {
 		if _, ok := th.txMap[txKey]; !ok {
 			continue
@@ -74,11 +66,9 @@ func (th *TxHistory) DeleteTxList(txKeys []string) {
 func (th *TxHistory) GetTxList() []*ultpb.Tx {
 	var txList []*ultpb.Tx
 
-	th.rw.RLock()
 	for _, tx := range th.txMap {
 		txList = append(txList, tx)
 	}
-	th.rw.RUnlock()
 
 	return txList
 }

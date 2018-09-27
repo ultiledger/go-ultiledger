@@ -8,7 +8,6 @@ import (
 
 	"github.com/ultiledger/go-ultiledger/account"
 	"github.com/ultiledger/go-ultiledger/consensus"
-	"github.com/ultiledger/go-ultiledger/crypto"
 	"github.com/ultiledger/go-ultiledger/db"
 	"github.com/ultiledger/go-ultiledger/future"
 	"github.com/ultiledger/go-ultiledger/ledger"
@@ -17,7 +16,6 @@ import (
 	"github.com/ultiledger/go-ultiledger/rpc"
 	"github.com/ultiledger/go-ultiledger/rpc/rpcpb"
 	"github.com/ultiledger/go-ultiledger/tx"
-	"github.com/ultiledger/go-ultiledger/ultpb"
 )
 
 // Node is the central controller for ultiledger
@@ -155,9 +153,6 @@ func (n *Node) Start() error {
 	// start node server event loop
 	go n.eventLoop()
 
-	// start tx result event loop
-	go n.txResultLoop()
-
 	// start peer manager
 	n.pm.Start()
 
@@ -179,38 +174,6 @@ func (n *Node) Stop() {
 	close(n.stopChan)
 	n.pm.Stop()
 	n.engine.Stop()
-}
-
-func (n *Node) txResultLoop() {
-	for {
-		select {
-		case tr := <-n.lm.Ready():
-			// get tx key
-			hash, _ := ultpb.SHA256HashBytes(tr.Tx)
-			k := &crypto.ULTKey{
-				Code: crypto.KeyTypeTransaction,
-				Hash: hash,
-			}
-			txKey := crypto.EncodeKey(k)
-
-			// update tx status
-			status := &rpcpb.TxStatus{}
-			if tr.Err != nil {
-				status.StatusCode = rpcpb.TxStatusCode_FAILED
-				status.ErrorMessage = tr.Err.Error()
-			} else {
-				status.StatusCode = rpcpb.TxStatusCode_CONFIRMED
-			}
-
-			err := n.tm.UpdateTxStatus(txKey, status)
-			if err != nil {
-				log.Errorw("update tx status failed: %v", err, "tx", txKey)
-			}
-		case <-n.stopChan:
-			log.Info("shutdown event loop")
-			return
-		}
-	}
 }
 
 // Event loop for processing server received messages

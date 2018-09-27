@@ -105,8 +105,9 @@ func (am *Manager) GetAccount(accountID string) (*ultpb.Account, error) {
 
 	// cache the account
 	am.accounts.Add(accountID, acc)
+	accCopy := pb.Clone(acc)
 
-	return acc, nil
+	return accCopy.(*ultpb.Account), nil
 }
 
 // Update account information

@@ -3,7 +3,6 @@ package ledger
 import (
 	"errors"
 	"fmt"
-	"sort"
 	"time"
 
 	lru "github.com/hashicorp/golang-lru"
@@ -44,15 +43,6 @@ var (
 	GenesisBaseReserve   = uint64(1000000000)
 )
 
-// TxResult represents the status of each tx,
-// the tx is successfully applied if the err
-// is nil or the error message will contains
-// details about the error.
-type TxResult struct {
-	Err error
-	Tx  *ultpb.Tx
-}
-
 // ledger manager is responsible for all the operations on ledgers
 type Manager struct {
 	// db store and corresponding bucket
@@ -89,23 +79,19 @@ type Manager struct {
 	// hash of current latest committed ledger header
 	currLedgerHeaderHash string
 
-	// internal channel for tx result
-	txResultChan chan *TxResult
-
 	// stop channel
 	stopChan chan struct{}
 }
 
 func NewManager(d db.DB, am *account.Manager, tm *tx.Manager) *Manager {
 	lm := &Manager{
-		store:        d,
-		bucket:       "LEDGERS",
-		am:           am,
-		tm:           tm,
-		ledgerState:  LedgerStateNotSynced,
-		startTime:    time.Now().Unix(),
-		txResultChan: make(chan *TxResult, 10),
-		stopChan:     make(chan struct{}),
+		store:       d,
+		bucket:      "LEDGERS",
+		am:          am,
+		tm:          tm,
+		ledgerState: LedgerStateNotSynced,
+		startTime:   time.Now().Unix(),
+		stopChan:    make(chan struct{}),
 	}
 	cache, err := lru.New(1000)
 	if err != nil {
@@ -163,11 +149,6 @@ func (lm *Manager) NextLedgerHeaderSeq() uint64 {
 	return lm.currLedgerHeader.SeqNum + 1
 }
 
-// Ready returns transaction status with error messages
-func (lm *Manager) Ready() <-chan *TxResult {
-	return lm.txResultChan
-}
-
 // Receive externalized consensus value and do appropriate operations
 func (lm *Manager) RecvExtVal(index uint64, value string, txset *ultpb.TxSet) error {
 	log.Infow("recv ext value", "seq", index, "value", value, "prevhash", txset.PrevLedgerHash, "txcount", len(txset.TxList))
@@ -176,10 +157,16 @@ func (lm *Manager) RecvExtVal(index uint64, value string, txset *ultpb.TxSet) er
 	case LedgerStateSynced:
 		if lm.NextLedgerHeaderSeq() == index+1 { // normal case
 			if lm.CurrLedgerHeaderHash() == txset.PrevLedgerHash {
-				// closeLedger
+				err := lm.closeLedger(index, value, txset)
+				if err != nil {
+					return fmt.Errorf("close ledger failed: %v", err)
+				}
 			} else {
 				log.Fatalw("ledger inconsistent", "currhash", lm.CurrLedgerHeaderHash())
 			}
+
+			// update ledger state
+			lm.ledgerState = LedgerStateSynced
 		} else if index <= lm.NextLedgerHeaderSeq() { // old case
 			log.Warnw("received value is old", "nextseq", lm.NextLedgerHeaderSeq())
 		} else { // new case
@@ -195,69 +182,21 @@ func (lm *Manager) RecvExtVal(index uint64, value string, txset *ultpb.TxSet) er
 
 // CloseLedger closes current ledger with new consensus value
 func (lm *Manager) closeLedger(index uint64, value string, txset *ultpb.TxSet) error {
-	// TODO(bobonovski) support ledger version upgrades
-
-	// sort tx by sequence number
-	sort.Sort(TxSlice(txset.TxList))
-
-	// group tx by account and txs of each account is sorted
-	// by sequence number in increasing order
-	accTxMap := make(map[string][]*ultpb.Tx)
-	for _, tx := range txset.TxList {
-		accTxMap[tx.AccountID] = append(accTxMap[tx.AccountID], tx)
+	// apply transactions
+	err := lm.tm.ApplyTxList(txset.TxList)
+	if err != nil {
+		return fmt.Errorf("apply tx list failed: %v", err)
 	}
 
-	// charge tx fees
-	for id, txs := range accTxMap {
-		acc, err := lm.am.GetAccount(id)
-		if err != nil {
-			return fmt.Errorf("get account failed: %v", err)
-		}
-
-		// cache normal tx
-		txList := make([]*ultpb.Tx, 0)
-
-		i := 0
-		for ; i < len(txs); i++ {
-			// check validity of sequence number
-			if acc.SequenceNumber > txs[i].SequenceNumber {
-				lm.txResultChan <- &TxResult{
-					Tx:  txs[i],
-					Err: ErrInvalidSeqNum,
-				}
-			}
-			// check sufficiency of balance
-			if acc.Balance < txs[i].Fee {
-				lm.txResultChan <- &TxResult{
-					Tx:  txs[i],
-					Err: ErrInsufficientForFee,
-				}
-			}
-			acc.Balance -= txs[i].Fee
-			acc.SequenceNumber = txs[i].SequenceNumber
-			txList = append(txList, txs[i])
-		}
-
-		// shrink txs of accounts to only maintain normal tx
-		accTxMap[id] = txList
-
-		// update account
-		err = lm.am.UpdateAccount(acc)
-		if err != nil {
-			return fmt.Errorf("update account %s failed: %v", id)
-		}
+	txsetHash, err := ultpb.GetTxSetHash(txset)
+	if err != nil {
+		return fmt.Errorf("get txset hash failed: %v", err)
 	}
 
-	// apply tx ops
-	/*
-		for id, txs := range accTxMap {
-			acc, _ := lm.am.GetAccount(id) // we already checked the error in fee charge
-
-			for _, tx := range txs {
-
-			}
-		}
-	*/
+	err = lm.advanceLedger(index, txset.PrevLedgerHash, txsetHash, value)
+	if err != nil {
+		return fmt.Errorf("advance ledger failed: %v", err)
+	}
 
 	return nil
 }

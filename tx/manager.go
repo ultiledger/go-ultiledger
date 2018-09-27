@@ -1,7 +1,10 @@
 package tx
 
 import (
+	"errors"
 	"fmt"
+	"sort"
+	"sync"
 
 	"github.com/deckarep/golang-set"
 	pb "github.com/golang/protobuf/proto"
@@ -15,6 +18,12 @@ import (
 	"github.com/ultiledger/go-ultiledger/rpc"
 	"github.com/ultiledger/go-ultiledger/rpc/rpcpb"
 	"github.com/ultiledger/go-ultiledger/ultpb"
+)
+
+var (
+	ErrInsufficientForFee = errors.New("insufficient balance for fee")
+	ErrInsufficientForTx  = errors.New("insufficient balance for tx")
+	ErrInvalidSeqNum      = errors.New("invalid sequence number")
 )
 
 // ManagerContext represents contextual information TxManager needs
@@ -65,6 +74,7 @@ type Manager struct {
 	txSet mapset.Set
 
 	// accountID to tx history map
+	rwm      sync.RWMutex
 	accTxMap map[string]*TxHistory
 
 	// tx to accountID map for convenient handling
@@ -169,8 +179,12 @@ func (m *Manager) AddTx(txKey string, tx *ultpb.Tx) error {
 	if balance < totalFees {
 		return fmt.Errorf("account %s insufficient balance", tx.AccountID)
 	}
+
+	m.rwm.Lock()
 	m.accTxMap[tx.AccountID].AddTx(txKey, tx)
 	m.txAccMap[txKey] = tx.AccountID
+	m.rwm.Unlock()
+
 	m.txSet.Add(txKey)
 
 	// change tx status
@@ -188,10 +202,91 @@ func (m *Manager) AddTx(txKey string, tx *ultpb.Tx) error {
 	return nil
 }
 
+// Apply the tx list by charging fees and applying all the ops
+func (m *Manager) ApplyTxList(txList []*ultpb.Tx) error {
+	// sort tx by sequence number
+	sort.Sort(TxSlice(txList))
+
+	// group tx by account and txs of each account is sorted
+	// by sequence number in increasing order
+	accTxMap := make(map[string][]*ultpb.Tx)
+	for _, tx := range txList {
+		accTxMap[tx.AccountID] = append(accTxMap[tx.AccountID], tx)
+	}
+
+	// charge tx fees
+	for id, txs := range accTxMap {
+		acc, err := m.am.GetAccount(id)
+		if err != nil {
+			return fmt.Errorf("get account failed: %v", err)
+		}
+
+		// cache normal tx
+		txList := make([]*ultpb.Tx, 0)
+
+		i := 0
+		for ; i < len(txs); i++ {
+			txk, _ := ultpb.GetTxKey(txs[i])
+
+			// check validity of sequence number
+			if acc.SequenceNumber > txs[i].SequenceNumber {
+				status := &rpcpb.TxStatus{
+					StatusCode:   rpcpb.TxStatusCode_FAILED,
+					ErrorMessage: ErrInvalidSeqNum.Error(),
+				}
+				err = m.UpdateTxStatus(txk, status)
+				if err != nil {
+					return fmt.Errorf("update tx %s status failed: %v", txk, err)
+				}
+				continue
+			}
+
+			// check sufficiency of balance
+			if acc.Balance < txs[i].Fee {
+				status := &rpcpb.TxStatus{
+					StatusCode:   rpcpb.TxStatusCode_FAILED,
+					ErrorMessage: ErrInsufficientForFee.Error(),
+				}
+				err = m.UpdateTxStatus(txk, status)
+				if err != nil {
+					return fmt.Errorf("update tx %s status failed: %v", txk, err)
+				}
+				continue
+			}
+
+			acc.Balance -= txs[i].Fee
+			acc.SequenceNumber = txs[i].SequenceNumber
+			txList = append(txList, txs[i])
+		}
+
+		// update account balance to charge fees
+		err = m.am.UpdateAccount(acc)
+		if err != nil {
+			return fmt.Errorf("update account failed: %v", err)
+		}
+
+		// shrink txs of accounts to only maintain normal tx
+		accTxMap[id] = txList
+	}
+
+	/*
+		// apply tx ops
+		for id, txs := range accTxMap {
+			acc, _ := lm.am.GetAccount(id)
+			for _, tx := range txs {
+			}
+		}
+	*/
+
+	return nil
+}
+
 // Get concatenated tx list of each account
 func (m *Manager) GetTxList() []*ultpb.Tx {
 	var txList []*ultpb.Tx
 
+	m.rwm.RLock()
+	defer m.rwm.RUnlock()
 	for _, txh := range m.accTxMap {
 		txs := txh.GetTxList()
 		txList = append(txList, txs...)
@@ -209,6 +304,7 @@ func (m *Manager) DeleteTxList(txList []*ultpb.Tx) {
 	}
 
 	for acc, txList := range accTxMap {
+		m.rwm.Lock()
 		th, ok := m.accTxMap[acc]
 		if !ok {
 			continue
@@ -219,6 +315,7 @@ func (m *Manager) DeleteTxList(txList []*ultpb.Tx) {
 		if th.Size() == 0 {
 			delete(m.accTxMap, acc)
 		}
+		m.rwm.Unlock()
 	}
 }
 
