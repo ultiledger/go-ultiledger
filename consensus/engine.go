@@ -219,6 +219,12 @@ func (e *Engine) Start() {
 					log.Errorf("externalize value failed: %v", err, "index", ext.Index, "value", ext.Value)
 					continue
 				}
+				// propose next consensus value
+				err = e.Propose()
+				if err != nil {
+					log.Errorf("propose new consensus value failed: %v", err)
+					continue
+				}
 			case <-e.stopChan:
 				return
 			}
@@ -436,7 +442,16 @@ func (e *Engine) Externalize(idx uint64, value string) error {
 		return fmt.Errorf("externalize value in ledger manager failed: %v", err)
 	}
 
-	// TODO(bobonovski) change the status of pending transactions
+	// delete processed tx
+	e.tm.DeleteTxList(txset.TxList)
+
+	// remove old decree
+	threshold := idx - e.maxDecrees
+	for i, _ := range e.decrees {
+		if i <= threshold {
+			delete(e.decrees, i)
+		}
+	}
 
 	return nil
 }
