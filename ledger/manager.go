@@ -58,6 +58,9 @@ type Manager struct {
 	// LRU cache for ledger headers
 	headers *lru.Cache
 
+	// ledger buffer for unclosed headers
+	buffer *CloseInfoBuffer
+
 	// ledger state
 	ledgerState LedgerState
 
@@ -89,6 +92,7 @@ func NewManager(d db.DB, am *account.Manager, tm *tx.Manager) *Manager {
 		bucket:      "LEDGERS",
 		am:          am,
 		tm:          tm,
+		buffer:      new(CloseInfoBuffer),
 		ledgerState: LedgerStateNotSynced,
 		startTime:   time.Now().Unix(),
 		stopChan:    make(chan struct{}),
@@ -155,6 +159,8 @@ func (lm *Manager) RecvExtVal(index uint64, value string, txset *ultpb.TxSet) er
 	log.Infow("recv ext value", "seq", index, "value", value, "prevhash", txset.PrevLedgerHash, "txcount", len(txset.TxList))
 
 	switch lm.ledgerState {
+	case LedgerStateNotSynced:
+		fallthrough
 	case LedgerStateSynced:
 		if lm.NextLedgerHeaderSeq() == index+1 { // normal case
 			if lm.CurrLedgerHeaderHash() == txset.PrevLedgerHash {
@@ -165,17 +171,17 @@ func (lm *Manager) RecvExtVal(index uint64, value string, txset *ultpb.TxSet) er
 			} else {
 				log.Fatalw("ledger inconsistent", "currhash", lm.CurrLedgerHeaderHash())
 			}
-
-			// update ledger state
 			lm.ledgerState = LedgerStateSynced
 		} else if index <= lm.NextLedgerHeaderSeq() { // old case
 			log.Warnw("received value is old", "nextseq", lm.NextLedgerHeaderSeq())
 		} else { // new case
-			// init catch up
+			lm.ledgerState = LedgerStateSyncing
+			lm.buffer.Append(&CloseInfo{Index: index, Value: value, TxSet: txset})
+			// start to catch up
 		}
 	case LedgerStateSyncing:
-	case LedgerStateNotSynced:
-		// TODO(bobonovski) catch up
+		// append to buffer until local ledger catches up
+		lm.buffer.Append(&CloseInfo{Index: index, Value: value, TxSet: txset})
 	}
 
 	return nil
