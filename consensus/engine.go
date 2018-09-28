@@ -256,6 +256,15 @@ func (e *Engine) GetTxSet(txsetHash string) (*TxSet, error) {
 	return txs, nil
 }
 
+// Recv downloaded txset
+func (e *Engine) RecvTxSet(txsetHash string, txset *TxSet) error {
+	err := e.validator.RecvTxSet(txsetHash, txset)
+	if err != nil {
+		return fmt.Errorf("recv txset failed: %v", err)
+	}
+	return nil
+}
+
 // Find the max between two uint64 values
 func MaxUint64(x uint64, y uint64) uint64 {
 	if x >= y {
