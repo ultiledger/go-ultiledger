@@ -92,7 +92,7 @@ func NewManager(ctx *ManagerContext) *Manager {
 	if err := ValidateManagerContext(ctx); err != nil {
 		log.Fatalf("tx manager context is invalid: %v", err)
 	}
-	m := &Manager{
+	tm := &Manager{
 		store:       ctx.Store,
 		bucket:      "TX",
 		seed:        ctx.Seed,
@@ -103,7 +103,7 @@ func NewManager(ctx *ManagerContext) *Manager {
 		txChan:      make(chan *ultpb.Tx),
 		stopChan:    make(chan struct{}),
 	}
-	err := m.store.CreateBucket(m.bucket)
+	err := tm.store.CreateBucket(tm.bucket)
 	if err != nil {
 		log.Fatalf("create tx bucket failed: %v", err)
 	}
@@ -111,22 +111,22 @@ func NewManager(ctx *ManagerContext) *Manager {
 	if err != nil {
 		log.Fatalf("create tx status LRU cache failed: %v", err)
 	}
-	m.txStatus = cache
-	return m
+	tm.txStatus = cache
+	return tm
 }
 
 // Start the internal event loop for tx manager
-func (m *Manager) Start() {
+func (tm *Manager) Start() {
 	go func() {
 		for {
 			select {
-			case tx := <-m.txChan:
-				err := m.broadcastTx(tx)
+			case tx := <-tm.txChan:
+				err := tm.broadcastTx(tx)
 				if err != nil {
 					log.Errorf("broadcast tx failed: %v", err)
 					continue
 				}
-			case <-m.stopChan:
+			case <-tm.stopChan:
 				return
 			}
 		}
@@ -134,8 +134,8 @@ func (m *Manager) Start() {
 }
 
 // Stop tx manager by closing stopChan to notify goroutines to stop
-func (m *Manager) Stop() {
-	close(m.stopChan)
+func (tm *Manager) Stop() {
+	close(tm.stopChan)
 }
 
 // Find the max between two uint64 values
@@ -147,14 +147,14 @@ func MaxUint64(x uint64, y uint64) uint64 {
 }
 
 // Add transaction to internal pending set
-func (m *Manager) AddTx(txKey string, tx *ultpb.Tx) error {
-	if m.txSet.Contains(txKey) {
+func (tm *Manager) AddTx(txKey string, tx *ultpb.Tx) error {
+	if tm.txSet.Contains(txKey) {
 		// directly return for duplicate tx
 		return nil
 	}
 
 	// get the account information
-	acc, err := m.am.GetAccount(tx.AccountID)
+	acc, err := tm.am.GetAccount(tx.AccountID)
 	if err != nil {
 		return fmt.Errorf("get account %s failed: %v", tx.AccountID, err)
 	}
@@ -162,11 +162,11 @@ func (m *Manager) AddTx(txKey string, tx *ultpb.Tx) error {
 	// compute the total fees and max sequence number
 	totalFees := tx.Fee
 	maxSeq := tx.SequenceNumber
-	if h, ok := m.accTxMap[tx.AccountID]; ok {
+	if h, ok := tm.accTxMap[tx.AccountID]; ok {
 		totalFees += h.TotalFees
 		maxSeq = MaxUint64(maxSeq, h.MaxSeqNum)
 	} else {
-		m.accTxMap[tx.AccountID] = NewTxHistory()
+		tm.accTxMap[tx.AccountID] = NewTxHistory()
 	}
 
 	// check whether tx sequence number is larger than existing one
@@ -175,35 +175,35 @@ func (m *Manager) AddTx(txKey string, tx *ultpb.Tx) error {
 	}
 
 	// check whether the accounts has sufficient balance
-	balance := acc.Balance - m.baseReserve*uint64(acc.EntryCount)
+	balance := acc.Balance - tm.baseReserve*uint64(acc.EntryCount)
 	if balance < totalFees {
 		return fmt.Errorf("account %s insufficient balance", tx.AccountID)
 	}
 
-	m.rwm.Lock()
-	m.accTxMap[tx.AccountID].AddTx(txKey, tx)
-	m.txAccMap[txKey] = tx.AccountID
-	m.rwm.Unlock()
+	tm.rwm.Lock()
+	tm.accTxMap[tx.AccountID].AddTx(txKey, tx)
+	tm.txAccMap[txKey] = tx.AccountID
+	tm.rwm.Unlock()
 
-	m.txSet.Add(txKey)
+	tm.txSet.Add(txKey)
 
 	// change tx status
 	status := &rpcpb.TxStatus{
 		StatusCode: rpcpb.TxStatusCode_ACCEPTED,
 	}
-	err = m.UpdateTxStatus(txKey, status)
+	err = tm.UpdateTxStatus(txKey, status)
 	if err != nil {
 		return fmt.Errorf("update tx status failed: %v", err)
 	}
 
 	// add tx to broadcast channel
-	go func() { m.txChan <- tx }()
+	go func() { tm.txChan <- tx }()
 
 	return nil
 }
 
 // Apply the tx list by charging fees and applying all the ops
-func (m *Manager) ApplyTxList(txList []*ultpb.Tx) error {
+func (tm *Manager) ApplyTxList(txList []*ultpb.Tx) error {
 	// sort tx by sequence number
 	sort.Sort(TxSlice(txList))
 
@@ -216,7 +216,7 @@ func (m *Manager) ApplyTxList(txList []*ultpb.Tx) error {
 
 	// charge tx fees
 	for id, txs := range accTxMap {
-		acc, err := m.am.GetAccount(id)
+		acc, err := tm.am.GetAccount(id)
 		if err != nil {
 			return fmt.Errorf("get account failed: %v", err)
 		}
@@ -234,7 +234,7 @@ func (m *Manager) ApplyTxList(txList []*ultpb.Tx) error {
 					StatusCode:   rpcpb.TxStatusCode_FAILED,
 					ErrorMessage: ErrInvalidSeqNum.Error(),
 				}
-				err = m.UpdateTxStatus(txk, status)
+				err = tm.UpdateTxStatus(txk, status)
 				if err != nil {
 					return fmt.Errorf("update tx %s status failed: %v", txk, err)
 				}
@@ -247,7 +247,7 @@ func (m *Manager) ApplyTxList(txList []*ultpb.Tx) error {
 					StatusCode:   rpcpb.TxStatusCode_FAILED,
 					ErrorMessage: ErrInsufficientForFee.Error(),
 				}
-				err = m.UpdateTxStatus(txk, status)
+				err = tm.UpdateTxStatus(txk, status)
 				if err != nil {
 					return fmt.Errorf("update tx %s status failed: %v", txk, err)
 				}
@@ -260,7 +260,7 @@ func (m *Manager) ApplyTxList(txList []*ultpb.Tx) error {
 		}
 
 		// update account balance to charge fees
-		err = m.am.UpdateAccount(acc)
+		err = tm.am.UpdateAccount(acc)
 		if err != nil {
 			return fmt.Errorf("update account failed: %v", err)
 		}
@@ -282,12 +282,12 @@ func (m *Manager) ApplyTxList(txList []*ultpb.Tx) error {
 }
 
 // Get concatenated tx list of each account
-func (m *Manager) GetTxList() []*ultpb.Tx {
+func (tm *Manager) GetTxList() []*ultpb.Tx {
 	var txList []*ultpb.Tx
 
-	m.rwm.RLock()
-	defer m.rwm.RUnlock()
-	for _, txh := range m.accTxMap {
+	tm.rwm.RLock()
+	defer tm.rwm.RUnlock()
+	for _, txh := range tm.accTxMap {
 		txs := txh.GetTxList()
 		txList = append(txList, txs...)
 	}
@@ -296,7 +296,7 @@ func (m *Manager) GetTxList() []*ultpb.Tx {
 }
 
 // Delete tx list from the manager and update internal fields
-func (m *Manager) DeleteTxList(txList []*ultpb.Tx) {
+func (tm *Manager) DeleteTxList(txList []*ultpb.Tx) {
 	accTxMap := make(map[string][]string)
 	for _, tx := range txList {
 		txKey, _ := ultpb.GetTxKey(tx)
@@ -304,8 +304,8 @@ func (m *Manager) DeleteTxList(txList []*ultpb.Tx) {
 	}
 
 	for acc, txList := range accTxMap {
-		m.rwm.Lock()
-		th, ok := m.accTxMap[acc]
+		tm.rwm.Lock()
+		th, ok := tm.accTxMap[acc]
 		if !ok {
 			continue
 		}
@@ -313,20 +313,20 @@ func (m *Manager) DeleteTxList(txList []*ultpb.Tx) {
 
 		// clear empty tx history
 		if th.Size() == 0 {
-			delete(m.accTxMap, acc)
+			delete(tm.accTxMap, acc)
 		}
-		m.rwm.Unlock()
+		tm.rwm.Unlock()
 	}
 }
 
 // Get the status of tx
-func (m *Manager) GetTxStatus(txKey string) (*rpcpb.TxStatus, error) {
-	if tx, ok := m.txStatus.Get(txKey); ok {
+func (tm *Manager) GetTxStatus(txKey string) (*rpcpb.TxStatus, error) {
+	if tx, ok := tm.txStatus.Get(txKey); ok {
 		return tx.(*rpcpb.TxStatus), nil
 	}
 
 	status := &rpcpb.TxStatus{}
-	b, ok := m.store.Get(m.bucket, []byte(txKey))
+	b, ok := tm.store.Get(tm.bucket, []byte(txKey))
 	if !ok {
 		status.StatusCode = rpcpb.TxStatusCode_NOTEXIST
 		return status, nil
@@ -341,15 +341,15 @@ func (m *Manager) GetTxStatus(txKey string) (*rpcpb.TxStatus, error) {
 }
 
 // Update the status of tx
-func (m *Manager) UpdateTxStatus(txKey string, status *rpcpb.TxStatus) error {
-	m.txStatus.Add(txKey, status)
+func (tm *Manager) UpdateTxStatus(txKey string, status *rpcpb.TxStatus) error {
+	tm.txStatus.Add(txKey, status)
 
 	b, err := ultpb.Encode(status)
 	if err != nil {
 		return fmt.Errorf("encode status failed: %v", err)
 	}
 
-	err = m.store.Set(m.bucket, []byte(txKey), b)
+	err = tm.store.Set(tm.bucket, []byte(txKey), b)
 	if err != nil {
 		return fmt.Errorf("save status in db failed: %v", err)
 	}
@@ -358,16 +358,16 @@ func (m *Manager) UpdateTxStatus(txKey string, status *rpcpb.TxStatus) error {
 }
 
 // Broadcast transaction through rpc broadcast
-func (m *Manager) broadcastTx(tx *ultpb.Tx) error {
-	clients := m.pm.GetLiveClients()
-	metadata := m.pm.GetMetadata()
+func (tm *Manager) broadcastTx(tx *ultpb.Tx) error {
+	clients := tm.pm.GetLiveClients()
+	metadata := tm.pm.GetMetadata()
 
 	payload, err := ultpb.Encode(tx)
 	if err != nil {
 		return fmt.Errorf("encode tx failed: %v", err)
 	}
 
-	sign, err := crypto.Sign(m.seed, payload)
+	sign, err := crypto.Sign(tm.seed, payload)
 	if err != nil {
 		return fmt.Errorf("sign tx failed: %v", err)
 	}
