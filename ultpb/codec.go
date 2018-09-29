@@ -125,6 +125,15 @@ func DecodeTxSet(b []byte) (*TxSet, error) {
 	return txset, nil
 }
 
+// Decode pb message to ledger
+func DecodeLedger(b []byte) (*Ledger, error) {
+	ledger := &Ledger{}
+	if err := proto.Unmarshal(b, ledger); err != nil {
+		return nil, err
+	}
+	return ledger, nil
+}
+
 // Decode pb message to consensus value
 func DecodeConsensusValue(b []byte) (*ConsensusValue, error) {
 	cv := &ConsensusValue{}

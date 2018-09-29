@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package ultpb;
 
+import "transaction.proto";
+
 message LedgerHeader {
   // version of pb message, each time we update the pb message definition, the
   // version number will incremented. The specific version number to use is 
@@ -25,4 +27,10 @@ message LedgerHeader {
   uint64 BaseReserve = 9;
   // close time
   int64 CloseTime = 10;
+}
+
+// Full ledger info of a ledger index
+message Ledger {
+  LedgerHeader LedgerHeader = 1;
+  TxSet TxSet = 2;
 }
