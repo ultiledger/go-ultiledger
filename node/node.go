@@ -165,6 +165,12 @@ func (n *Node) Start() error {
 	// start consensus engine
 	n.engine.Start()
 
+	// start ledger manager
+	n.lm.Start()
+
+	// start tx manager
+	n.tm.Start()
+
 	select {}
 	return nil
 }
@@ -180,6 +186,8 @@ func (n *Node) Stop() {
 	close(n.stopChan)
 	n.pm.Stop()
 	n.engine.Stop()
+	n.lm.Stop()
+	n.tm.Stop()
 }
 
 // Event loop for processing server received messages
