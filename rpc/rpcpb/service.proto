@@ -60,6 +60,7 @@ message NotifyResponse {}
 enum QueryMsgType {
   QUORUM = 0; // query quorum information
   TXSET = 1;  // query txset information
+  LEDGER = 2; // query ledger information
 }
 
 message QueryRequest {

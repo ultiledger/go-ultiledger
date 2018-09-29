@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand"
 	"time"
 
 	pb "github.com/golang/protobuf/proto"
@@ -17,6 +18,7 @@ import (
 type (
 	Quorum = ultpb.Quorum
 	TxSet  = ultpb.TxSet
+	Ledger = ultpb.Ledger
 )
 
 // Query quorum information from peers
@@ -27,16 +29,20 @@ func QueryQuorum(clients []rpcpb.NodeClient, md metadata.MD, payload []byte, sig
 	if signature == "" {
 		return nil, ErrEmptySignature
 	}
+
 	req := &rpcpb.QueryRequest{
 		MsgType:   rpcpb.QueryMsgType_QUORUM,
 		Data:      payload,
 		Signature: signature,
 	}
+
 	msg, err := query(clients, md, req)
 	if err != nil {
 		return nil, fmt.Errorf("query info failed: %v", err)
 	}
+
 	quorum := msg.(*Quorum)
+
 	return quorum, nil
 }
 
@@ -48,17 +54,46 @@ func QueryTxSet(clients []rpcpb.NodeClient, md metadata.MD, payload []byte, sign
 	if signature == "" {
 		return nil, ErrEmptySignature
 	}
+
 	req := &rpcpb.QueryRequest{
 		MsgType:   rpcpb.QueryMsgType_TXSET,
 		Data:      payload,
 		Signature: signature,
 	}
+
 	msg, err := query(clients, md, req)
 	if err != nil {
 		return nil, fmt.Errorf("query txset failed: %v", err)
 	}
+
 	txset := msg.(*TxSet)
+
 	return txset, nil
+}
+
+// Query ledger information from peers
+func QueryLedger(clients []rpcpb.NodeClient, md metadata.MD, payload []byte, signature string) (*Ledger, error) {
+	if len(payload) == 0 {
+		return nil, ErrEmptyPayload
+	}
+	if signature == "" {
+		return nil, ErrEmptySignature
+	}
+
+	req := &rpcpb.QueryRequest{
+		MsgType:   rpcpb.QueryMsgType_LEDGER,
+		Data:      payload,
+		Signature: signature,
+	}
+
+	msg, err := query(clients, md, req)
+	if err != nil {
+		return nil, fmt.Errorf("query txset failed: %v", err)
+	}
+
+	ledger := msg.(*Ledger)
+
+	return ledger, nil
 }
 
 // Query needed information from peers iteratively
@@ -67,30 +102,43 @@ func query(clients []rpcpb.NodeClient, md metadata.MD, req *rpcpb.QueryRequest) 
 	var message pb.Message
 	var err error
 	var b []byte
-	for _, c := range clients {
+
+	// randomly shuffle clients to amortize query
+	rand.Seed(time.Now().Unix())
+	indices := rand.Perm(len(clients))
+
+	for _, i := range indices {
+		c := clients[i]
 		b, err = queryPeer(c, md, req)
 		if err != nil {
 			log.Errorf("query peer failed: %v", err)
 			continue
 		}
+
 		if len(b) == 0 {
 			continue
 		}
+
 		// decode information
 		switch req.MsgType {
 		case rpcpb.QueryMsgType_QUORUM:
 			message, err = ultpb.DecodeQuorum(b)
 		case rpcpb.QueryMsgType_TXSET:
 			message, err = ultpb.DecodeTxSet(b)
+		case rpcpb.QueryMsgType_LEDGER:
+			message, err = ultpb.DecodeLedger(b)
 		default:
 			return nil, errors.New("unknown query msg type")
 		}
+
 		if err != nil {
 			log.Errorf("decode msg failed: %v", err)
 			continue
 		}
+
 		return message, nil
 	}
+
 	return nil, errors.New("requested information not found")
 }
 
@@ -98,9 +146,11 @@ func queryPeer(client rpcpb.NodeClient, md metadata.MD, req *rpcpb.QueryRequest)
 	ctx := metadata.NewOutgoingContext(context.Background(), md)
 	ctx, cancel := context.WithTimeout(ctx, time.Duration(1*time.Second))
 	defer cancel()
+
 	resp, err := client.Query(ctx, req)
 	if err != nil {
 		return nil, err
 	}
+
 	return resp.Data, nil
 }
