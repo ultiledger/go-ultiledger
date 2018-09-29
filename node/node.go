@@ -87,7 +87,13 @@ func NewNode(conf *Config) *Node {
 	tm := tx.NewManager(txCtx)
 
 	// ledger manager depends on account and tx manager
-	lm := ledger.NewManager(store, am, tm)
+	lmCtx := &ledger.ManagerContext{
+		Store: store,
+		PM:    pm,
+		AM:    am,
+		TM:    tm,
+	}
+	lm := ledger.NewManager(lmCtx)
 
 	stopChan := make(chan struct{})
 

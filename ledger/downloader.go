@@ -80,9 +80,6 @@ func NewDownloader(db db.DB, pm *peer.Manager) *Downloader {
 		stopChan:   make(chan struct{}),
 	}
 
-	// start to listen for download tasks
-	go dlr.run()
-
 	return dlr
 }
 
@@ -104,6 +101,12 @@ func (d *Downloader) AddTask(start uint64, end uint64) error {
 	d.rangeChan <- &DownloadRange{StartIndex: d.startIndex, EndIndex: d.endIndex}
 
 	return nil
+}
+
+// Start the downloader
+func (d *Downloader) Start() {
+	go d.run()
+	go d.reorder()
 }
 
 // Stop the downloader by notifying goroutines to stop
@@ -203,14 +206,14 @@ func (d *Downloader) runTask(done <-chan bool, taskChan <-chan uint64) <-chan *C
 		// sign the data
 		sign, err := crypto.Sign(d.seed, payload)
 		if err != nil {
-			log.Errorw("sign payload for ledger query failed: %v", err, "index", i)
+			log.Errorf("sign payload for ledger %d query failed: %v", i, err)
 			return nil
 		}
 
 		// query ledger from peers
 		ledger, err := rpc.QueryLedger(clients, metadata, payload, sign)
 		if err != nil {
-			log.Errorw("rpc ledger query failed: %v", err, "index", i)
+			log.Errorf("rpc query ledger %d failed: %v", i, err)
 			return nil
 		}
 
@@ -273,6 +276,9 @@ func (d *Downloader) mergeInfo(done <-chan bool, infoChans ...<-chan *CloseInfo)
 	multiplex := func(infoChan <-chan *CloseInfo) {
 		defer wg.Done()
 		for info := range infoChan {
+			if info == nil {
+				continue
+			}
 			select {
 			case <-done:
 				return

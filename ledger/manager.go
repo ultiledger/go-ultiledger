@@ -11,6 +11,7 @@ import (
 	"github.com/ultiledger/go-ultiledger/crypto"
 	"github.com/ultiledger/go-ultiledger/db"
 	"github.com/ultiledger/go-ultiledger/log"
+	"github.com/ultiledger/go-ultiledger/peer"
 	"github.com/ultiledger/go-ultiledger/tx"
 	"github.com/ultiledger/go-ultiledger/ultpb"
 )
@@ -43,11 +44,41 @@ var (
 	GenesisBaseReserve   = uint64(1000000000)
 )
 
+// ManagerContext contains contextural information Manager needs
+type ManagerContext struct {
+	Store db.DB
+	AM    *account.Manager
+	TM    *tx.Manager
+	PM    *peer.Manager
+}
+
+func ValidateManagerContext(mc *ManagerContext) error {
+	if mc == nil {
+		return errors.New("manager context is nil")
+	}
+	if mc.Store == nil {
+		return errors.New("database instance is nil")
+	}
+	if mc.AM == nil {
+		return errors.New("account manager is nil")
+	}
+	if mc.TM == nil {
+		return errors.New("tx manager is nil")
+	}
+	if mc.PM == nil {
+		return errors.New("peer manager is nil")
+	}
+	return nil
+}
+
 // ledger manager is responsible for all the operations on ledgers
 type Manager struct {
 	// db store and corresponding bucket
 	store  db.DB
 	bucket string
+
+	// ledger downloader
+	downloader *Downloader
 
 	// account manager
 	am *account.Manager
@@ -86,13 +117,17 @@ type Manager struct {
 	stopChan chan struct{}
 }
 
-func NewManager(d db.DB, am *account.Manager, tm *tx.Manager) *Manager {
+func NewManager(ctx *ManagerContext) *Manager {
+	if err := ValidateManagerContext(ctx); err != nil {
+		log.Fatalf("validate manager context failed: %v", err)
+	}
 	lm := &Manager{
-		store:       d,
-		bucket:      "LEDGERS",
-		am:          am,
-		tm:          tm,
+		store:       ctx.Store,
+		bucket:      "LEDGER",
+		am:          ctx.AM,
+		tm:          ctx.TM,
 		buffer:      new(CloseInfoBuffer),
+		downloader:  NewDownloader(ctx.Store, ctx.PM),
 		ledgerState: LedgerStateNotSynced,
 		startTime:   time.Now().Unix(),
 		stopChan:    make(chan struct{}),
@@ -110,11 +145,56 @@ func NewManager(d db.DB, am *account.Manager, tm *tx.Manager) *Manager {
 }
 
 // Start the ledger manager
-func (lm *Manager) Start() {}
+func (lm *Manager) Start() {
+	lm.downloader.Start()
+
+	// deal with downloaded ledgers
+	go func() {
+		for {
+			select {
+			case info := <-lm.downloader.Ready():
+				if lm.NextLedgerHeaderSeq() != info.Index {
+					log.Errorw("downloaded index incompatible ledger", "expect", lm.NextLedgerHeaderSeq(), "recv", info.Index)
+				}
+				if lm.CurrLedgerHeaderHash() != info.TxSet.PrevLedgerHash {
+					log.Errorw("downloaded hash incompatible ledger", "expect", lm.CurrLedgerHeaderHash(), "recv", info.TxSet.PrevLedgerHash)
+				}
+				err := lm.closeLedger(info.Index, info.Value, info.TxSet)
+				if err != nil {
+					log.Errorf("close ledger %d failed: %v", info.Index, err)
+				}
+				// check whether we can replay buffered ledgers
+				if lm.buffer.Size() == 0 {
+					continue
+				}
+				head := lm.buffer.PeekHead()
+				if lm.NextLedgerHeaderSeq() != head.Index {
+					continue
+				}
+				for {
+					if lm.buffer.Size() == 0 {
+						break
+					}
+					head = lm.buffer.PopHead()
+					err := lm.closeLedger(head.Index, head.Value, head.TxSet)
+					if err != nil {
+						log.Errorf("close ledger %d failed: %v", head.Index, err)
+						break
+					}
+				}
+				lm.buffer.Clear()
+				lm.ledgerState = LedgerStateSynced
+			case <-lm.stopChan:
+				return
+			}
+		}
+	}()
+}
 
 // Stop the ledger manager
 func (lm *Manager) Stop() {
 	close(lm.stopChan)
+	lm.downloader.Stop()
 }
 
 // Start the genesis ledger and initialize master account
@@ -177,7 +257,11 @@ func (lm *Manager) RecvExtVal(index uint64, value string, txset *ultpb.TxSet) er
 		} else { // new case
 			lm.ledgerState = LedgerStateSyncing
 			lm.buffer.Append(&CloseInfo{Index: index, Value: value, TxSet: txset})
-			// start to catch up
+			// start to download missing ledgers
+			err := lm.downloader.AddTask(lm.NextLedgerHeaderSeq(), index-1)
+			if err != nil {
+				return fmt.Errorf("add task to downloader failed: %v", err)
+			}
 		}
 	case LedgerStateSyncing:
 		// append to buffer until local ledger catches up

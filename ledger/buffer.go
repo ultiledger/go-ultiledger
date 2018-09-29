@@ -1,9 +1,26 @@
 package ledger
 
+import "sync"
+
 // CloseInfoBuffer caches unclosed ledger close info until
 // local ledger state catch up with the network state.
 type CloseInfoBuffer struct {
+	rwm   sync.RWMutex
 	infos []*CloseInfo
+}
+
+// Returns the size of buffered CloseInfo
+func (b *CloseInfoBuffer) Size() int {
+	b.rwm.RLock()
+	defer b.rwm.RUnlock()
+	return len(b.infos)
+}
+
+// Clear the buffer
+func (b *CloseInfoBuffer) Clear() {
+	b.rwm.Lock()
+	defer b.rwm.Unlock()
+	b.infos = nil
 }
 
 // Append info the the tail of the buffer by checking whether
@@ -18,11 +35,15 @@ func (b *CloseInfoBuffer) Append(info *CloseInfo) {
 			return
 		}
 	}
+	b.rwm.Lock()
+	defer b.rwm.Unlock()
 	b.infos = append(b.infos, info)
 }
 
 // Return the first CloseInfo without removing it
 func (b *CloseInfoBuffer) PeekHead() *CloseInfo {
+	b.rwm.RLock()
+	defer b.rwm.RUnlock()
 	if len(b.infos) == 0 {
 		return nil
 	}
@@ -31,6 +52,8 @@ func (b *CloseInfoBuffer) PeekHead() *CloseInfo {
 
 // Return the first CloseInfo and remove it from internal buffer
 func (b *CloseInfoBuffer) PopHead() *CloseInfo {
+	b.rwm.Lock()
+	defer b.rwm.Unlock()
 	if len(b.infos) == 0 {
 		return nil
 	}
