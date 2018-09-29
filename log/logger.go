@@ -11,8 +11,9 @@ func init() {
 	config := zap.NewProductionConfig()
 	// change stacktrace output level to DPanic so that
 	// we will not get cluttered log in Error level
-	option := zap.AddStacktrace(zapcore.DPanicLevel)
-	logger, err := config.Build(option)
+	stacktraceOption := zap.AddStacktrace(zapcore.DPanicLevel)
+	callerOption := zap.AddCallerSkip(1)
+	logger, err := config.Build(stacktraceOption, callerOption)
 	if err != nil {
 		panic(err)
 	}
