@@ -1,6 +1,7 @@
 package account
 
 import (
+	"errors"
 	"fmt"
 
 	pb "github.com/golang/protobuf/proto"
@@ -10,6 +11,10 @@ import (
 	"github.com/ultiledger/go-ultiledger/db"
 	"github.com/ultiledger/go-ultiledger/log"
 	"github.com/ultiledger/go-ultiledger/ultpb"
+)
+
+var (
+	ErrAccountNotExist = errors.New("account not exist")
 )
 
 // Manager manages the creation of accounts
@@ -95,7 +100,7 @@ func (am *Manager) GetAccount(accountID string) (*ultpb.Account, error) {
 	// then check database
 	b, ok := am.store.Get(am.bucket, []byte(accountID))
 	if !ok {
-		return nil, fmt.Errorf("account %s not exist", accountID)
+		return nil, ErrAccountNotExist
 	}
 	acc, err := ultpb.DecodeAccount(b)
 	if err != nil {
@@ -113,6 +118,9 @@ func (am *Manager) GetAccount(accountID string) (*ultpb.Account, error) {
 func (am *Manager) UpdateAccount(acc *ultpb.Account) error {
 	oldAcc, err := am.GetAccount(acc.AccountID)
 	if err != nil {
+		if err == ErrAccountNotExist {
+			return err
+		}
 		return fmt.Errorf("get account failed: %v", err)
 	}
 
