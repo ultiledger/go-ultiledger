@@ -17,6 +17,7 @@ import (
 	"github.com/ultiledger/go-ultiledger/peer"
 	"github.com/ultiledger/go-ultiledger/rpc"
 	"github.com/ultiledger/go-ultiledger/rpc/rpcpb"
+	"github.com/ultiledger/go-ultiledger/tx/op"
 	"github.com/ultiledger/go-ultiledger/ultpb"
 )
 
@@ -215,14 +216,12 @@ func (tm *Manager) ApplyTxList(txList []*ultpb.Tx) error {
 	}
 
 	// charge tx fees
+	restTxList := make([]*ultpb.Tx, 0)
 	for id, txs := range accTxMap {
 		acc, err := tm.am.GetAccount(id)
 		if err != nil {
 			return fmt.Errorf("get account failed: %v", err)
 		}
-
-		// cache normal tx
-		txList := make([]*ultpb.Tx, 0)
 
 		i := 0
 		for ; i < len(txs); i++ {
@@ -256,7 +255,7 @@ func (tm *Manager) ApplyTxList(txList []*ultpb.Tx) error {
 
 			acc.Balance -= txs[i].Fee
 			acc.SequenceNumber = txs[i].SequenceNumber
-			txList = append(txList, txs[i])
+			restTxList = append(txList, txs[i])
 		}
 
 		// update account balance to charge fees
@@ -264,19 +263,47 @@ func (tm *Manager) ApplyTxList(txList []*ultpb.Tx) error {
 		if err != nil {
 			return fmt.Errorf("update account failed: %v", err)
 		}
-
-		// shrink txs of accounts to only maintain normal tx
-		accTxMap[id] = txList
 	}
 
-	/*
-		// apply tx ops
-		for id, txs := range accTxMap {
-			acc, _ := lm.am.GetAccount(id)
-			for _, tx := range txs {
+	// TODO(bobonovski) sort the rest of the txs in more random way
+	sort.Sort(TxSlice(restTxList))
+
+	var ops []op.Op
+	for _, tx := range restTxList {
+		txk, _ := ultpb.GetTxKey(tx)
+
+		for _, o := range tx.OpList {
+			switch o.OpType {
+			case ultpb.OpType_CREATE_ACCOUNT:
+				ca := o.GetCreateAccount()
+				ops = append(ops, &op.CreateAccount{
+					SrcAccountID: tx.AccountID,
+					DstAccountID: ca.AccountID,
+					Balance:      ca.Balance,
+				})
+			default:
+				log.Fatalf("received invalid op type: %v", o.OpType)
 			}
 		}
-	*/
+
+		var opErr error
+		for _, o := range ops {
+			if err := o.Apply(); err != nil {
+				opErr = err
+				break
+			}
+		}
+		if opErr != nil {
+			status := &rpcpb.TxStatus{
+				StatusCode:   rpcpb.TxStatusCode_FAILED,
+				ErrorMessage: opErr.Error(),
+			}
+			err := tm.UpdateTxStatus(txk, status)
+			if err != nil {
+				return fmt.Errorf("update tx %s status failed: %v", txk, err)
+			}
+		}
+	}
 
 	return nil
 }
