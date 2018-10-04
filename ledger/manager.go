@@ -36,12 +36,12 @@ var (
 )
 
 var (
-	GenesisVersion       = uint32(1)
-	GenesisMaxTxListSize = uint32(100)
-	GenesisSeqNum        = uint64(1)
-	GenesisTotalTokens   = uint64(4500000000000000000)
-	GenesisBaseFee       = uint64(1000)
-	GenesisBaseReserve   = uint64(1000000000)
+	GenesisVersion      = uint32(1)
+	GenesisMaxTxSetSize = uint32(100)
+	GenesisSeqNum       = uint64(1)
+	GenesisTotalTokens  = uint64(4500000000000000000)
+	GenesisBaseFee      = uint64(1000)
+	GenesisBaseReserve  = uint64(1000000000)
 )
 
 // ManagerContext contains contextural information Manager needs
@@ -318,7 +318,7 @@ func (lm *Manager) advanceLedger(seq uint64, prevHeaderHash string, txHash strin
 		ConsensusValue: cv,
 		// global configs below
 		Version:       GenesisVersion,
-		MaxTxListSize: GenesisMaxTxListSize,
+		MaxTxListSize: GenesisMaxTxSetSize,
 		TotalTokens:   GenesisTotalTokens,
 		BaseFee:       GenesisBaseFee,
 		BaseReserve:   GenesisBaseReserve,
