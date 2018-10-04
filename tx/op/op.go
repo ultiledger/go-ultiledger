@@ -1,4 +1,4 @@
-package tx
+package op
 
 // Op represents the interface with which various
 // transaction operations should comply.

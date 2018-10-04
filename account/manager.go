@@ -64,7 +64,6 @@ func (am *Manager) CreateAccount(accountID string, balance uint64, signer string
 		Balance:   balance,
 		Signer:    signer,
 	}
-	am.master = acc
 
 	accb, err := ultpb.Encode(acc)
 	if err != nil {
