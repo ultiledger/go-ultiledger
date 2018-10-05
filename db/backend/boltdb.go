@@ -28,14 +28,6 @@ func NewBoltDB(path string) db.DB {
 	if err != nil {
 		log.Fatal(err)
 	}
-	// create a default bucket
-	b.Update(func(tx *bolt.Tx) error {
-		_, err := tx.CreateBucket([]byte("ULTDB"))
-		if err != nil {
-			log.Fatal(err)
-		}
-		return nil
-	})
 	return &boltdbWrapper{internalDB: b}
 }
 

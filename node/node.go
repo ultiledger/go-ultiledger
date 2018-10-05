@@ -2,6 +2,7 @@ package node
 
 import (
 	"net"
+	"strings"
 	"time"
 
 	"google.golang.org/grpc"
@@ -62,7 +63,9 @@ func NewNode(conf *Config) *Node {
 	defer conn.Close()
 	netAddr := conn.LocalAddr().(*net.UDPAddr)
 
-	addr := netAddr.String() + ":" + conf.Port
+	log.Infof("local IP is: %s", netAddr.String())
+
+	addr := strings.Split(netAddr.String(), ":")[0] + ":" + conf.Port
 	nodeID := conf.NodeID
 	seed := conf.Seed
 
