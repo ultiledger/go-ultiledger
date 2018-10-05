@@ -26,8 +26,10 @@ import (
 
 var startCmd = &cobra.Command{
 	Use:   "start",
-	Short: "Start a new network",
-	Long:  `Bootstrap a new network with all the subsystems initialized`,
+	Short: "Start the node with config",
+	Long: `Start a ultiledger node with specified configuration, the program will
+try to recover from previous saved states if the --newnode command arg
+is not specified or it will bootstrap a completely new node.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		// read in config file
 		if cfgFile == "" {
@@ -54,5 +56,7 @@ var cfgFile string
 func init() {
 	startCmd.Flags().StringVarP(&cfgFile, "config", "c", "", "Help message for toggle")
 	startCmd.MarkFlagRequired("config")
+	startCmd.Flags().BoolP("newnode", "n", false, "bootstrap a new node")
+	viper.BindPFlag("newnode", startCmd.Flags().Lookup("newnode"))
 	rootCmd.AddCommand(startCmd)
 }
