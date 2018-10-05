@@ -48,7 +48,7 @@ func NewManager(d db.DB) *Manager {
 
 // Create master account with native asset (ULT) and initial balances
 func (am *Manager) CreateMasterAccount(networkID []byte, balance uint64) error {
-	pubKey, privKey, err := crypto.GenerateKeypairFromSeed(networkID)
+	pubKey, privKey, err := crypto.GetAccountKeypairFromSeed(networkID)
 	if err != nil {
 		return err
 	}

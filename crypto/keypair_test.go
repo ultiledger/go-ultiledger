@@ -17,7 +17,9 @@ var (
 
 // test validity of supplied key
 func TestKeypair(t *testing.T) {
-	_, _, err := GenerateKeypair()
+	_, _, err := GetAccountKeypair()
+	assert.Equal(t, nil, err)
+	_, _, err = GetNodeKeypair()
 	assert.Equal(t, nil, err)
 }
 

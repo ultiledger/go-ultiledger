@@ -10,10 +10,10 @@ import (
 	"golang.org/x/crypto/ed25519"
 )
 
-// generate key pair with ed25510 cryto algorithm, since we can
-// always reconstruct the true private key using the same seed,
-// we use the randomly generated seed as a equivalent private key.
-func ed25519Keypair() (string, string, error) {
+// Generate account keypair with ed25510 cryto algorithm, since we can
+// always reconstruct the true private key using the same seed, we use
+// the randomly generated seed as a equivalent private key.
+func accountKeypair() (string, string, error) {
 	var seed [32]byte
 	_, err := io.ReadFull(rand.Reader, seed[:])
 	if err != nil {
@@ -33,7 +33,30 @@ func ed25519Keypair() (string, string, error) {
 	return pubKeyStr, seedStr, nil
 }
 
-// reconstruct the true private key from the seed, it supposes to
+// Generate node keypair with ed25510 cryto algorithm, since we can
+// always reconstruct the true private key using the same seed, we use
+// the randomly generated seed as a equivalent private key.
+func nodeKeypair() (string, string, error) {
+	var seed [32]byte
+	_, err := io.ReadFull(rand.Reader, seed[:])
+	if err != nil {
+		return "", "", err
+	}
+	privateKey := ed25519.NewKeyFromSeed(seed[:])
+	publicKey := privateKey.Public().(ed25519.PublicKey)
+
+	var pk [32]byte
+	copy(pk[:], publicKey)
+	acc := &ULTKey{Code: KeyTypeNodeID, Hash: pk}
+	sd := &ULTKey{Code: KeyTypeSeed, Hash: seed}
+
+	pubKeyStr := EncodeKey(acc)
+	seedStr := EncodeKey(sd)
+
+	return pubKeyStr, seedStr, nil
+}
+
+// Reconstruct the true private key from the seed, it supposes to
 // be only used in situations where you need to sign the data so
 // the authenticity can be verified by the corresponding public key.
 func getPrivateKey(seed string) (ed25519.PrivateKey, error) {
@@ -48,17 +71,27 @@ func getPrivateKey(seed string) (ed25519.PrivateKey, error) {
 	return privateKey, nil
 }
 
-// randomly generate a pair of public and private key
-func GenerateKeypair() (string, string, error) {
+// Randomly generate a pair of account public and private key.
+func GetAccountKeypair() (string, string, error) {
 	// privateKey is actually the seed used to generate the keypair
-	publicKey, seed, err := ed25519Keypair()
+	publicKey, seed, err := accountKeypair()
 	if err != nil {
 		return "", "", err
 	}
 	return publicKey, seed, err
 }
 
-func GenerateKeypairFromSeed(seed []byte) (string, string, error) {
+// Randomly generate a pair of node public and private key.
+func GetNodeKeypair() (string, string, error) {
+	// privateKey is actually the seed used to generate the keypair
+	publicKey, seed, err := nodeKeypair()
+	if err != nil {
+		return "", "", err
+	}
+	return publicKey, seed, err
+}
+
+func GetAccountKeypairFromSeed(seed []byte) (string, string, error) {
 	if len(seed) != 32 {
 		return "", "", errors.New("Invalid seed, byte length is not 32")
 	}

@@ -9,6 +9,7 @@ import (
 	"github.com/ultiledger/go-ultiledger/account"
 	"github.com/ultiledger/go-ultiledger/consensus"
 	"github.com/ultiledger/go-ultiledger/db"
+	_ "github.com/ultiledger/go-ultiledger/db/backend"
 	"github.com/ultiledger/go-ultiledger/future"
 	"github.com/ultiledger/go-ultiledger/ledger"
 	"github.com/ultiledger/go-ultiledger/log"
