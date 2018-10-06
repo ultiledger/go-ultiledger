@@ -199,6 +199,7 @@ func (lm *Manager) Stop() {
 
 // Start the genesis ledger and initialize master account
 func (lm *Manager) CreateGenesisLedger() error {
+	lm.ledgerState = LedgerStateSynced
 	// close genesis ledger
 	err := lm.advanceLedger(GenesisSeqNum, "", "", "")
 	if err != nil {
@@ -300,14 +301,14 @@ func (lm *Manager) advanceLedger(seq uint64, prevHeaderHash string, txHash strin
 	}
 
 	// Check whether the sequence number is valid
-	if lm.currLedgerHeader.SeqNum+1 != seq {
+	if lm.currLedgerHeader != nil && lm.currLedgerHeader.SeqNum+1 != seq {
 		return fmt.Errorf("ledger seqnum mismatch: expect %d, got %d", lm.currLedgerHeader.SeqNum+1, seq)
 	}
 
 	// Check whether the supplied prev ledger header hash is identical
 	// to the current ledger header hash. It should never happen that
 	// these two values are not identical which means some fork happened.
-	if lm.currLedgerHeaderHash != prevHeaderHash {
+	if lm.currLedgerHeader != nil && lm.currLedgerHeaderHash != prevHeaderHash {
 		log.Fatalw("ledger tx header hash mismatch", "curr", lm.currLedgerHeaderHash, "prev", prevHeaderHash)
 	}
 

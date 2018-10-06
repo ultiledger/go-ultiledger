@@ -156,7 +156,7 @@ func NewNode(conf *Config) *Node {
 
 // Start checks the provided configurations, if the config is valid,
 // it will trigger sub goroutines to do the sub tasks.
-func (n *Node) Start() error {
+func (n *Node) Start(newnode bool) {
 	// start node server
 	go n.serveNode()
 
@@ -175,14 +175,23 @@ func (n *Node) Start() error {
 	// start tx manager
 	n.tm.Start()
 
-	select {}
-	return nil
-}
+	if newnode {
+		err := n.lm.CreateGenesisLedger()
+		if err != nil {
+			log.Fatalf("create genesis ledger failed: %v", err)
+		}
+		err = n.engine.Propose()
+		if err != nil {
+			log.Fatalf("propose new value failed: %v", err)
+		}
+	}
 
-// Restart checks the provided configurations, if the config is valid,
-// it will trigger sub goroutines to do the sub tasks.
-func (n *Node) Restart() error {
-	return nil
+	for {
+		select {
+		case <-n.stopChan:
+			return
+		}
+	}
 }
 
 // Close node by signaling all the goroutines to stop

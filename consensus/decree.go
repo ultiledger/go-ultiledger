@@ -393,7 +393,7 @@ func (d *Decree) promoteVotes(newNom *Nominate) (bool, bool, error) {
 		}
 		// use federated accept to promote values from votes to accepts
 		if !d.federatedAccept(voteFilter(vote), acceptFilter(vote), d.nominations) {
-			log.Errorf("federated accept vote failed", "vote", vote)
+			log.Errorw("federated accept vote failed, vote: %s", vote)
 			continue
 		}
 		// TODO(bobonovski) check the validity of the vote
@@ -410,7 +410,7 @@ func (d *Decree) promoteVotes(newNom *Nominate) (bool, bool, error) {
 		// use federated ratify to promote values from accepts to
 		// condidates, i.e. confirmation
 		if !d.federatedRatify(acceptFilter(accept), d.nominations) {
-			log.Errorf("federated ratify vote failed", "accept", accept)
+			log.Errorf("federated ratify vote failed, accept: %s", accept)
 			continue
 		}
 		d.candidates.Add(accept)

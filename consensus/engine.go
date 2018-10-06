@@ -125,17 +125,20 @@ func NewEngine(ctx *EngineContext) *Engine {
 		store:              ctx.Store,
 		bucket:             "ENGINE",
 		statusBucket:       "TXSTATUS",
+		nodeID:             ctx.NodeID,
 		seed:               ctx.Seed,
 		pm:                 ctx.PM,
 		am:                 ctx.AM,
 		lm:                 ctx.LM,
 		tm:                 ctx.TM,
+		quorum:             ctx.Quorum,
 		decrees:            make(map[uint64]*Decree),
 		txSet:              mapset.NewSet(),
 		statementChan:      make(chan *ultpb.Statement),
 		txChan:             make(chan *ultpb.Tx),
 		txsetDownloadChan:  make(chan string),
 		quorumDownloadChan: make(chan string),
+		externalizeChan:    make(chan *ExternalizeValue),
 		stopChan:           make(chan struct{}),
 	}
 	// create validator
@@ -409,6 +412,7 @@ func (e *Engine) nominate(idx uint64, prevValue string, currValue string) error 
 		decreeCtx := &DecreeContext{
 			Index:           idx,
 			NodeID:          e.nodeID,
+			Quorum:          e.quorum,
 			LM:              e.lm,
 			Validator:       e.validator,
 			StmtChan:        e.statementChan,

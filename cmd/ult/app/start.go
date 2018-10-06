@@ -45,9 +45,9 @@ is not specified or it will bootstrap a completely new node.`,
 		if err != nil {
 			log.Fatal(err)
 		}
-		// bootstrap a new ULTNode
+		// start a ULTNode
 		n := node.NewNode(c)
-		n.Start()
+		n.Start(viper.GetBool("newnode"))
 	},
 }
 
