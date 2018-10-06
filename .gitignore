@@ -3,3 +3,4 @@ ultiledger
 *.yaml
 cmd/ult/ult
 cmd/ultcli/ultcli
+*.db

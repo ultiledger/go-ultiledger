@@ -36,9 +36,6 @@ func NewConfig(v *viper.Viper) (*Config, error) {
 	if v.GetString("port") == "" {
 		return nil, errors.New("network port is missing")
 	}
-	if len(v.GetStringSlice("peers")) == 0 {
-		return nil, errors.New("initial peers is empty")
-	}
 	if v.GetString("node_id") == "" {
 		return nil, errors.New("node ID is empty")
 	}
