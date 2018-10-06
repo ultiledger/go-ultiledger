@@ -1,6 +1,6 @@
 go-ultiledger
 ultiledger
 *.yaml
-cmd/ult/ult
-cmd/ultcli/ultcli
+ult
+ultcli
 *.db
