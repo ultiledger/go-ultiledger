@@ -129,6 +129,8 @@ func NewDecree(ctx *DecreeContext) *Decree {
 		quorumHash:      quorumHash,
 		nominationRound: 0,
 		nominationStart: false,
+		lm:              ctx.LM,
+		validator:       ctx.Validator,
 		votes:           mapset.NewSet(),
 		accepts:         mapset.NewSet(),
 		candidates:      mapset.NewSet(),
@@ -137,7 +139,12 @@ func NewDecree(ctx *DecreeContext) *Decree {
 		ballots:         make(map[string]*Statement),
 		ballotMsgCount:  0,
 		statementChan:   ctx.StmtChan,
+		externalizeChan: ctx.ExternalizeChan,
 	}
+
+	// sync quorum info to validator
+	d.validator.RecvQuorum(d.quorumHash, d.quorum)
+
 	return d
 }
 
@@ -253,6 +260,8 @@ func (d *Decree) federatedRatify(filter func(*Statement) bool, stmts map[string]
 		if nodes.Equal(subnodes) {
 			break
 		}
+
+		subnodes.Clear()
 		for n := range nodes.Iter() {
 			nodeID := n.(string)
 			q := d.getStatementQuorum(stmts[nodeID])
@@ -261,7 +270,6 @@ func (d *Decree) federatedRatify(filter func(*Statement) bool, stmts map[string]
 			}
 		}
 		nodes = nodes.Intersect(subnodes)
-		subnodes.Clear()
 	}
 
 	if isQuorumSlice(d.quorum, nodes) {
@@ -315,6 +323,8 @@ func (d *Decree) recvNomination(stmt *Statement) error {
 		return errors.New("vote and accept list is empty")
 	}
 
+	log.Infow("received nomination", "nodeID", stmt.NodeID, "votes", len(nom.VoteList), "accepts", len(nom.AcceptList))
+
 	// check whether the existing nomination of the remote node
 	// is the proper subset of the new nomination and save the
 	// new nomination statement
@@ -322,6 +332,8 @@ func (d *Decree) recvNomination(stmt *Statement) error {
 		if isNewerNomination(s.GetNominate(), nom) {
 			d.nominations[stmt.NodeID] = stmt
 		}
+	} else {
+		d.nominations[stmt.NodeID] = stmt
 	}
 
 	if d.nominationStart == false {
@@ -335,11 +347,13 @@ func (d *Decree) recvNomination(stmt *Statement) error {
 
 	// send new nomination if votes changed
 	if acceptUpdated {
+		log.Info("nomination accepted votes changed")
 		d.sendNomination()
 	}
 
 	// start balloting if candidates changed
 	if candidateUpdated {
+		log.Info("nomination candidate votes changed")
 		compValue, err := d.combineCandidates()
 		if err != nil {
 			return fmt.Errorf("combine candidates failed: %v", err)
@@ -393,7 +407,7 @@ func (d *Decree) promoteVotes(newNom *Nominate) (bool, bool, error) {
 		}
 		// use federated accept to promote values from votes to accepts
 		if !d.federatedAccept(voteFilter(vote), acceptFilter(vote), d.nominations) {
-			log.Errorw("federated accept vote failed, vote: %s", vote)
+			log.Errorw("nomination federated accept vote failed", "vote", vote)
 			continue
 		}
 		// TODO(bobonovski) check the validity of the vote
@@ -410,7 +424,7 @@ func (d *Decree) promoteVotes(newNom *Nominate) (bool, bool, error) {
 		// use federated ratify to promote values from accepts to
 		// condidates, i.e. confirmation
 		if !d.federatedRatify(acceptFilter(accept), d.nominations) {
-			log.Errorf("federated ratify vote failed, accept: %s", accept)
+			log.Errorw("nomination federated ratify vote failed", "accept", accept)
 			continue
 		}
 		d.candidates.Add(accept)

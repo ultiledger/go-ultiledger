@@ -175,6 +175,7 @@ func (e *Engine) Start() {
 					log.Errorf("broadcast statement failed: %v", err)
 					continue
 				}
+				log.Infow("broadcast statement", "decreeIdx", stmt.Index)
 			case txsetHash := <-e.txsetDownloadChan:
 				txset, err := e.queryTxSet(txsetHash)
 				if err != nil {
@@ -385,6 +386,9 @@ func (e *Engine) Propose() error {
 	if err != nil {
 		return fmt.Errorf("get tx set hash failed: %v", err)
 	}
+
+	// sync txset info to validator
+	e.validator.RecvTxSet(hash, txSet)
 
 	// construct new consensus value
 	cv := &ultpb.ConsensusValue{

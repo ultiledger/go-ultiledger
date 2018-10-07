@@ -74,6 +74,7 @@ func NewValidator(ctx *ValidatorContext) *Validator {
 	if err := ValidateValidatorContext(ctx); err != nil {
 		log.Fatalf("validator context is invalid: %v", err)
 	}
+
 	v := &Validator{
 		store:              ctx.Store,
 		bucket:             "VALIDATOR",
@@ -85,6 +86,12 @@ func NewValidator(ctx *ValidatorContext) *Validator {
 		readyChan:          make(chan *Statement, 100),
 		downloadChan:       make(chan *Statement, 100),
 	}
+
+	err := v.store.CreateBucket(v.bucket)
+	if err != nil {
+		log.Fatalf("create validator bucket failed: %v", err)
+	}
+
 	qc, err := lru.New(1000)
 	if err != nil {
 		log.Fatalf("create quorum LRU cache failed: %v", err)

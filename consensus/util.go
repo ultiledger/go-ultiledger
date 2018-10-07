@@ -148,16 +148,16 @@ func isNewerNomination(anom *ultpb.Nominate, bnom *ultpb.Nominate) bool {
 		return true
 	}
 
-	if !isProperSubset(anom.VoteList, bnom.VoteList) {
+	if isProperSubset(anom.VoteList, bnom.VoteList) {
 		// TODO(bobonovski) more elaborate check like interset?
-		return false
+		return true
 	}
 
-	if !isProperSubset(anom.AcceptList, bnom.AcceptList) {
-		return false
+	if isProperSubset(anom.AcceptList, bnom.AcceptList) {
+		return true
 	}
 
-	return true
+	return false
 }
 
 // Check whether the input node set form V-blocking for input quorum
@@ -192,20 +192,20 @@ func isQuorumSlice(quorum *ultpb.Quorum, nodeSet mapset.Set) bool {
 	threshold := int(math.Ceil(qsize * quorum.Threshold))
 
 	for _, vid := range quorum.Validators {
-		if threshold == 0 {
-			return true
-		}
 		if nodeSet.Contains(vid) {
 			threshold = threshold - 1
+		}
+		if threshold <= 0 {
+			return true
 		}
 	}
 
 	for _, nq := range quorum.NestQuorums {
-		if threshold == 0 {
-			return true
-		}
 		if isVblocking(nq, nodeSet) {
 			threshold = threshold - 1
+		}
+		if threshold <= 0 {
+			return true
 		}
 	}
 
