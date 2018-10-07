@@ -15,7 +15,8 @@ const (
 	_ KeyType = iota // skip zero
 	KeyTypeAccountID
 	KeyTypeSeed
-	KeyTypeTransaction
+	KeyTypeTx
+	KeyTypeTxSet
 	KeyTypeNodeID
 )
 
@@ -53,7 +54,9 @@ func DecodeKey(key string) (*ULTKey, error) {
 		fallthrough
 	case KeyTypeSeed:
 		fallthrough
-	case KeyTypeTransaction:
+	case KeyTypeTx:
+		fallthrough
+	case KeyTypeTxSet:
 		fallthrough
 	case KeyTypeNodeID:
 		return &ultKey, nil

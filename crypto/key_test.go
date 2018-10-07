@@ -63,7 +63,7 @@ func TestKeySeed(t *testing.T) {
 
 // test base58 encoding of Transaction key
 func TestKeyTransaction(t *testing.T) {
-	tk := ULTKey{Code: KeyTypeTransaction}
+	tk := ULTKey{Code: KeyTypeTx}
 	copy(tk.Hash[:], testHash)
 
 	var buf bytes.Buffer

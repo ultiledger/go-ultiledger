@@ -381,7 +381,7 @@ func (e *Engine) Propose() error {
 	}
 
 	// compute hash
-	hash, err := ultpb.GetTxSetHash(txSet)
+	hash, err := ultpb.GetTxSetKey(txSet)
 	if err != nil {
 		return fmt.Errorf("get tx set hash failed: %v", err)
 	}
@@ -398,9 +398,12 @@ func (e *Engine) Propose() error {
 	cvStr := hex.EncodeToString(cvb)
 
 	// nominate new consensus value
-	slotIdx := e.lm.NextLedgerHeaderSeq()
+	decreeIdx := e.lm.NextLedgerHeaderSeq()
 	currHeader := e.lm.CurrLedgerHeader()
-	e.nominate(slotIdx, currHeader.ConsensusValue, cvStr)
+
+	log.Infow("nominate consensus value", "decreeIdx", decreeIdx, "txsetKey", hash, "newCV", cvStr)
+
+	e.nominate(decreeIdx, currHeader.ConsensusValue, cvStr)
 
 	return nil
 }

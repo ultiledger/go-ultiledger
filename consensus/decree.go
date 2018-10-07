@@ -473,7 +473,7 @@ func (d *Decree) combineCandidates() (string, error) {
 
 	// TODO(bobonovski) trim invalid tx
 
-	newTxSetHash, err := ultpb.GetTxSetHash(newTxSet)
+	newTxSetHash, err := ultpb.GetTxSetKey(newTxSet)
 	if err != nil {
 		return "", fmt.Errorf("compute tx set hash failed: %v", err)
 	}

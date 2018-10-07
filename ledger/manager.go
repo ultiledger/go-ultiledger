@@ -280,7 +280,7 @@ func (lm *Manager) closeLedger(index uint64, value string, txset *ultpb.TxSet) e
 		return fmt.Errorf("apply tx list failed: %v", err)
 	}
 
-	txsetHash, err := ultpb.GetTxSetHash(txset)
+	txsetHash, err := ultpb.GetTxSetKey(txset)
 	if err != nil {
 		return fmt.Errorf("get txset hash failed: %v", err)
 	}

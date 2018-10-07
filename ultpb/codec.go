@@ -28,7 +28,7 @@ func GetTxKey(tx *Tx) (string, error) {
 	}
 	key := &crypto.ULTKey{
 		Hash: hash,
-		Code: crypto.KeyTypeTransaction,
+		Code: crypto.KeyTypeTx,
 	}
 	return crypto.EncodeKey(key), nil
 }
@@ -51,8 +51,8 @@ func SHA256HashBytes(msg proto.Message) ([32]byte, error) {
 	return crypto.SHA256HashBytes(b), nil
 }
 
-// Compute the overall hash of transaction set
-func GetTxSetHash(ts *TxSet) (string, error) {
+// Hash txset and encode to txset ULTKey
+func GetTxSetKey(ts *TxSet) (string, error) {
 	// compute tx hashes
 	var hashes []string
 	for _, tx := range ts.TxList {
@@ -84,9 +84,13 @@ func GetTxSetHash(ts *TxSet) (string, error) {
 		buf.Write(txb)
 	}
 
-	hash := crypto.SHA256Hash(buf.Bytes())
-
-	return hash, nil
+	// encode to txset ULTKey
+	hash := crypto.SHA256HashBytes(buf.Bytes())
+	key := &crypto.ULTKey{
+		Hash: hash,
+		Code: crypto.KeyTypeTxSet,
+	}
+	return crypto.EncodeKey(key), nil
 }
 
 // Decode pb message to Tx
