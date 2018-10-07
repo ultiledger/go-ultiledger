@@ -41,6 +41,7 @@ type DecreeContext struct {
 	Index           uint64  // decree index
 	NodeID          string  // local node ID
 	Quorum          *Quorum // local node quorum
+	QuorumHash      string  // local node quorum hash
 	LM              *ledger.Manager
 	Validator       *Validator
 	StmtChan        chan<- *Statement        // channel for broadcasting statement
@@ -56,6 +57,9 @@ func ValidateDecreeContext(dc *DecreeContext) error {
 	}
 	if dc.Quorum == nil {
 		return fmt.Errorf("initial quorum is nil")
+	}
+	if dc.QuorumHash == "" {
+		return fmt.Errorf("initial quorum hash is empty")
 	}
 	if dc.LM == nil {
 		return fmt.Errorf("ledger manager is nil")
@@ -118,15 +122,12 @@ func NewDecree(ctx *DecreeContext) *Decree {
 	if err := ValidateDecreeContext(ctx); err != nil {
 		log.Fatalf("decree context is invalid: %v", err)
 	}
-	quorumHash, err := ultpb.SHA256Hash(ctx.Quorum)
-	if err != nil {
-		log.Fatalf("compute quorum hash failed: %v", err)
-	}
+
 	d := &Decree{
 		index:           ctx.Index,
 		nodeID:          ctx.NodeID,
 		quorum:          ctx.Quorum,
-		quorumHash:      quorumHash,
+		quorumHash:      ctx.QuorumHash,
 		nominationRound: 0,
 		nominationStart: false,
 		lm:              ctx.LM,
@@ -141,9 +142,6 @@ func NewDecree(ctx *DecreeContext) *Decree {
 		statementChan:   ctx.StmtChan,
 		externalizeChan: ctx.ExternalizeChan,
 	}
-
-	// sync quorum info to validator
-	d.validator.RecvQuorum(d.quorumHash, d.quorum)
 
 	return d
 }
@@ -359,7 +357,7 @@ func (d *Decree) recvNomination(stmt *Statement) error {
 			return fmt.Errorf("combine candidates failed: %v", err)
 		}
 		d.latestComposite = compValue
-
+		log.Infof("get combined candidate value: %s", compValue)
 		d.updateBallotPhase(compValue, false)
 	}
 

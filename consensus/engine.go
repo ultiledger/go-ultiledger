@@ -121,6 +121,12 @@ func NewEngine(ctx *EngineContext) *Engine {
 	if err := ValidateEngineContext(ctx); err != nil {
 		log.Fatalf("engine context is invalid: %v", err)
 	}
+
+	quorumHash, err := ultpb.SHA256Hash(ctx.Quorum)
+	if err != nil {
+		log.Fatalf("compute quorum hash failed: %v", err)
+	}
+
 	e := &Engine{
 		store:              ctx.Store,
 		bucket:             "ENGINE",
@@ -132,6 +138,7 @@ func NewEngine(ctx *EngineContext) *Engine {
 		lm:                 ctx.LM,
 		tm:                 ctx.TM,
 		quorum:             ctx.Quorum,
+		quorumHash:         quorumHash,
 		decrees:            make(map[uint64]*Decree),
 		txSet:              mapset.NewSet(),
 		statementChan:      make(chan *ultpb.Statement),
@@ -141,6 +148,7 @@ func NewEngine(ctx *EngineContext) *Engine {
 		externalizeChan:    make(chan *ExternalizeValue),
 		stopChan:           make(chan struct{}),
 	}
+
 	// create validator
 	vctx := &ValidatorContext{
 		Store:              e.store,
@@ -148,19 +156,23 @@ func NewEngine(ctx *EngineContext) *Engine {
 		QuorumDownloadChan: e.quorumDownloadChan,
 	}
 	e.validator = NewValidator(vctx)
-	err := e.store.CreateBucket(e.bucket)
+
+	err = e.store.CreateBucket(e.bucket)
 	if err != nil {
 		log.Fatalf("create db bucket %s failed: %v", e.bucket, err)
 	}
+
 	err = e.store.CreateBucket(e.statusBucket)
 	if err != nil {
 		log.Fatalf("create db bucket %s failed: %v", e.statusBucket, err)
 	}
+
 	cache, err := lru.New(10000)
 	if err != nil {
 		log.Fatalf("create consensus engine LRU cache failed: %v", err)
 	}
 	e.txStatus = cache
+
 	return e
 }
 
@@ -388,7 +400,16 @@ func (e *Engine) Propose() error {
 	}
 
 	// sync txset info to validator
-	e.validator.RecvTxSet(hash, txSet)
+	err = e.validator.RecvTxSet(hash, txSet)
+	if err != nil {
+		return fmt.Errorf("sync txset with validator failed: %v", err)
+	}
+
+	// sync quorum info to validator
+	err = e.validator.RecvQuorum(e.quorumHash, e.quorum)
+	if err != nil {
+		return fmt.Errorf("sync quorum with validator failed: %v", err)
+	}
 
 	// construct new consensus value
 	cv := &ultpb.ConsensusValue{
@@ -420,6 +441,7 @@ func (e *Engine) nominate(idx uint64, prevValue string, currValue string) error 
 			Index:           idx,
 			NodeID:          e.nodeID,
 			Quorum:          e.quorum,
+			QuorumHash:      e.quorumHash,
 			LM:              e.lm,
 			Validator:       e.validator,
 			StmtChan:        e.statementChan,
