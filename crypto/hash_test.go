@@ -1,21 +1,22 @@
 package crypto
 
 import (
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 var key string = "hello world!"
 
 func TestMD5Hash(t *testing.T) {
 	digest := MD5Hash([]byte(key))
-	assert.Equal(t, len(digest), 32)
+	assert.Equal(t, len(digest), 22)
 }
 func TestSHA1Hash(t *testing.T) {
 	digest := SHA1Hash([]byte(key))
-	assert.Equal(t, len(digest), 40)
+	assert.Equal(t, len(digest), 27)
 }
 func TestSHA256Hash(t *testing.T) {
 	digest := SHA256Hash([]byte(key))
-	assert.Equal(t, len(digest), 64)
+	assert.Equal(t, len(digest), 44)
 }
