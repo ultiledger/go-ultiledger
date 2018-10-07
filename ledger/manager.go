@@ -8,7 +8,6 @@ import (
 	lru "github.com/hashicorp/golang-lru"
 
 	"github.com/ultiledger/go-ultiledger/account"
-	"github.com/ultiledger/go-ultiledger/crypto"
 	"github.com/ultiledger/go-ultiledger/db"
 	"github.com/ultiledger/go-ultiledger/log"
 	"github.com/ultiledger/go-ultiledger/peer"
@@ -329,7 +328,13 @@ func (lm *Manager) advanceLedger(seq uint64, prevHeaderHash string, txHash strin
 	if err != nil {
 		return fmt.Errorf("encode ledger header failed: %v", err)
 	}
-	h := crypto.SHA256Hash(b)
+
+	// encode ledger header to ULTKey
+	h, err := ultpb.GetLedgerHeaderKey(header)
+	if err != nil {
+		return fmt.Errorf("encode ledger header to key failed: %v", err)
+	}
+
 	lm.store.Set(lm.bucket, []byte(h), b)
 
 	// advance current ledger header

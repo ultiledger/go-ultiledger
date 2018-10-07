@@ -18,6 +18,7 @@ const (
 	KeyTypeTx
 	KeyTypeTxSet
 	KeyTypeNodeID
+	KeyTypeLedgerHeader
 )
 
 var (
@@ -57,6 +58,8 @@ func DecodeKey(key string) (*ULTKey, error) {
 	case KeyTypeTx:
 		fallthrough
 	case KeyTypeTxSet:
+		fallthrough
+	case KeyTypeLedgerHeader:
 		fallthrough
 	case KeyTypeNodeID:
 		return &ultKey, nil

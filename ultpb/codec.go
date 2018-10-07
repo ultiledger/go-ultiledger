@@ -11,15 +11,6 @@ import (
 	"github.com/ultiledger/go-ultiledger/crypto"
 )
 
-// Encode pb message to bytes
-func Encode(msg proto.Message) ([]byte, error) {
-	b, err := proto.Marshal(msg)
-	if err != nil {
-		return nil, err
-	}
-	return b, nil
-}
-
 // Hash tx and encode to tx ULTKey
 func GetTxKey(tx *Tx) (string, error) {
 	hash, err := SHA256HashBytes(tx)
@@ -31,24 +22,6 @@ func GetTxKey(tx *Tx) (string, error) {
 		Code: crypto.KeyTypeTx,
 	}
 	return crypto.EncodeKey(key), nil
-}
-
-// Compute sha256 checksum of proto message
-func SHA256Hash(msg proto.Message) (string, error) {
-	b, err := Encode(msg)
-	if err != nil {
-		return "", err
-	}
-	return crypto.SHA256Hash(b), nil
-}
-
-// Compute sha256 checksum of proto message in bytes
-func SHA256HashBytes(msg proto.Message) ([32]byte, error) {
-	b, err := Encode(msg)
-	if err != nil {
-		return [32]byte{}, err
-	}
-	return crypto.SHA256HashBytes(b), nil
 }
 
 // Hash txset and encode to txset ULTKey
@@ -91,6 +64,46 @@ func GetTxSetKey(ts *TxSet) (string, error) {
 		Code: crypto.KeyTypeTxSet,
 	}
 	return crypto.EncodeKey(key), nil
+}
+
+// Hash ledger header and encode to ledger header ULTKey
+func GetLedgerHeaderKey(lh *LedgerHeader) (string, error) {
+	hash, err := SHA256HashBytes(lh)
+	if err != nil {
+		return "", err
+	}
+	key := &crypto.ULTKey{
+		Hash: hash,
+		Code: crypto.KeyTypeLedgerHeader,
+	}
+	return crypto.EncodeKey(key), nil
+}
+
+// Encode pb message to bytes
+func Encode(msg proto.Message) ([]byte, error) {
+	b, err := proto.Marshal(msg)
+	if err != nil {
+		return nil, err
+	}
+	return b, nil
+}
+
+// Compute sha256 checksum of proto message
+func SHA256Hash(msg proto.Message) (string, error) {
+	b, err := Encode(msg)
+	if err != nil {
+		return "", err
+	}
+	return crypto.SHA256Hash(b), nil
+}
+
+// Compute sha256 checksum of proto message in bytes
+func SHA256HashBytes(msg proto.Message) ([32]byte, error) {
+	b, err := Encode(msg)
+	if err != nil {
+		return [32]byte{}, err
+	}
+	return crypto.SHA256HashBytes(b), nil
 }
 
 // Decode pb message to Tx
