@@ -23,49 +23,49 @@ func init() {
 // Wrap the methods of global sugared logger for purpose
 // of removing the ugly S() method call to write log
 func Error(args ...interface{}) {
-	rootLogger.Error(args)
+	rootLogger.Error(args...)
 }
 
 func Errorf(template string, args ...interface{}) {
-	rootLogger.Errorf(template, args)
+	rootLogger.Errorf(template, args...)
 }
 
 func Errorw(msg string, keysAndValues ...interface{}) {
-	rootLogger.Errorw(msg, keysAndValues)
+	rootLogger.Errorw(msg, keysAndValues...)
 }
 
 func Fatal(args ...interface{}) {
-	rootLogger.Fatal(args)
+	rootLogger.Fatal(args...)
 }
 
 func Fatalf(template string, args ...interface{}) {
-	rootLogger.Fatalf(template, args)
+	rootLogger.Fatalf(template, args...)
 }
 
 func Fatalw(msg string, keysAndValues ...interface{}) {
-	rootLogger.Fatalw(msg, keysAndValues)
+	rootLogger.Fatalw(msg, keysAndValues...)
 }
 
 func Warn(args ...interface{}) {
-	rootLogger.Warn(args)
+	rootLogger.Warn(args...)
 }
 
 func Warnf(template string, args ...interface{}) {
-	rootLogger.Warnf(template, args)
+	rootLogger.Warnf(template, args...)
 }
 
 func Warnw(msg string, keysAndValues ...interface{}) {
-	rootLogger.Warnw(msg, keysAndValues)
+	rootLogger.Warnw(msg, keysAndValues...)
 }
 
 func Info(args ...interface{}) {
-	rootLogger.Info(args)
+	rootLogger.Info(args...)
 }
 
 func Infof(template string, args ...interface{}) {
-	rootLogger.Infof(template, args)
+	rootLogger.Infof(template, args...)
 }
 
 func Infow(msg string, keysAndValues ...interface{}) {
-	rootLogger.Fatalw(msg, keysAndValues)
+	rootLogger.Infow(msg, keysAndValues...)
 }
