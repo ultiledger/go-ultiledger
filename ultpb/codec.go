@@ -2,11 +2,11 @@ package ultpb
 
 import (
 	"bytes"
-	"encoding/hex"
 	"fmt"
 	"sort"
 
 	"github.com/golang/protobuf/proto"
+	b58 "github.com/mr-tron/base58/base58"
 
 	"github.com/ultiledger/go-ultiledger/crypto"
 )
@@ -69,7 +69,7 @@ func GetTxSetKey(ts *TxSet) (string, error) {
 
 	// append all the hash to buffer
 	buf := bytes.NewBuffer(nil)
-	b, err := hex.DecodeString(ts.PrevLedgerHash)
+	b, err := b58.Decode(ts.PrevLedgerHash)
 	if err != nil {
 		return "", nil
 	}

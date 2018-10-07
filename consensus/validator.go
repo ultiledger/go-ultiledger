@@ -1,7 +1,6 @@
 package consensus
 
 import (
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"sync"
@@ -9,6 +8,7 @@ import (
 
 	"github.com/deckarep/golang-set"
 	lru "github.com/hashicorp/golang-lru"
+	b58 "github.com/mr-tron/base58/base58"
 
 	"github.com/ultiledger/go-ultiledger/db"
 	"github.com/ultiledger/go-ultiledger/log"
@@ -343,7 +343,7 @@ func extractTxSetHash(stmt *Statement) ([]string, error) {
 	case ultpb.StatementType_NOMINATE:
 		nom := stmt.GetNominate()
 		for _, v := range nom.VoteList {
-			b, err := hex.DecodeString(v)
+			b, err := b58.Decode(v)
 			if err != nil {
 				return nil, fmt.Errorf("decode hex string failed: %v", err)
 			}
@@ -354,7 +354,7 @@ func extractTxSetHash(stmt *Statement) ([]string, error) {
 			hashes = append(hashes, cv.TxSetHash)
 		}
 		for _, a := range nom.AcceptList {
-			b, err := hex.DecodeString(a)
+			b, err := b58.Decode(a)
 			if err != nil {
 				return nil, fmt.Errorf("decode hex string failed: %v", err)
 			}
@@ -370,7 +370,7 @@ func extractTxSetHash(stmt *Statement) ([]string, error) {
 		fallthrough
 	case ultpb.StatementType_EXTERNALIZE:
 		ballot := getWorkingBallot(stmt)
-		b, err := hex.DecodeString(ballot.Value)
+		b, err := b58.Decode(ballot.Value)
 		if err != nil {
 			return nil, fmt.Errorf("decode hex string failed: %v", err)
 		}

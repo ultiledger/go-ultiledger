@@ -1,13 +1,13 @@
 package consensus
 
 import (
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"time"
 
 	"github.com/deckarep/golang-set"
 	lru "github.com/hashicorp/golang-lru"
+	b58 "github.com/mr-tron/base58/base58"
 
 	"github.com/ultiledger/go-ultiledger/account"
 	"github.com/ultiledger/go-ultiledger/crypto"
@@ -395,13 +395,13 @@ func (e *Engine) Propose() error {
 	if err != nil {
 		return fmt.Errorf("encode consensus value failed: %v", err)
 	}
-	cvStr := hex.EncodeToString(cvb)
+	cvStr := b58.Encode(cvb)
 
 	// nominate new consensus value
 	decreeIdx := e.lm.NextLedgerHeaderSeq()
 	currHeader := e.lm.CurrLedgerHeader()
 
-	log.Infow("nominate consensus value", "decreeIdx", decreeIdx, "txsetKey", hash, "newCV", cvStr)
+	log.Infow("nominate consensus value", "decreeIdx", decreeIdx, "txsetKey", hash, "currCV", currHeader.ConsensusValue, "newCV", cvStr)
 
 	e.nominate(decreeIdx, currHeader.ConsensusValue, cvStr)
 
@@ -438,7 +438,7 @@ func (e *Engine) Externalize(idx uint64, value string) error {
 	}
 
 	// decode consensus value
-	b, err := hex.DecodeString(value)
+	b, err := b58.Decode(value)
 	if err != nil {
 		return fmt.Errorf("hex decode consensus value failed: %v", err)
 	}

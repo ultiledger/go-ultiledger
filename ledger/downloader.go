@@ -2,9 +2,10 @@ package ledger
 
 import (
 	"encoding/binary"
-	"encoding/hex"
 	"errors"
 	"sync"
+
+	b58 "github.com/mr-tron/base58/base58"
 
 	"github.com/ultiledger/go-ultiledger/crypto"
 	"github.com/ultiledger/go-ultiledger/db"
@@ -233,7 +234,7 @@ func (d *Downloader) runTask(done <-chan bool, taskChan <-chan uint64) <-chan *C
 		}
 
 		// check consensus value
-		cvb, err := hex.DecodeString(header.ConsensusValue)
+		cvb, err := b58.Decode(header.ConsensusValue)
 		if err != nil {
 			log.Errorf("hex decode consensus value failed: %v", err)
 			return nil

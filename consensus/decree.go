@@ -2,7 +2,6 @@ package consensus
 
 import (
 	"bytes"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"math"
@@ -11,6 +10,7 @@ import (
 
 	"github.com/deckarep/golang-set"
 	pb "github.com/golang/protobuf/proto"
+	b58 "github.com/mr-tron/base58/base58"
 
 	"github.com/ultiledger/go-ultiledger/crypto"
 	"github.com/ultiledger/go-ultiledger/ledger"
@@ -431,7 +431,7 @@ func (d *Decree) combineCandidates() (string, error) {
 	var vals []*ConsensusValue
 	for cs := range d.candidates.Iter() {
 		cand := cs.(string)
-		canb, err := hex.DecodeString(cand)
+		canb, err := b58.Decode(cand)
 		if err != nil {
 			return "", fmt.Errorf("decode candidate failed: %v", err)
 		}
@@ -484,7 +484,7 @@ func (d *Decree) combineCandidates() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("encode combine consensus value failed: %v", err)
 	}
-	candStr := hex.EncodeToString(candb)
+	candStr := b58.Encode(candb)
 
 	return candStr, nil
 }
@@ -492,9 +492,9 @@ func (d *Decree) combineCandidates() (string, error) {
 // Check whether the first input string is smaller than the second one
 // after byte-wise OR
 func lessBytesOr(l string, r string, h string) bool {
-	lb, _ := hex.DecodeString(l)
-	rb, _ := hex.DecodeString(r)
-	hb, _ := hex.DecodeString(h)
+	lb, _ := b58.Decode(l)
+	rb, _ := b58.Decode(r)
+	hb, _ := b58.Decode(h)
 
 	lbuf := bytes.NewBuffer(nil)
 	rbuf := bytes.NewBuffer(nil)
@@ -508,8 +508,8 @@ func lessBytesOr(l string, r string, h string) bool {
 
 // Compute the byte-wise OR bit operation between input bytes
 func bytesOr(l string, r string) string {
-	lb, _ := hex.DecodeString(l)
-	rb, _ := hex.DecodeString(r)
+	lb, _ := b58.Decode(l)
+	rb, _ := b58.Decode(r)
 
 	buf := bytes.NewBuffer(nil)
 	for i, _ := range lb {
@@ -1459,7 +1459,7 @@ func (d *Decree) validateBallot(stmt *Statement) error {
 
 // Validate consensus value
 func (d *Decree) validateConsensusValue(val string) error {
-	vb, err := hex.DecodeString(val)
+	vb, err := b58.Decode(val)
 	if err != nil {
 		return fmt.Errorf("decode hex string failed: %v", err)
 	}
