@@ -357,7 +357,6 @@ func (d *Decree) recvNomination(stmt *Statement) error {
 			return fmt.Errorf("combine candidates failed: %v", err)
 		}
 		d.latestComposite = compValue
-		log.Infof("get combined candidate value: %s", compValue)
 		d.updateBallotPhase(compValue, false)
 	}
 
@@ -380,6 +379,7 @@ func (d *Decree) sendNomination() error {
 	stmt := &Statement{
 		StatementType: ultpb.StatementType_NOMINATE,
 		NodeID:        d.nodeID,
+		Index:         d.index,
 		Stmt:          &ultpb.Statement_Nominate{Nominate: nom},
 	}
 
@@ -455,8 +455,8 @@ func (d *Decree) combineCandidates() (string, error) {
 		if err != nil {
 			return "", fmt.Errorf("decode consensus value failed: %v", err)
 		}
-		if cv.CloseTime > candidate.CloseTime {
-			candidate.CloseTime = cv.CloseTime
+		if cv.ProposeTime > candidate.ProposeTime {
+			candidate.ProposeTime = cv.ProposeTime
 		}
 
 		vals = append(vals, cv)
@@ -488,6 +488,11 @@ func (d *Decree) combineCandidates() (string, error) {
 	newTxSetHash, err := ultpb.GetTxSetKey(newTxSet)
 	if err != nil {
 		return "", fmt.Errorf("compute tx set hash failed: %v", err)
+	}
+
+	err = d.validator.RecvTxSet(newTxSetHash, newTxSet)
+	if err != nil {
+		return "", fmt.Errorf("sync quorum to validator failed: %v", err)
 	}
 
 	candidate.TxSetHash = newTxSetHash
@@ -538,6 +543,8 @@ func (d *Decree) recvBallot(stmt *Statement) error {
 	if stmt.Index != d.index {
 		log.Errorf("received incompatible ballot index: local %d, recv %d", d.index, stmt.Index)
 	}
+
+	log.Infow("received ballot", "nodeID", stmt.NodeID, "decreeIdx", stmt.Index)
 
 	// skip outdated statement without returning error
 	if s, ok := d.ballots[stmt.NodeID]; ok {
@@ -618,8 +625,8 @@ func (d *Decree) sendBallot() error {
 	}
 
 	// check whether the statement is already processed
-	s, ok := d.ballots[d.nodeID]
-	if !ok || pb.Equal(s, stmt) {
+	s, ok := d.ballots[stmt.NodeID]
+	if !ok || !pb.Equal(s, stmt) {
 		if err := d.recvBallot(stmt); err != nil {
 			return fmt.Errorf("recv local ballot failed: %v", err)
 		}
@@ -785,6 +792,8 @@ func (d *Decree) acceptPrepared(stmt *Statement) bool {
 
 	candidates := d.preparedCandidates(stmt)
 
+	log.Infof("get %d candidates for accepting prepared", len(candidates))
+
 	for _, cand := range candidates {
 		if d.currentPhase == BallotPhaseConfirm {
 			// skip old or incompatible ballots
@@ -820,6 +829,7 @@ func (d *Decree) acceptPrepared(stmt *Statement) bool {
 				}
 			}
 			if updated {
+				log.Infof("accept prepared ballot updated")
 				d.sendBallot()
 			}
 			return updated
@@ -941,6 +951,8 @@ func (d *Decree) confirmPrepared(stmt *Statement) bool {
 
 	candidates := d.preparedCandidates(stmt)
 
+	log.Infof("get %d candidates for confirming prepared", len(candidates))
+
 	// candidate for higher ballot
 	var hCandidate *ultpb.Ballot
 
@@ -950,7 +962,7 @@ func (d *Decree) confirmPrepared(stmt *Statement) bool {
 		// skip the ballot if it is impossible to find
 		// a higher confirmed prepared ballot
 		if d.hBallot != nil && compareBallots(cand, d.hBallot) <= 0 {
-			continue
+			break
 		}
 
 		if d.federatedRatify(prepareAcceptFilter(cand), d.ballots) {
@@ -967,9 +979,9 @@ func (d *Decree) confirmPrepared(stmt *Statement) bool {
 			curb = &Ballot{}
 		}
 		// find a new commit ballot
-		if d.cBallot != nil &&
-			(d.pBallot != nil && !lessAndIncompatibleBallots(hCandidate, d.pBallot) &&
-				(d.qBallot != nil && !lessAndIncompatibleBallots(hCandidate, d.qBallot))) {
+		if d.cBallot == nil &&
+			(d.pBallot == nil || !lessAndIncompatibleBallots(hCandidate, d.pBallot)) &&
+			(d.qBallot == nil || !lessAndIncompatibleBallots(hCandidate, d.qBallot)) {
 			for ; i < len(candidates); i++ {
 				cand := candidates[i]
 				if compareBallots(cand, curb) < 0 {
@@ -984,9 +996,9 @@ func (d *Decree) confirmPrepared(stmt *Statement) bool {
 				}
 				// TODO(bobonovski) break or continue searching?
 			}
-			updated := d.setConfirmPrepared(cCandidate, hCandidate)
-			return updated
 		}
+		updated := d.setConfirmPrepared(cCandidate, hCandidate)
+		return updated
 	}
 
 	return false
@@ -1058,6 +1070,9 @@ func (d *Decree) acceptCommit(stmt *Statement) bool {
 	}
 
 	lb, rb := d.findCommitInterval(counters, filter)
+
+	log.Infof("get commit interval %d,%d for accepting commit", lb, rb)
+
 	if lb != 0 {
 		if d.currentPhase != BallotPhaseConfirm || rb > d.hBallot.Counter {
 			cBallot := &Ballot{Value: ballot.Value, Counter: lb}
@@ -1088,7 +1103,9 @@ func (d *Decree) setAcceptCommit(cb *Ballot, hb *Ballot) bool {
 		if d.currentBallot != nil && !lessAndCompatibleBallots(hb, d.currentBallot) {
 			d.updateBallot(hb)
 		}
-		d.qBallot.Reset()
+		if d.qBallot != nil {
+			d.qBallot.Reset()
+		}
 		updated = true
 	}
 
@@ -1203,6 +1220,9 @@ func (d *Decree) confirmCommit(stmt *Statement) bool {
 	}
 
 	lb, rb := d.findCommitInterval(counters, filter)
+
+	log.Infof("get commit interval %d,%d for confirming commit", lb, rb)
+
 	if lb != 0 {
 		cBallot := &Ballot{Value: ballot.Value, Counter: lb}
 		hBallot := &Ballot{Value: ballot.Value, Counter: rb}
@@ -1251,7 +1271,7 @@ func (d *Decree) updateBallotIfNeeded(b *Ballot) bool {
 
 // Update the current ballot phase
 func (d *Decree) updateBallotPhase(val string, force bool) bool {
-	if !force && d.currentBallot == nil {
+	if !force && d.currentBallot != nil {
 		return false
 	}
 
@@ -1259,6 +1279,8 @@ func (d *Decree) updateBallotPhase(val string, force bool) bool {
 	if d.currentBallot != nil {
 		counter = d.currentBallot.Counter + 1
 	}
+
+	log.Infow("try to update ballot phase", "counter", counter, "val", val)
 
 	updated := d.updateBallotPhaseWithCounter(val, counter)
 
@@ -1278,6 +1300,7 @@ func (d *Decree) updateBallotPhaseWithCounter(val string, counter uint32) bool {
 
 	updated := d.updateBallotValue(b)
 	if updated {
+		log.Infof("current ballot updated")
 		d.sendBallot()
 	}
 
@@ -1307,6 +1330,7 @@ func (d *Decree) updateBallotValue(b *Ballot) bool {
 		if compareBallots(d.currentBallot, b) <= 0 {
 			d.updateBallot(b)
 			updated = true
+			log.Infof("current ballot updated")
 		}
 	}
 

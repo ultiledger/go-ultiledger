@@ -44,9 +44,9 @@ func compareBallots(lb *Ballot, rb *Ballot) int {
 	if lb == nil && rb == nil {
 		return 0
 	} else if lb == nil && rb != nil {
-		return 1
-	} else if lb != nil && rb == nil {
 		return -1
+	} else if lb != nil && rb == nil {
+		return 1
 	}
 
 	// check normal case
@@ -104,7 +104,7 @@ func isNewerBallot(lb *Statement, rb *Statement) bool {
 		}
 	case ultpb.StatementType_CONFIRM:
 		lc := lb.GetConfirm()
-		rc := lb.GetConfirm()
+		rc := rb.GetConfirm()
 		cmp := compareBallots(lc.B, rc.B)
 		if cmp < 0 {
 			return true

@@ -112,6 +112,9 @@ type Engine struct {
 	// channel for listening externalized value
 	externalizeChan chan *ExternalizeValue
 
+	// channel for listening propose signal
+	proposeChan chan struct{}
+
 	// channel for stopping goroutines
 	stopChan chan struct{}
 }
@@ -146,6 +149,7 @@ func NewEngine(ctx *EngineContext) *Engine {
 		txsetDownloadChan:  make(chan string),
 		quorumDownloadChan: make(chan string),
 		externalizeChan:    make(chan *ExternalizeValue),
+		proposeChan:        make(chan struct{}),
 		stopChan:           make(chan struct{}),
 	}
 
@@ -182,12 +186,12 @@ func (e *Engine) Start() {
 		for {
 			select {
 			case stmt := <-e.statementChan:
+				log.Infow("broadcast statement", "decreeIdx", stmt.Index)
 				err := e.broadcastStatement(stmt)
 				if err != nil {
 					log.Errorf("broadcast statement failed: %v", err)
 					continue
 				}
-				log.Infow("broadcast statement", "decreeIdx", stmt.Index)
 			case txsetHash := <-e.txsetDownloadChan:
 				txset, err := e.queryTxSet(txsetHash)
 				if err != nil {
@@ -230,16 +234,28 @@ func (e *Engine) Start() {
 				}
 				e.decrees[stmt.Index].Recv(stmt)
 			case ext := <-e.externalizeChan:
+				log.Infow("received ext value", "index", ext.Index, "value", ext.Value)
 				err := e.Externalize(ext.Index, ext.Value)
 				if err != nil {
 					log.Errorf("externalize value failed: %v", err, "index", ext.Index, "value", ext.Value)
 					continue
 				}
-				// propose next consensus value
-				err = e.Propose()
+				time.Sleep(3 * time.Second)
+				e.proposeChan <- struct{}{}
+			case <-e.stopChan:
+				return
+			}
+		}
+	}()
+	// goroutine for proposing new consensus value
+	go func() {
+		for {
+			select {
+			case <-e.proposeChan:
+				err := e.Propose()
 				if err != nil {
 					log.Errorf("propose new consensus value failed: %v", err)
-					continue
+					return
 				}
 			case <-e.stopChan:
 				return
@@ -309,6 +325,13 @@ func (e *Engine) RecvStatement(stmt *ultpb.Statement) error {
 func (e *Engine) broadcastStatement(stmt *ultpb.Statement) error {
 	clients := e.pm.GetLiveClients()
 	metadata := e.pm.GetMetadata()
+
+	if len(clients) == 0 {
+		log.Warn("there are no live clients for broadcast")
+		return nil
+	}
+
+	log.Infof("get %d live clients for broadcast statement", len(clients))
 
 	payload, err := ultpb.Encode(stmt)
 	if err != nil {
