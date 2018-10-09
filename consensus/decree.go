@@ -710,14 +710,14 @@ func (d *Decree) update() bool {
 	}
 	counters.Add(target)
 
-	// sort the counters in descending order
+	// sort the counters in ascending order
 	var sortedCounters []uint32
 	for c := range counters.Iter() {
 		v := c.(uint32)
 		sortedCounters = append(sortedCounters, v)
 	}
 	sort.SliceStable(sortedCounters, func(i, j int) bool {
-		return sortedCounters[i] > sortedCounters[j]
+		return sortedCounters[i] < sortedCounters[j]
 	})
 
 	// statement filter
@@ -738,7 +738,7 @@ func (d *Decree) update() bool {
 		}
 	}
 
-	// filter statements to get the nodeIDs
+	// find the smallest compatible counter
 	nodes := mapset.NewSet()
 	for _, c := range sortedCounters {
 		if c < target {
@@ -760,9 +760,10 @@ func (d *Decree) update() bool {
 		if c == target {
 			break
 		}
-		d.abandonBallot(c)
-
 		nodes.Clear()
+
+		updated := d.abandonBallot(c)
+		return updated
 	}
 
 	return false
