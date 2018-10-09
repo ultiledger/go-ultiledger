@@ -646,7 +646,10 @@ func (d *Decree) step(stmt *Statement) error {
 	if d.ballotMsgCount == 10 { // TODO(bobonovski) adaptive threshold?
 		return errors.New("max number of invoking reached in step")
 	}
-	// try to update internal ballot states bying following operations:
+
+	log.Infof("ballot msg count increase to: %d", d.ballotMsgCount)
+
+	// update internal ballot states by following operations:
 	// 1. accept the prepared statement
 	// 2. confirm the prepared statement
 	// 3. accept the commit statement
@@ -669,6 +672,8 @@ func (d *Decree) step(stmt *Statement) error {
 	}
 
 	d.ballotMsgCount -= 1
+
+	log.Infof("ballot msg count decrease to: %d", d.ballotMsgCount)
 
 	if d.ballotMsgCount == 0 && d.latestBallotStmt != nil {
 		d.statementChan <- d.latestBallotStmt
@@ -1280,8 +1285,6 @@ func (d *Decree) updateBallotPhase(val string, force bool) bool {
 		counter = d.currentBallot.Counter + 1
 	}
 
-	log.Infow("try to update ballot phase", "counter", counter, "val", val)
-
 	updated := d.updateBallotPhaseWithCounter(val, counter)
 
 	return updated
@@ -1319,10 +1322,6 @@ func (d *Decree) updateBallotValue(b *Ballot) bool {
 		d.updateBallot(b)
 		updated = true
 	} else {
-		if compareBallots(d.currentBallot, b) <= 0 {
-			log.Fatal("cannot update current ballot with smaller one")
-		}
-
 		if d.cBallot != nil && strings.Compare(d.cBallot.Value, b.Value) != 0 {
 			return false
 		}
