@@ -523,7 +523,8 @@ func lessBytesOr(l string, r string, h string) bool {
 	return lbuf.String() < rbuf.String()
 }
 
-// Compute the byte-wise OR bit operation between input bytes
+// Compute the byte-wise OR bit operation between input string,
+// the decoded bytes from input string should have the same length
 func bytesOr(l string, r string) string {
 	lb, _ := b58.Decode(l)
 	rb, _ := b58.Decode(r)
