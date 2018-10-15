@@ -116,7 +116,7 @@ func (d *Downloader) Stop() {
 	d.infoMap = nil
 }
 
-// Ready returns downloaded ledger from start index to end index
+// Ready returns downloaded ledgers from start index to end index
 func (d *Downloader) Ready() <-chan *CloseInfo {
 	return d.readyChan
 }
