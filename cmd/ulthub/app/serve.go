@@ -19,8 +19,8 @@ import (
 	// "github.com/ultiledger/go-ultiledger/log"
 )
 
-var gennodeidCmd = &cobra.Command{
-	Use:   "servehttp",
+var serveCmd = &cobra.Command{
+	Use:   "serve",
 	Short: "Serve a http server",
 	Long:  `Serve a http server to the underlying core servers`,
 	Run: func(cmd *cobra.Command, args []string) {
@@ -28,5 +28,5 @@ var gennodeidCmd = &cobra.Command{
 }
 
 func init() {
-	rootCmd.AddCommand(gennodeidCmd)
+	rootCmd.AddCommand(serveCmd)
 }
