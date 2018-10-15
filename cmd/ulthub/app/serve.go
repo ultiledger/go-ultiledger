@@ -15,8 +15,13 @@
 package app
 
 import (
+	"net/http"
+
 	"github.com/spf13/cobra"
-	// "github.com/ultiledger/go-ultiledger/log"
+	"github.com/spf13/viper"
+
+	"github.com/ultiledger/go-ultiledger/cmd/ulthub/service"
+	"github.com/ultiledger/go-ultiledger/log"
 )
 
 var serveCmd = &cobra.Command{
@@ -24,9 +29,20 @@ var serveCmd = &cobra.Command{
 	Short: "Serve a http server",
 	Long:  `Serve a http server to the underlying core servers`,
 	Run: func(cmd *cobra.Command, args []string) {
+		handler := service.NewHandler(viper.GetString("ult_endpoints"))
+		server := &http.Server{
+			Addr:    viper.GetString("addr"),
+			Handler: handler,
+		}
+		log.Fatal(server.ListenAndServe())
 	},
 }
 
 func init() {
+	serveCmd.Flags().StringP("addr", "", ":8080", "network address")
+	serveCmd.Flags().StringP("ult_endpoints", "", "", "ult server endpoints")
+	viper.BindPFlag("addr", serveCmd.Flags().Lookup("addr"))
+	viper.BindPFlag("ult_endpoints", serveCmd.Flags().Lookup("ult_endpoints"))
+
 	rootCmd.AddCommand(serveCmd)
 }
