@@ -1,6 +1,7 @@
 package service
 
 import (
+	"fmt"
 	"net/http"
 	"time"
 
@@ -10,8 +11,11 @@ import (
 )
 
 // NewHandler creates a customized http handler to the http server.
-func NewHandler(coreEndpoints string) http.Handler {
-	hub := NewHub(coreEndpoints)
+func NewHandler(coreEndpoints string) (http.Handler, error) {
+	hub, err := NewHub(coreEndpoints)
+	if err != nil {
+		return nil, fmt.Errorf("create http hub failed: %v", err)
+	}
 
 	ws := new(restful.WebService)
 	ws.Path("/ultiledger").
@@ -23,7 +27,7 @@ func NewHandler(coreEndpoints string) http.Handler {
 	container := restful.NewContainer()
 	container.Add(ws)
 
-	return container
+	return container, nil
 }
 
 func responseFilter(req *restful.Request, resp *restful.Response, chain *restful.FilterChain) {

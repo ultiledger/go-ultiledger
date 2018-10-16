@@ -29,7 +29,10 @@ var serveCmd = &cobra.Command{
 	Short: "Serve a http server",
 	Long:  `Serve a http server to the underlying core servers`,
 	Run: func(cmd *cobra.Command, args []string) {
-		handler := service.NewHandler(viper.GetString("ult_endpoints"))
+		handler, err := service.NewHandler(viper.GetString("ult_endpoints"))
+		if err != nil {
+			log.Fatalf("create http handler failed: %v", err)
+		}
 		server := &http.Server{
 			Addr:    viper.GetString("addr"),
 			Handler: handler,
