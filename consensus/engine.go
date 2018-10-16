@@ -255,7 +255,7 @@ func (e *Engine) Start() {
 				err := e.Propose()
 				if err != nil {
 					log.Errorf("propose new consensus value failed: %v", err)
-					return
+					continue
 				}
 			case <-e.stopChan:
 				return
