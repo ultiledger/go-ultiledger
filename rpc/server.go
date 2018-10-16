@@ -213,7 +213,7 @@ func (s *NodeServer) SubmitTx(ctx context.Context, req *rpcpb.SubmitTxRequest) (
 	f.Init()
 	s.txFuture <- f
 	if err := f.Error(); err != nil {
-		return resp, err
+		return resp, fmt.Errorf("submit tx failed: %v", err)
 	}
 	return resp, nil
 }
@@ -281,13 +281,13 @@ func (s *NodeServer) Notify(ctx context.Context, req *rpcpb.NotifyRequest) (*rpc
 	case rpcpb.NotifyMsgType_STATEMENT:
 		stmt, err := ultpb.DecodeStatement(req.Data)
 		if err != nil {
-			return resp, fmt.Errorf("decode tx failed: %v", err)
+			return resp, fmt.Errorf("decode statement failed: %v", err)
 		}
 		sf := &future.Statement{Stmt: stmt}
 		sf.Init()
 		s.stmtFuture <- sf
 		if err := sf.Error(); err != nil {
-			return resp, fmt.Errorf("decode statement failed: %v", err)
+			return resp, fmt.Errorf("add statement failed: %v", err)
 		}
 	}
 
