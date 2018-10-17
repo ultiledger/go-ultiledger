@@ -29,8 +29,8 @@ type DownloadRange struct {
 
 // Downloader downloads missing ledgers from peers
 type Downloader struct {
-	store  db.DB
-	bucket string
+	database db.Database
+	bucket   string
 
 	// peer manager
 	pm *peer.Manager
@@ -66,9 +66,9 @@ type Downloader struct {
 }
 
 // Create a new instance of downloader
-func NewDownloader(db db.DB, pm *peer.Manager) *Downloader {
+func NewDownloader(db db.Database, pm *peer.Manager) *Downloader {
 	dlr := &Downloader{
-		store:      db,
+		database:   db,
 		bucket:     "DOWNLOADER",
 		pm:         pm,
 		startIndex: uint64(0),

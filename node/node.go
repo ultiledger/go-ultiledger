@@ -10,7 +10,6 @@ import (
 	"github.com/ultiledger/go-ultiledger/account"
 	"github.com/ultiledger/go-ultiledger/consensus"
 	"github.com/ultiledger/go-ultiledger/db"
-	_ "github.com/ultiledger/go-ultiledger/db/backend"
 	"github.com/ultiledger/go-ultiledger/future"
 	"github.com/ultiledger/go-ultiledger/ledger"
 	"github.com/ultiledger/go-ultiledger/log"
@@ -22,7 +21,7 @@ import (
 
 // Node is the central controller for ultiledger
 type Node struct {
-	store db.DB
+	database db.Database
 
 	// Network address of this node
 	addr string
@@ -70,19 +69,15 @@ func NewNode(conf *Config) *Node {
 	seed := conf.Seed
 
 	// create database store
-	ctor, err := db.GetDB(conf.DBBackend)
-	if err != nil {
-		log.Fatal(err)
-	}
-	store := ctor(conf.DBPath)
+	database := db.NewBoltDB(conf.DBPath)
 
 	// peer and account managers are independent
 	pm := peer.NewManager(conf.Peers, addr, nodeID)
-	am := account.NewManager(store)
+	am := account.NewManager(database)
 
 	// tx manager depends on peer and account manager
 	txCtx := &tx.ManagerContext{
-		Store:       store,
+		Database:    database,
 		PM:          pm,
 		AM:          am,
 		BaseReserve: ledger.GenesisBaseReserve,
@@ -92,10 +87,10 @@ func NewNode(conf *Config) *Node {
 
 	// ledger manager depends on account and tx manager
 	lmCtx := &ledger.ManagerContext{
-		Store: store,
-		PM:    pm,
-		AM:    am,
-		TM:    tm,
+		Database: database,
+		PM:       pm,
+		AM:       am,
+		TM:       tm,
 	}
 	lm := ledger.NewManager(lmCtx)
 
@@ -103,14 +98,14 @@ func NewNode(conf *Config) *Node {
 
 	// construct consensus engine context and create consensus engine
 	engineCtx := &consensus.EngineContext{
-		Store:  store,
-		Seed:   seed,
-		NodeID: nodeID,
-		PM:     pm,
-		AM:     am,
-		LM:     lm,
-		TM:     tm,
-		Quorum: conf.Quorum,
+		Database: database,
+		Seed:     seed,
+		NodeID:   nodeID,
+		PM:       pm,
+		AM:       am,
+		LM:       lm,
+		TM:       tm,
+		Quorum:   conf.Quorum,
 	}
 	engine := consensus.NewEngine(engineCtx)
 
@@ -138,7 +133,7 @@ func NewNode(conf *Config) *Node {
 	// create local node
 	node := &Node{
 		config:    conf,
-		store:     store,
+		database:  database,
 		server:    nodeServer,
 		pm:        pm,
 		lm:        lm,

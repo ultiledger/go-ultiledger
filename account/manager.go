@@ -19,8 +19,8 @@ var (
 
 // Manager manages the creation of accounts
 type Manager struct {
-	store  db.DB
-	bucket string
+	database db.Database
+	bucket   string
 
 	// LRU cache for accounts
 	accounts *lru.Cache
@@ -29,12 +29,12 @@ type Manager struct {
 	master *ultpb.Account
 }
 
-func NewManager(d db.DB) *Manager {
+func NewManager(d db.Database) *Manager {
 	am := &Manager{
-		store:  d,
-		bucket: "ACCOUNT",
+		database: d,
+		bucket:   "ACCOUNT",
 	}
-	err := am.store.CreateBucket(am.bucket)
+	err := am.database.NewBucket(am.bucket)
 	if err != nil {
 		log.Fatalf("create db bucket %s failed: %v", am.bucket, err)
 	}
@@ -76,7 +76,7 @@ func (am *Manager) CreateAccount(accountID string, balance uint64, signer string
 	}
 
 	// save the account in db
-	err = am.store.Set(am.bucket, []byte(acc.AccountID), accb)
+	err = am.database.Put(am.bucket, []byte(acc.AccountID), accb)
 	if err != nil {
 		return fmt.Errorf("save account in db failed: %v", err)
 	}
@@ -98,8 +98,11 @@ func (am *Manager) GetAccount(accountID string) (*ultpb.Account, error) {
 	}
 
 	// then check database
-	b, ok := am.store.Get(am.bucket, []byte(accountID))
-	if !ok {
+	b, err := am.database.Get(am.bucket, []byte(accountID))
+	if err != nil {
+		return nil, fmt.Errorf("get account %s failed: %v", accountID, err)
+	}
+	if b == nil {
 		return nil, ErrAccountNotExist
 	}
 	acc, err := ultpb.DecodeAccount(b)
@@ -135,7 +138,7 @@ func (am *Manager) UpdateAccount(acc *ultpb.Account) error {
 	}
 
 	// update account in db
-	err = am.store.Set(am.bucket, []byte(acc.AccountID), accb)
+	err = am.database.Put(am.bucket, []byte(acc.AccountID), accb)
 	if err != nil {
 		return fmt.Errorf("save account in db failed: %v", err)
 	}

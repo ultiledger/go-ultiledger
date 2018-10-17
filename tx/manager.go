@@ -29,7 +29,7 @@ var (
 
 // ManagerContext represents contextual information TxManager needs
 type ManagerContext struct {
-	Store       db.DB            // database instance
+	Database    db.Database      // database instance
 	AM          *account.Manager // account manager
 	PM          *peer.Manager    // peer manager
 	BaseReserve uint64           // global base reserve for an account
@@ -40,7 +40,7 @@ func ValidateManagerContext(mc *ManagerContext) error {
 	if mc == nil {
 		return fmt.Errorf("tx context is nil")
 	}
-	if mc.Store == nil {
+	if mc.Database == nil {
 		return fmt.Errorf("database instance is nil")
 	}
 	if mc.AM == nil {
@@ -58,8 +58,8 @@ func ValidateManagerContext(mc *ManagerContext) error {
 // Manager manages incoming tx and coordinate with ledger manager
 // and consensus engine
 type Manager struct {
-	store  db.DB
-	bucket string
+	database db.Database
+	bucket   string
 
 	seed string
 
@@ -94,7 +94,7 @@ func NewManager(ctx *ManagerContext) *Manager {
 		log.Fatalf("tx manager context is invalid: %v", err)
 	}
 	tm := &Manager{
-		store:       ctx.Store,
+		database:    ctx.Database,
 		bucket:      "TX",
 		seed:        ctx.Seed,
 		baseReserve: ctx.BaseReserve,
@@ -104,7 +104,7 @@ func NewManager(ctx *ManagerContext) *Manager {
 		txChan:      make(chan *ultpb.Tx),
 		stopChan:    make(chan struct{}),
 	}
-	err := tm.store.CreateBucket(tm.bucket)
+	err := tm.database.NewBucket(tm.bucket)
 	if err != nil {
 		log.Fatalf("create tx bucket failed: %v", err)
 	}
@@ -353,13 +353,16 @@ func (tm *Manager) GetTxStatus(txKey string) (*rpcpb.TxStatus, error) {
 	}
 
 	status := &rpcpb.TxStatus{}
-	b, ok := tm.store.Get(tm.bucket, []byte(txKey))
-	if !ok {
+	b, err := tm.database.Get(tm.bucket, []byte(txKey))
+	if err != nil {
+		return nil, fmt.Errorf("get tx %s status failed: %v", txKey, err)
+	}
+	if b == nil {
 		status.StatusCode = rpcpb.TxStatusCode_NOTEXIST
 		return status, nil
 	}
 
-	err := pb.Unmarshal(b, status)
+	err = pb.Unmarshal(b, status)
 	if err != nil {
 		return nil, err
 	}
@@ -376,7 +379,7 @@ func (tm *Manager) UpdateTxStatus(txKey string, status *rpcpb.TxStatus) error {
 		return fmt.Errorf("encode status failed: %v", err)
 	}
 
-	err = tm.store.Set(tm.bucket, []byte(txKey), b)
+	err = tm.database.Put(tm.bucket, []byte(txKey), b)
 	if err != nil {
 		return fmt.Errorf("save status in db failed: %v", err)
 	}

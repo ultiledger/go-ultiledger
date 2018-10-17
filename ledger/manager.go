@@ -45,17 +45,17 @@ var (
 
 // ManagerContext contains contextural information Manager needs
 type ManagerContext struct {
-	Store db.DB
-	AM    *account.Manager
-	TM    *tx.Manager
-	PM    *peer.Manager
+	Database db.Database
+	AM       *account.Manager
+	TM       *tx.Manager
+	PM       *peer.Manager
 }
 
 func ValidateManagerContext(mc *ManagerContext) error {
 	if mc == nil {
 		return errors.New("manager context is nil")
 	}
-	if mc.Store == nil {
+	if mc.Database == nil {
 		return errors.New("database instance is nil")
 	}
 	if mc.AM == nil {
@@ -73,8 +73,8 @@ func ValidateManagerContext(mc *ManagerContext) error {
 // ledger manager is responsible for all the operations on ledgers
 type Manager struct {
 	// db store and corresponding bucket
-	store  db.DB
-	bucket string
+	database db.Database
+	bucket   string
 
 	// ledger downloader
 	downloader *Downloader
@@ -121,12 +121,12 @@ func NewManager(ctx *ManagerContext) *Manager {
 		log.Fatalf("validate manager context failed: %v", err)
 	}
 	lm := &Manager{
-		store:       ctx.Store,
+		database:    ctx.Database,
 		bucket:      "LEDGER",
 		am:          ctx.AM,
 		tm:          ctx.TM,
 		buffer:      new(CloseInfoBuffer),
-		downloader:  NewDownloader(ctx.Store, ctx.PM),
+		downloader:  NewDownloader(ctx.Database, ctx.PM),
 		ledgerState: LedgerStateNotSynced,
 		startTime:   time.Now().Unix(),
 		stopChan:    make(chan struct{}),
@@ -136,7 +136,7 @@ func NewManager(ctx *ManagerContext) *Manager {
 		log.Fatalf("create ledger manager LRU cache failed: %v", err)
 	}
 	lm.headers = cache
-	err = lm.store.CreateBucket(lm.bucket)
+	err = lm.database.NewBucket(lm.bucket)
 	if err != nil {
 		log.Fatalf("create db bucket %s failed: %v", lm.bucket, err)
 	}
@@ -336,7 +336,7 @@ func (lm *Manager) advanceLedger(seq uint64, prevHeaderHash string, txHash strin
 		return fmt.Errorf("encode ledger header to key failed: %v", err)
 	}
 
-	lm.store.Set(lm.bucket, []byte(h), b)
+	lm.database.Put(lm.bucket, []byte(h), b)
 
 	// advance current ledger header
 	lm.prevLedgerHeader = lm.currLedgerHeader

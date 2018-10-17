@@ -28,14 +28,14 @@ var (
 
 // EngineContext represents contextual information Engine needs
 type EngineContext struct {
-	Store  db.DB            // database instance
-	Seed   string           // node seed
-	NodeID string           // node ID
-	PM     *peer.Manager    // peer manager
-	AM     *account.Manager // account manager
-	LM     *ledger.Manager  // ledger manager
-	TM     *tx.Manager      // tx manager
-	Quorum *ultpb.Quorum    // initial quorum parsed from config
+	Database db.Database      // database instance
+	Seed     string           // node seed
+	NodeID   string           // node ID
+	PM       *peer.Manager    // peer manager
+	AM       *account.Manager // account manager
+	LM       *ledger.Manager  // ledger manager
+	TM       *tx.Manager      // tx manager
+	Quorum   *ultpb.Quorum    // initial quorum parsed from config
 }
 
 func ValidateEngineContext(ec *EngineContext) error {
@@ -68,8 +68,8 @@ func ValidateEngineContext(ec *EngineContext) error {
 
 // Engine is the driver of underlying consensus protocol
 type Engine struct {
-	store  db.DB
-	bucket string
+	database db.Database
+	bucket   string
 	// for saving transaction status
 	statusBucket string
 
@@ -131,7 +131,7 @@ func NewEngine(ctx *EngineContext) *Engine {
 	}
 
 	e := &Engine{
-		store:              ctx.Store,
+		database:           ctx.Database,
 		bucket:             "ENGINE",
 		statusBucket:       "TXSTATUS",
 		nodeID:             ctx.NodeID,
@@ -155,18 +155,18 @@ func NewEngine(ctx *EngineContext) *Engine {
 
 	// create validator
 	vctx := &ValidatorContext{
-		Store:              e.store,
+		Database:           e.database,
 		TxSetDownloadChan:  e.txsetDownloadChan,
 		QuorumDownloadChan: e.quorumDownloadChan,
 	}
 	e.validator = NewValidator(vctx)
 
-	err = e.store.CreateBucket(e.bucket)
+	err = e.database.NewBucket(e.bucket)
 	if err != nil {
 		log.Fatalf("create db bucket %s failed: %v", e.bucket, err)
 	}
 
-	err = e.store.CreateBucket(e.statusBucket)
+	err = e.database.NewBucket(e.statusBucket)
 	if err != nil {
 		log.Fatalf("create db bucket %s failed: %v", e.statusBucket, err)
 	}

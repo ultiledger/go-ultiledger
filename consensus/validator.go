@@ -17,7 +17,7 @@ import (
 
 // ValidatorContext contains contextual information validator needs
 type ValidatorContext struct {
-	Store              db.DB // database instance
+	Database           db.Database // database instance
 	QuorumDownloadChan chan<- string
 	TxSetDownloadChan  chan<- string
 }
@@ -26,7 +26,7 @@ func ValidateValidatorContext(vc *ValidatorContext) error {
 	if vc == nil {
 		return fmt.Errorf("validator context is nil")
 	}
-	if vc.Store == nil {
+	if vc.Database == nil {
 		return fmt.Errorf("db instance is nil")
 	}
 	if vc.QuorumDownloadChan == nil {
@@ -42,8 +42,8 @@ func ValidateValidatorContext(vc *ValidatorContext) error {
 // requests missing information of transaction and quorum
 // from other peers.
 type Validator struct {
-	store  db.DB
-	bucket string
+	database db.Database
+	bucket   string
 
 	// statements which are downloading
 	rwm       sync.RWMutex
@@ -76,7 +76,7 @@ func NewValidator(ctx *ValidatorContext) *Validator {
 	}
 
 	v := &Validator{
-		store:              ctx.Store,
+		database:           ctx.Database,
 		bucket:             "VALIDATOR",
 		downloads:          make(map[string]*Statement),
 		statements:         mapset.NewSet(),
@@ -87,7 +87,7 @@ func NewValidator(ctx *ValidatorContext) *Validator {
 		downloadChan:       make(chan *Statement, 100),
 	}
 
-	err := v.store.CreateBucket(v.bucket)
+	err := v.database.NewBucket(v.bucket)
 	if err != nil {
 		log.Fatalf("create validator bucket failed: %v", err)
 	}
@@ -167,7 +167,7 @@ func (v *Validator) RecvQuorum(quorumHash string, quorum *Quorum) error {
 	}
 
 	// save the quorum in db first
-	err = v.store.Set(v.bucket, []byte(quorumHash), qb)
+	err = v.database.Put(v.bucket, []byte(quorumHash), qb)
 	if err != nil {
 		return fmt.Errorf("save quorum to db failed: %v", err)
 	}
@@ -186,7 +186,7 @@ func (v *Validator) RecvTxSet(txsetHash string, txset *TxSet) error {
 	}
 
 	// save the txset in db first
-	err = v.store.Set(v.bucket, []byte(txsetHash), tb)
+	err = v.database.Put(v.bucket, []byte(txsetHash), tb)
 	if err != nil {
 		return fmt.Errorf("save tx list to db failed: %v", err)
 	}
@@ -202,8 +202,8 @@ func (v *Validator) GetQuorum(quorumHash string) (*Quorum, bool) {
 		return q.(*Quorum), true
 	}
 
-	qb, ok := v.store.Get(v.bucket, []byte(quorumHash))
-	if !ok {
+	qb, err := v.database.Get(v.bucket, []byte(quorumHash))
+	if err != nil || qb == nil {
 		return nil, false
 	}
 
@@ -225,8 +225,8 @@ func (v *Validator) GetTxSet(txsetHash string) (*TxSet, bool) {
 		return txs.(*TxSet), true
 	}
 
-	txb, ok := v.store.Get(v.bucket, []byte(txsetHash))
-	if !ok {
+	txb, err := v.database.Get(v.bucket, []byte(txsetHash))
+	if err != nil || txb == nil {
 		return nil, false
 	}
 

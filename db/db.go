@@ -1,31 +1,30 @@
 package db
 
-import (
-	"fmt"
-)
+// Putter wraps the database write operation.
+type Putter interface {
+	Put(bucket string, key []byte, value []byte) error
+}
 
-var constructors = make(map[string]DBCtor)
+// Deleter wraps the database delete operation.
+type Deleter interface {
+	Delete(bucket string, key []byte) error
+}
 
-// generic database operation interface
-type DB interface {
-	CreateBucket(name string) error
-	Set(bucket string, key []byte, val []byte) error
-	Get(bucket string, key []byte) ([]byte, bool)
+// Generic database operation interface.
+type Database interface {
+	Putter
+	Deleter
+	Get(bucket string, key []byte) ([]byte, error)
 	Close()
+	NewBatch() Batch
+	NewBucket(bucket string) error
 }
 
-// database backend should call this function to register itself
-// in order to be used by application
-func Register(dbName string, ctor DBCtor) {
-	constructors[dbName] = ctor
-}
-
-// create a new db in specified file path
-type DBCtor func(string) DB
-
-func GetDB(dbName string) (DBCtor, error) {
-	if _, ok := constructors[dbName]; !ok {
-		return nil, fmt.Errorf("database %s not registered", dbName)
-	}
-	return constructors[dbName], nil
+// Batch combines multiple updates and writes them to database.
+type Batch interface {
+	Putter
+	Deleter
+	ValueSize() int
+	Write() error
+	Reset()
 }
