@@ -9,6 +9,7 @@ import "asset.proto";
 enum OpType {
   CREATE_ACCOUNT = 0;
   PAYMENT = 1;
+  PATH_PAYMENT = 2;
 }
 
 // Operation
@@ -19,6 +20,7 @@ message Op {
   oneof Op {
     CreateAccountOp CreateAccount = 2;
     PaymentOp Payment = 3;
+    PathPaymentOp PathPayment = 4;
   }
 }
 
@@ -57,7 +59,34 @@ message PaymentOp {
   // destination account of the payment
   string AccountID = 1;
   // asset type of payment
-  AssetType AssetType = 2;
+  Asset Asset = 2;
   // amount of payment in specified asset type
   int64 Amount = 3;
+}
+
+// Path payment
+message PathPaymentOp {
+  // source asset to send
+  Asset SrcAsset = 1;
+  // amount of source asset to send
+  uint64 SrcAmount = 2;
+  // destination account of the path payment
+  string AccountID = 3; 
+  // destination asset type   
+  Asset DstAsset = 4;
+  // payment asset path
+  repeated Asset Path = 5;
+}
+
+// Trust management
+enum TrustOpType {
+  CREATE = 0;
+  UPDATE = 1;
+  DELETE = 2;  
+}
+
+message TrustOp {
+  TrustOpType OpType = 1;
+  Asset Asset = 2;
+  uint64 Balance = 3;
 }

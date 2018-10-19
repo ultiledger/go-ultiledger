@@ -29,6 +29,8 @@ It has these top-level messages:
 	TxSet
 	CreateAccountOp
 	PaymentOp
+	PathPaymentOp
+	TrustOp
 */
 package ultpb
 

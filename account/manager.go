@@ -3,6 +3,7 @@ package account
 import (
 	"errors"
 	"fmt"
+	"math"
 
 	pb "github.com/golang/protobuf/proto"
 	lru "github.com/hashicorp/golang-lru"
@@ -14,7 +15,9 @@ import (
 )
 
 var (
-	ErrAccountNotExist = errors.New("account not exist")
+	ErrAccountNotExist  = errors.New("account not exist")
+	ErrBalanceOverflow  = errors.New("account balance overflow")
+	ErrBalanceUnderflow = errors.New("account balance underflow")
 )
 
 // Manager manages the creation of accounts
@@ -117,7 +120,7 @@ func (am *Manager) GetAccount(accountID string) (*ultpb.Account, error) {
 	return accCopy.(*ultpb.Account), nil
 }
 
-// Update account information
+// Update account information.
 func (am *Manager) UpdateAccount(acc *ultpb.Account) error {
 	oldAcc, err := am.GetAccount(acc.AccountID)
 	if err != nil {
@@ -144,6 +147,28 @@ func (am *Manager) UpdateAccount(acc *ultpb.Account) error {
 	}
 
 	am.accounts.Add(acc.AccountID, acc)
+
+	return nil
+}
+
+// Add balance to account and check balance overflow.
+func (am *Manager) AddBalance(acc *ultpb.Account, balance uint64) error {
+	if acc.Balance > math.MaxUint64-balance {
+		return ErrBalanceOverflow
+	}
+
+	acc.Balance += balance
+
+	return nil
+}
+
+// Subtract balance from account and check balance underflow
+func (am *Manager) SubBalance(acc *ultpb.Account, balance uint64) error {
+	if acc.Balance < balance {
+		return ErrBalanceUnderflow
+	}
+
+	acc.Balance -= balance
 
 	return nil
 }
