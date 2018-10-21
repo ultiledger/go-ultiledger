@@ -1,7 +1,6 @@
 package db
 
 import (
-	"errors"
 	"fmt"
 	"log"
 	"time"
@@ -27,13 +26,6 @@ func NewBoltDB(path string) Database {
 }
 
 func (bt *boltdb) NewBucket(name string) error {
-	if bt.db == nil {
-		return errors.New("database is not initialized")
-	}
-	if name == "" {
-		return errors.New("database bucket name is empty")
-	}
-
 	if err := bt.db.Update(func(tx *bolt.Tx) error {
 		_, err := tx.CreateBucketIfNotExists([]byte(name))
 		if err != nil {
@@ -48,10 +40,6 @@ func (bt *boltdb) NewBucket(name string) error {
 
 // Put writes the key/value pair to database.
 func (bt *boltdb) Put(bucket string, key, value []byte) error {
-	if bt.db == nil {
-		return errors.New("database is not initialized")
-	}
-
 	if err := bt.db.Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(bucket))
 		err := b.Put(key, value)
@@ -64,10 +52,6 @@ func (bt *boltdb) Put(bucket string, key, value []byte) error {
 
 // Delete deletes the key from the database.
 func (bt *boltdb) Delete(bucket string, key []byte) error {
-	if bt.db == nil {
-		return errors.New("database is not initialized")
-	}
-
 	if err := bt.db.Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(bucket))
 		err := b.Delete(key)
@@ -80,10 +64,6 @@ func (bt *boltdb) Delete(bucket string, key []byte) error {
 
 // Get retrieves the value of the key from database.
 func (bt *boltdb) Get(bucket string, key []byte) ([]byte, error) {
-	if bt.db == nil {
-		return nil, errors.New("database is not initialized")
-	}
-
 	var val []byte
 	if err := bt.db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(bucket))
@@ -102,9 +82,51 @@ func (bt *boltdb) Close() {
 	}
 }
 
+// Begin returns a writable database transaction object
+// which can be used to manually managing transaction.
+func (bt *boltdb) Begin() (Tx, error) {
+	tx, err := bt.db.Begin(true)
+	if err != nil {
+		return nil, err
+	}
+	btx := &boltdbTx{tx: tx}
+	return btx, nil
+}
+
 // NewBatch creates a Batch object which can be used for batch writes.
 func (bt *boltdb) NewBatch() Batch {
 	return &boltdbBatch{db: bt.db}
+}
+
+// boltdbTx wraps boltdb Tx to provide a desired interface.
+type boltdbTx struct {
+	tx *bolt.Tx
+}
+
+func (btx *boltdbTx) Put(bucket string, key, value []byte) error {
+	b := btx.tx.Bucket([]byte(bucket))
+	err := b.Put(key, value)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (btx *boltdbTx) Delete(bucket string, key []byte) error {
+	b := btx.tx.Bucket([]byte(bucket))
+	err := b.Delete(key)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (btx *boltdbTx) Rollback() error {
+	return btx.tx.Rollback()
+}
+
+func (btx *boltdbTx) Commit() error {
+	return btx.tx.Commit()
 }
 
 type kv struct {
@@ -121,12 +143,6 @@ type boltdbBatch struct {
 }
 
 func (bb *boltdbBatch) Put(bucket string, key, value []byte) error {
-	if bucket == "" {
-		return errors.New("bucket is empty")
-	}
-	if len(key) == 0 {
-		return errors.New("key is empty")
-	}
 	bb.kvs = append(bb.kvs, &kv{
 		bucket: bucket,
 		key:    key,
