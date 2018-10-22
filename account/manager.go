@@ -57,7 +57,7 @@ func (am *Manager) CreateMasterAccount(networkID []byte, balance uint64) error {
 	}
 	log.Infof("master private key (seed) is %s", privKey)
 
-	err = am.CreateAccount(pubKey, balance, pubKey)
+	err = am.CreateAccount(am.database, pubKey, balance, pubKey)
 	if err != nil {
 		return fmt.Errorf("create master account failed: %v", err)
 	}
@@ -66,7 +66,7 @@ func (am *Manager) CreateMasterAccount(networkID []byte, balance uint64) error {
 }
 
 // Create a new account with initial balance
-func (am *Manager) CreateAccount(accountID string, balance uint64, signer string) error {
+func (am *Manager) CreateAccount(putter db.Putter, accountID string, balance uint64, signer string) error {
 	acc := &ultpb.Account{
 		AccountID: accountID,
 		Balance:   balance,
@@ -79,7 +79,7 @@ func (am *Manager) CreateAccount(accountID string, balance uint64, signer string
 	}
 
 	// save the account in db
-	err = am.database.Put(am.bucket, []byte(acc.AccountID), accb)
+	err = putter.Put(am.bucket, []byte(acc.AccountID), accb)
 	if err != nil {
 		return fmt.Errorf("save account in db failed: %v", err)
 	}
@@ -91,7 +91,7 @@ func (am *Manager) CreateAccount(accountID string, balance uint64, signer string
 }
 
 // Get account information from accountID
-func (am *Manager) GetAccount(accountID string) (*ultpb.Account, error) {
+func (am *Manager) GetAccount(getter db.Getter, accountID string) (*ultpb.Account, error) {
 	// first check the LRU cache, if the account is in the cache
 	// we return a deep copy of the account
 	if acc, ok := am.accounts.Get(accountID); ok {
@@ -101,7 +101,7 @@ func (am *Manager) GetAccount(accountID string) (*ultpb.Account, error) {
 	}
 
 	// then check database
-	b, err := am.database.Get(am.bucket, []byte(accountID))
+	b, err := getter.Get(am.bucket, []byte(accountID))
 	if err != nil {
 		return nil, fmt.Errorf("get account %s failed: %v", accountID, err)
 	}
@@ -121,32 +121,17 @@ func (am *Manager) GetAccount(accountID string) (*ultpb.Account, error) {
 }
 
 // Update account information.
-func (am *Manager) UpdateAccount(acc *ultpb.Account) error {
-	oldAcc, err := am.GetAccount(acc.AccountID)
-	if err != nil {
-		if err == ErrAccountNotExist {
-			return err
-		}
-		return fmt.Errorf("get account failed: %v", err)
-	}
-
-	// we cannot change the signer of the account
-	if oldAcc.Signer != acc.Signer {
-		return fmt.Errorf("cannot update account signer")
-	}
-
+func (am *Manager) SaveAccount(putter db.Putter, acc *ultpb.Account) error {
 	accb, err := ultpb.Encode(acc)
 	if err != nil {
 		return fmt.Errorf("encode account failed: %v", err)
 	}
 
 	// update account in db
-	err = am.database.Put(am.bucket, []byte(acc.AccountID), accb)
+	err = putter.Put(am.bucket, []byte(acc.AccountID), accb)
 	if err != nil {
 		return fmt.Errorf("save account in db failed: %v", err)
 	}
-
-	am.accounts.Add(acc.AccountID, acc)
 
 	return nil
 }

@@ -5,9 +5,10 @@ import (
 	"fmt"
 
 	"github.com/ultiledger/go-ultiledger/account"
+	"github.com/ultiledger/go-ultiledger/db"
 )
 
-// Operation for creating a new account
+// Operation for creating a new account.
 type CreateAccount struct {
 	AM           *account.Manager
 	SrcAccountID string
@@ -15,7 +16,7 @@ type CreateAccount struct {
 	Balance      uint64
 }
 
-func (op *CreateAccount) Apply() error {
+func (op *CreateAccount) Apply(dt db.Tx) error {
 	// validate parameters
 	if op.SrcAccountID == op.DstAccountID {
 		return errors.New("src and dst account is the same")
@@ -25,7 +26,7 @@ func (op *CreateAccount) Apply() error {
 	}
 
 	// get src account
-	srcAcc, err := op.AM.GetAccount(op.SrcAccountID)
+	srcAcc, err := op.AM.GetAccount(dt, op.SrcAccountID)
 	if err != nil {
 		return fmt.Errorf("get src account %s failed: %v", op.SrcAccountID, err)
 	}
@@ -38,13 +39,13 @@ func (op *CreateAccount) Apply() error {
 	// TODO(bobonovski) change the following ops in a transactions
 	// update the src account
 	srcAcc.Balance -= op.Balance
-	err = op.AM.UpdateAccount(srcAcc)
+	err = op.AM.SaveAccount(dt, srcAcc)
 	if err != nil {
 		return fmt.Errorf("update account %s failed: %v", op.SrcAccountID, err)
 	}
 
 	// create the dst account
-	err = op.AM.CreateAccount(op.DstAccountID, op.Balance, op.SrcAccountID)
+	err = op.AM.CreateAccount(dt, op.DstAccountID, op.Balance, op.SrcAccountID)
 	if err != nil {
 		return fmt.Errorf("create account %s failed: %v", op.DstAccountID, err)
 	}

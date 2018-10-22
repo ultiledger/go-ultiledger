@@ -1,5 +1,10 @@
 package db
 
+// Getter wraps the database read operation.
+type Getter interface {
+	Get(bucket string, key []byte) ([]byte, error)
+}
+
 // Putter wraps the database write operation.
 type Putter interface {
 	Put(bucket string, key []byte, value []byte) error
@@ -12,9 +17,9 @@ type Deleter interface {
 
 // Generic database operations interface.
 type Database interface {
+	Getter
 	Putter
 	Deleter
-	Get(bucket string, key []byte) ([]byte, error)
 	Close()
 	Begin() (Tx, error)
 	NewBatch() Batch
@@ -23,6 +28,7 @@ type Database interface {
 
 // Generic database transaction operations interface.
 type Tx interface {
+	Getter
 	Putter
 	Deleter
 	Rollback() error

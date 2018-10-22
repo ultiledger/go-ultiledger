@@ -103,6 +103,12 @@ type boltdbTx struct {
 	tx *bolt.Tx
 }
 
+func (btx *boltdbTx) Get(bucket string, key []byte) ([]byte, error) {
+	b := btx.tx.Bucket([]byte(bucket))
+	v := b.Get(key)
+	return v, nil
+}
+
 func (btx *boltdbTx) Put(bucket string, key, value []byte) error {
 	b := btx.tx.Bucket([]byte(bucket))
 	err := b.Put(key, value)

@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/ultiledger/go-ultiledger/account"
+	"github.com/ultiledger/go-ultiledger/db"
 	"github.com/ultiledger/go-ultiledger/ultpb"
 )
 
@@ -35,7 +36,7 @@ type Payment struct {
 	Amount       uint64
 }
 
-func (p *Payment) Apply() error {
+func (p *Payment) Apply(dt db.Tx) error {
 	if err := ValidateAsset(p.Asset); err != nil {
 		return fmt.Errorf("validate payment asset failed: %v", err)
 	}
@@ -57,7 +58,7 @@ func (p *Payment) Apply() error {
 		DstAsset:     p.Asset,
 		DstAmount:    p.Amount,
 	}
-	if err := pp.Apply(); err != nil {
+	if err := pp.Apply(dt); err != nil {
 		return err
 	}
 
@@ -76,7 +77,7 @@ type PathPayment struct {
 	Path         []*ultpb.Asset
 }
 
-func (pp *PathPayment) Apply() error {
+func (pp *PathPayment) Apply(dt db.Tx) error {
 	if err := ValidateAsset(pp.SrcAsset); err != nil {
 		return fmt.Errorf("validate src payment asset failed: %v", err)
 	}
@@ -95,24 +96,49 @@ func (pp *PathPayment) Apply() error {
 		return ErrInvalidPaymentAmount
 	}
 
+	// save the last asset and amount exchanged
+	asset := pp.DstAsset
+	amount := pp.DstAmount
+
 	// build asset path
 	var path []*ultpb.Asset
 	path = append(path, pp.SrcAsset)
 	path = append(path, pp.Path...)
 
-	// TODO(bobonovski) use DB batch
-
-	dstAccount, err := pp.AM.GetAccount(pp.DstAccountID)
+	dstAccount, err := pp.AM.GetAccount(dt, pp.DstAccountID)
 	if err != nil {
 		return fmt.Errorf("get dst account failed: %v", err)
 	}
 
-	if pp.DstAsset.AssetType == ultpb.AssetType_NATIVE {
-		if err = pp.AM.AddBalance(dstAccount, pp.DstAmount); err != nil {
+	if asset.AssetType == ultpb.AssetType_NATIVE {
+		if err := pp.AM.AddBalance(dstAccount, amount); err != nil {
+			return err
+		}
+		if err := pp.AM.SaveAccount(dt, dstAccount); err != nil {
 			return err
 		}
 	} else {
 
+	}
+
+	//TODO(bobonovski) exchange assets in backward order
+
+	if amount > pp.SrcAmount {
+		return errors.New("deduced src payment amount is over the limit")
+	}
+
+	if asset.AssetType == ultpb.AssetType_NATIVE {
+		// load source account
+		srcAccount, err := pp.AM.GetAccount(dt, pp.SrcAccountID)
+		if err != nil {
+			return fmt.Errorf("load source account failed: %v", err)
+		}
+		if err := pp.AM.SubBalance(srcAccount, amount); err != nil {
+			return err
+		}
+		if err := pp.AM.SaveAccount(dt, srcAccount); err != nil {
+			return err
+		}
 	}
 
 	return nil

@@ -155,7 +155,7 @@ func (tm *Manager) AddTx(txKey string, tx *ultpb.Tx) error {
 	}
 
 	// get the account information
-	acc, err := tm.am.GetAccount(tx.AccountID)
+	acc, err := tm.am.GetAccount(tm.database, tx.AccountID)
 	if err != nil {
 		return fmt.Errorf("get account %s failed: %v", tx.AccountID, err)
 	}
@@ -218,13 +218,12 @@ func (tm *Manager) ApplyTxList(txList []*ultpb.Tx) error {
 	// charge tx fees
 	restTxList := make([]*ultpb.Tx, 0)
 	for id, txs := range accTxMap {
-		acc, err := tm.am.GetAccount(id)
+		acc, err := tm.am.GetAccount(tm.database, id)
 		if err != nil {
 			return fmt.Errorf("get account failed: %v", err)
 		}
 
-		i := 0
-		for ; i < len(txs); i++ {
+		for i := 0; i < len(txs); i++ {
 			txk, _ := ultpb.GetTxKey(txs[i])
 
 			// check validity of sequence number
@@ -255,11 +254,11 @@ func (tm *Manager) ApplyTxList(txList []*ultpb.Tx) error {
 
 			acc.Balance -= txs[i].Fee
 			acc.SequenceNumber = txs[i].SequenceNumber
-			restTxList = append(txList, txs[i])
+			restTxList = append(restTxList, txs[i])
 		}
 
 		// update account balance to charge fees
-		err = tm.am.UpdateAccount(acc)
+		err = tm.am.SaveAccount(tm.database, acc)
 		if err != nil {
 			return fmt.Errorf("update account failed: %v", err)
 		}
@@ -286,13 +285,21 @@ func (tm *Manager) ApplyTxList(txList []*ultpb.Tx) error {
 			}
 		}
 
+		// start db transaction
+		dt, err := tm.database.Begin()
+		if err != nil {
+			return fmt.Errorf("start db transaction failed: %v", err)
+		}
+
 		var opErr error
 		for _, o := range ops {
-			if err := o.Apply(); err != nil {
+			if err := o.Apply(dt); err != nil {
 				opErr = err
+				dt.Rollback()
 				break
 			}
 		}
+
 		if opErr != nil {
 			status := &rpcpb.TxStatus{
 				StatusCode:   rpcpb.TxStatusCode_FAILED,
@@ -301,6 +308,10 @@ func (tm *Manager) ApplyTxList(txList []*ultpb.Tx) error {
 			err := tm.UpdateTxStatus(txk, status)
 			if err != nil {
 				return fmt.Errorf("update tx %s status failed: %v", txk, err)
+			}
+		} else {
+			if err := dt.Commit(); err != nil {
+				return fmt.Errorf("commit changes to db failed: %v", err)
 			}
 		}
 	}
