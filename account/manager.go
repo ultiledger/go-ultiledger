@@ -197,6 +197,17 @@ func (am *Manager) CreateTrust(putter db.Putter, accountID string, asset *ultpb.
 
 // Get trust information
 func (am *Manager) GetTrust(getter db.Getter, accountID string, asset *ultpb.Asset) (*ultpb.Trust, error) {
+	if accountID == asset.Issuer {
+		tst := &ultpb.Trust{
+			AccountID:  accountID,
+			Asset:      asset,
+			Balance:    math.MaxUint64,
+			Limit:      math.MaxUint64,
+			Authorized: 1,
+		}
+		return tst, nil
+	}
+
 	// construct db key
 	assetb, err := ultpb.Encode(asset)
 	if err != nil {
