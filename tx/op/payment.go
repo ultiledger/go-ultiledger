@@ -12,6 +12,7 @@ import (
 var (
 	ErrInvalidPaymentAmount = errors.New("invalid payment amount")
 	ErrInvalidAccountID     = errors.New("invalid accountID")
+	ErrPaymentNotAuthorized = errors.New("payment is not authorized")
 )
 
 func ValidateAsset(asset *ultpb.Asset) error {
@@ -122,6 +123,23 @@ func (pp *PathPayment) Apply(dt db.Tx) error {
 		_, err := pp.AM.GetAccount(dt, asset.Issuer)
 		if err != nil {
 			return fmt.Errorf("get asset issuer failed: %v", err)
+		}
+
+		trust, err := pp.AM.GetTrust(dt, pp.DstAccountID, asset)
+		if err != nil {
+			return fmt.Errorf("get dst trust failed: %v", err)
+		}
+
+		if trust.Authorized == 0 {
+			return ErrPaymentNotAuthorized
+		}
+
+		if err := pp.AM.AddTrustBalance(trust, pp.DstAmount); err != nil {
+			return fmt.Errorf("add trust balance failed: %v", err)
+		}
+
+		if err := pp.AM.SaveTrust(dt, trust); err != nil {
+			return fmt.Errorf("save trust failed: %v", err)
 		}
 	}
 

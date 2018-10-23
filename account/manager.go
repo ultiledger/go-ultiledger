@@ -18,6 +18,8 @@ var (
 	ErrAccountNotExist  = errors.New("account not exist")
 	ErrBalanceOverflow  = errors.New("account balance overflow")
 	ErrBalanceUnderflow = errors.New("account balance underflow")
+	ErrTrustOverLimit   = errors.New("trust balance over limit")
+	ErrTrustUnderflow   = errors.New("trust balance underflow")
 )
 
 // Manager manages the creation of accounts
@@ -252,6 +254,28 @@ func (am *Manager) SaveTrust(putter db.Putter, trust *ultpb.Trust) error {
 	if err != nil {
 		return fmt.Errorf("save account in db failed: %v", err)
 	}
+
+	return nil
+}
+
+// Add balance to trust and check out of limit
+func (am *Manager) AddTrustBalance(trust *ultpb.Trust, balance uint64) error {
+	if trust.Balance+balance > trust.Limit {
+		return ErrTrustOverLimit
+	}
+
+	trust.Balance += balance
+
+	return nil
+}
+
+// Substract balance from trust and check balance underfund
+func (am *Manager) SubTrustBalance(trust *ultpb.Trust, balance uint64) error {
+	if trust.Balance < balance {
+		return ErrTrustUnderflow
+	}
+
+	trust.Balance -= balance
 
 	return nil
 }
