@@ -112,13 +112,17 @@ func (pp *PathPayment) Apply(dt db.Tx) error {
 
 	if asset.AssetType == ultpb.AssetType_NATIVE {
 		if err := pp.AM.AddBalance(dstAccount, amount); err != nil {
-			return err
+			return fmt.Errorf("add balance failed: %v", err)
 		}
 		if err := pp.AM.SaveAccount(dt, dstAccount); err != nil {
-			return err
+			return fmt.Errorf("save account failed: %v", err)
 		}
 	} else {
-
+		// load asset issuer
+		_, err := pp.AM.GetAccount(dt, asset.Issuer)
+		if err != nil {
+			return fmt.Errorf("get asset issuer failed: %v", err)
+		}
 	}
 
 	//TODO(bobonovski) exchange assets in backward order

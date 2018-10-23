@@ -120,7 +120,7 @@ func (am *Manager) GetAccount(getter db.Getter, accountID string) (*ultpb.Accoun
 	return accCopy.(*ultpb.Account), nil
 }
 
-// Update account information.
+// Update account information
 func (am *Manager) SaveAccount(putter db.Putter, acc *ultpb.Account) error {
 	accb, err := ultpb.Encode(acc)
 	if err != nil {
@@ -136,7 +136,7 @@ func (am *Manager) SaveAccount(putter db.Putter, acc *ultpb.Account) error {
 	return nil
 }
 
-// Add balance to account and check balance overflow.
+// Add balance to account and check balance overflow
 func (am *Manager) AddBalance(acc *ultpb.Account, balance uint64) error {
 	if acc.Balance > math.MaxUint64-balance {
 		return ErrBalanceOverflow
@@ -154,6 +154,93 @@ func (am *Manager) SubBalance(acc *ultpb.Account, balance uint64) error {
 	}
 
 	acc.Balance -= balance
+
+	return nil
+}
+
+// Create a new trust for issued asset
+func (am *Manager) CreateTrust(putter db.Putter, accountID string, asset *ultpb.Asset, limit uint64) error {
+	// self-trust is not necessary
+	if accountID == asset.Issuer {
+		return nil
+	}
+
+	trust := &ultpb.Trust{
+		AccountID:  accountID,
+		Asset:      asset,
+		Balance:    0,
+		Limit:      limit,
+		Authorized: 1,
+	}
+
+	trustb, err := ultpb.Encode(trust)
+	if err != nil {
+		return fmt.Errorf("encode trust failed: %v", err)
+	}
+
+	// construct db key
+	assetb, err := ultpb.Encode(asset)
+	if err != nil {
+		return fmt.Errorf("encode asset failed: %v", err)
+	}
+	key := []byte(accountID)
+	key = append(key, assetb...)
+
+	// save the trust in db
+	err = putter.Put(am.bucket, key, trustb)
+	if err != nil {
+		return fmt.Errorf("save trust in db failed: %v", err)
+	}
+
+	return nil
+}
+
+// Get trust information
+func (am *Manager) GetTrust(getter db.Getter, accountID string, asset *ultpb.Asset) (*ultpb.Trust, error) {
+	// construct db key
+	assetb, err := ultpb.Encode(asset)
+	if err != nil {
+		return nil, fmt.Errorf("encode asset failed: %v", err)
+	}
+	key := []byte(accountID)
+	key = append(key, assetb...)
+
+	// get trust in db
+	b, err := getter.Get(am.bucket, key)
+	if err != nil {
+		return nil, fmt.Errorf("get trust from db failed: %v", err)
+	}
+
+	trust, err := ultpb.DecodeTrust(b)
+	if err != nil {
+		return nil, fmt.Errorf("decode trust failed: %v", err)
+	}
+
+	trustCopy := pb.Clone(trust)
+
+	return trustCopy.(*ultpb.Trust), nil
+}
+
+// Update trust information
+func (am *Manager) SaveTrust(putter db.Putter, trust *ultpb.Trust) error {
+	trustb, err := ultpb.Encode(trust)
+	if err != nil {
+		return fmt.Errorf("encode account failed: %v", err)
+	}
+
+	// construct db key
+	assetb, err := ultpb.Encode(trust.Asset)
+	if err != nil {
+		return fmt.Errorf("encode asset failed: %v", err)
+	}
+	key := []byte(trust.AccountID)
+	key = append(key, assetb...)
+
+	// update account in db
+	err = putter.Put(am.bucket, key, trustb)
+	if err != nil {
+		return fmt.Errorf("save account in db failed: %v", err)
+	}
 
 	return nil
 }

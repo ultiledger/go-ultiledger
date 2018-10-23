@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package ultpb;
+
+import "asset.proto";
+
+message Trust {
+  // owner of this trust
+  string AccountID = 1;
+  // trusted asset
+  Asset Asset = 2;
+  // balance of the asset
+  uint64 Balance = 3;
+  // upper limit the balance
+  uint64 Limit = 4;
+  // trust authorized or not
+  uint32 Authorized = 5;
+}

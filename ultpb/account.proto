@@ -16,3 +16,8 @@ message Account {
   // ULTkeys of transactions belongs to this account
   repeated string TxKeyList = 6;  
 }
+
+message TrustAccount {
+  // public key of the account
+  string AccountID = 1;
+}

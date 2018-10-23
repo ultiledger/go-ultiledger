@@ -79,14 +79,15 @@ message PathPaymentOp {
 }
 
 // Trust management
-enum TrustOpType {
-  CREATE = 0;
-  UPDATE = 1;
-  DELETE = 2;  
+message TrustOp {
+  Asset Asset = 2;
+  // limit of trust
+  uint64 Limit = 3;
 }
 
-message TrustOp {
-  TrustOpType OpType = 1;
+// Trust authorization management
+message AllowTrustOp {
+  string AccountID = 1;
   Asset Asset = 2;
-  uint64 Balance = 3;
+  uint32 Authorized = 3;  
 }

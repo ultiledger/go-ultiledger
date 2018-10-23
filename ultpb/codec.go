@@ -124,6 +124,24 @@ func DecodeAccount(b []byte) (*Account, error) {
 	return acc, nil
 }
 
+// Decode pb message to asset
+func DecodeAsset(b []byte) (*Asset, error) {
+	ass := &Asset{}
+	if err := proto.Unmarshal(b, ass); err != nil {
+		return nil, err
+	}
+	return ass, nil
+}
+
+// Decode pb message to trust
+func DecodeTrust(b []byte) (*Trust, error) {
+	tst := &Trust{}
+	if err := proto.Unmarshal(b, tst); err != nil {
+		return nil, err
+	}
+	return tst, nil
+}
+
 // Decode pb message to quorum
 func DecodeQuorum(b []byte) (*Quorum, error) {
 	quorum := &Quorum{}
