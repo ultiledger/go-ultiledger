@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+package ultpb;
+
+import "asset.proto";
+
+message Price {
+  uint64 Numerator = 1;
+  uint64 Denominator = 2;
+}
+
+message Offer {
+  // seller of the offer
+  string AccountID = 1;
+  // ID of the offer
+  uint64 OfferID = 2;
+  // asset for selling
+  Asset SellingAsset = 3;
+  // asset for buying
+  Asset BuyingAsset = 4;
+  // amount of asset for selling
+  uint64 Amount = 5;
+  // price of the offer
+  Price Price = 6;
+  // passive offer?
+  uint32 Passive = 7;
+}

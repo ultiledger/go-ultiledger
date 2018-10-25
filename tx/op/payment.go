@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 
+	pb "github.com/golang/protobuf/proto"
+
 	"github.com/ultiledger/go-ultiledger/account"
 	"github.com/ultiledger/go-ultiledger/db"
 	"github.com/ultiledger/go-ultiledger/ultpb"
@@ -144,11 +146,24 @@ func (pp *PathPayment) Apply(dt db.Tx) error {
 	}
 
 	//TODO(bobonovski) exchange assets in backward order
+	for i := len(path) - 1; i >= 0; i-- {
+		if pb.Equal(path[i], asset) {
+			continue
+		}
+		// check whether asset issuer exists
+		if path[i].AssetType != ultpb.AssetType_NATIVE {
+			_, err := pp.AM.GetAccount(dt, pp.SrcAccountID)
+			if err != nil {
+				return fmt.Errorf("load source account failed: %v", err)
+			}
+		}
+	}
 
 	if amount > pp.SrcAmount {
 		return errors.New("deduced src payment amount is over the limit")
 	}
 
+	// update source account balance
 	if asset.AssetType == ultpb.AssetType_NATIVE {
 		// load source account
 		srcAccount, err := pp.AM.GetAccount(dt, pp.SrcAccountID)
@@ -160,6 +175,28 @@ func (pp *PathPayment) Apply(dt db.Tx) error {
 		}
 		if err := pp.AM.SaveAccount(dt, srcAccount); err != nil {
 			return err
+		}
+	} else {
+		_, err := pp.AM.GetAccount(dt, asset.Issuer)
+		if err != nil {
+			return fmt.Errorf("get asset issuer failed: %v", err)
+		}
+
+		trust, err := pp.AM.GetTrust(dt, pp.SrcAccountID, asset)
+		if err != nil {
+			return fmt.Errorf("get dst trust failed: %v", err)
+		}
+
+		if trust.Authorized == 0 {
+			return ErrPaymentNotAuthorized
+		}
+
+		if err := pp.AM.SubTrustBalance(trust, amount); err != nil {
+			return fmt.Errorf("add trust balance failed: %v", err)
+		}
+
+		if err := pp.AM.SaveTrust(dt, trust); err != nil {
+			return fmt.Errorf("save trust failed: %v", err)
 		}
 	}
 

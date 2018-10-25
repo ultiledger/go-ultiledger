@@ -33,10 +33,9 @@ func (op *CreateAccount) Apply(dt db.Tx) error {
 
 	// check src account has enough ULUs
 	if srcAcc.Balance < op.Balance {
-		return fmt.Errorf("src account is out of ULU")
+		return fmt.Errorf("src account is underfund")
 	}
 
-	// TODO(bobonovski) change the following ops in a transactions
 	// update the src account
 	srcAcc.Balance -= op.Balance
 	err = op.AM.SaveAccount(dt, srcAcc)

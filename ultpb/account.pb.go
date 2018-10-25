@@ -9,6 +9,7 @@ It is generated from these files:
 	asset.proto
 	consensus.proto
 	ledger.proto
+	offer.proto
 	transaction.proto
 	trust.proto
 
@@ -26,6 +27,8 @@ It has these top-level messages:
 	Statement
 	LedgerHeader
 	Ledger
+	Price
+	Offer
 	Op
 	Tx
 	TxSet
@@ -34,6 +37,7 @@ It has these top-level messages:
 	PathPaymentOp
 	TrustOp
 	AllowTrustOp
+	OfferOp
 	Trust
 */
 package ultpb

@@ -3,6 +3,7 @@ syntax = "proto3";
 package ultpb;
 
 import "asset.proto";
+import "offer.proto";
 
 // Every operation is related to a specific account and 
 // each transaction could contain one or more operations
@@ -90,4 +91,14 @@ message AllowTrustOp {
   string AccountID = 1;
   Asset Asset = 2;
   uint32 Authorized = 3;  
+}
+
+// Offer management
+message OfferOp {
+  Asset SellingAsset = 1;
+  Asset BuyingAsset = 2;
+  uint64 Amount = 3;
+  Price Price = 4;
+  uint64 OfferID = 5;
+  uint32 Passive = 6;
 }

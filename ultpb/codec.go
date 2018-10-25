@@ -142,6 +142,15 @@ func DecodeTrust(b []byte) (*Trust, error) {
 	return tst, nil
 }
 
+// Decode pb message to offer
+func DecodeOffer(b []byte) (*Offer, error) {
+	offer := &Offer{}
+	if err := proto.Unmarshal(b, offer); err != nil {
+		return nil, err
+	}
+	return offer, nil
+}
+
 // Decode pb message to quorum
 func DecodeQuorum(b []byte) (*Quorum, error) {
 	quorum := &Quorum{}

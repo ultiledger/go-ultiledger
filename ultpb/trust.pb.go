@@ -28,7 +28,7 @@ type Trust struct {
 func (m *Trust) Reset()                    { *m = Trust{} }
 func (m *Trust) String() string            { return proto.CompactTextString(m) }
 func (*Trust) ProtoMessage()               {}
-func (*Trust) Descriptor() ([]byte, []int) { return fileDescriptor5, []int{0} }
+func (*Trust) Descriptor() ([]byte, []int) { return fileDescriptor6, []int{0} }
 
 func (m *Trust) GetAccountID() string {
 	if m != nil {
@@ -69,9 +69,9 @@ func init() {
 	proto.RegisterType((*Trust)(nil), "ultpb.Trust")
 }
 
-func init() { proto.RegisterFile("trust.proto", fileDescriptor5) }
+func init() { proto.RegisterFile("trust.proto", fileDescriptor6) }
 
-var fileDescriptor5 = []byte{
+var fileDescriptor6 = []byte{
 	// 168 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0xe2, 0x2e, 0x29, 0x2a, 0x2d,
 	0x2e, 0xd1, 0x2b, 0x28, 0xca, 0x2f, 0xc9, 0x17, 0x62, 0x2d, 0xcd, 0x29, 0x29, 0x48, 0x92, 0xe2,
