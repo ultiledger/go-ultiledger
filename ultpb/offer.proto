@@ -13,7 +13,7 @@ message Offer {
   // seller of the offer
   string AccountID = 1;
   // ID of the offer
-  uint64 OfferID = 2;
+  string OfferID = 2;
   // asset for selling
   Asset SellingAsset = 3;
   // asset for buying

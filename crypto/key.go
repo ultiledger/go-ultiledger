@@ -19,6 +19,7 @@ const (
 	KeyTypeTxSet
 	KeyTypeNodeID
 	KeyTypeLedgerHeader
+	KeyTypeOfferID
 )
 
 var (

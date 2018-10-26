@@ -19,7 +19,7 @@ type Offer struct {
 	BuyingAsset  *ultpb.Asset
 	Amount       uint64
 	Price        *ultpb.Price
-	OfferID      uint64
+	OfferID      string
 	Passive      uint32
 }
 
@@ -40,7 +40,7 @@ func (of *Offer) Apply(dt db.Tx) error {
 		return errors.New("price is invalid")
 	}
 
-	if of.Amount == 0 && of.OfferID == 0 {
+	if of.Amount == 0 && of.OfferID == "" {
 		return errors.New("offerID and amount are incompatible")
 	}
 

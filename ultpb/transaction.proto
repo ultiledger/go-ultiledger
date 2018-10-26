@@ -81,6 +81,7 @@ message PathPaymentOp {
 
 // Trust management
 message TrustOp {
+  // asset for trust
   Asset Asset = 2;
   // limit of trust
   uint64 Limit = 3;
@@ -88,17 +89,26 @@ message TrustOp {
 
 // Trust authorization management
 message AllowTrustOp {
+  // accountID of trustor
   string AccountID = 1;
+  // asset of trust
   Asset Asset = 2;
+  // authorization flag
   uint32 Authorized = 3;  
 }
 
 // Offer management
 message OfferOp {
+  // asset for selling
   Asset SellingAsset = 1;
+  // asset for buying
   Asset BuyingAsset = 2;
+  // amount of asset for selling
   uint64 Amount = 3;
+  // price in fractional format
   Price Price = 4;
-  uint64 OfferID = 5;
+  // ID of this offer
+  string OfferID = 5;
+  // whether the offer is passive
   uint32 Passive = 6;
 }
