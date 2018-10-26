@@ -20,7 +20,7 @@ type Price struct {
 func (m *Price) Reset()                    { *m = Price{} }
 func (m *Price) String() string            { return proto.CompactTextString(m) }
 func (*Price) ProtoMessage()               {}
-func (*Price) Descriptor() ([]byte, []int) { return fileDescriptor4, []int{0} }
+func (*Price) Descriptor() ([]byte, []int) { return fileDescriptor5, []int{0} }
 
 func (m *Price) GetNumerator() uint64 {
 	if m != nil {
@@ -56,7 +56,7 @@ type Offer struct {
 func (m *Offer) Reset()                    { *m = Offer{} }
 func (m *Offer) String() string            { return proto.CompactTextString(m) }
 func (*Offer) ProtoMessage()               {}
-func (*Offer) Descriptor() ([]byte, []int) { return fileDescriptor4, []int{1} }
+func (*Offer) Descriptor() ([]byte, []int) { return fileDescriptor5, []int{1} }
 
 func (m *Offer) GetAccountID() string {
 	if m != nil {
@@ -112,9 +112,9 @@ func init() {
 	proto.RegisterType((*Offer)(nil), "ultpb.Offer")
 }
 
-func init() { proto.RegisterFile("offer.proto", fileDescriptor4) }
+func init() { proto.RegisterFile("offer.proto", fileDescriptor5) }
 
-var fileDescriptor4 = []byte{
+var fileDescriptor5 = []byte{
 	// 237 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x6c, 0x90, 0x4f, 0x4b, 0xc4, 0x30,
 	0x10, 0xc5, 0x89, 0x6e, 0x5b, 0x3a, 0x59, 0x2f, 0x73, 0x90, 0x20, 0x1e, 0x4a, 0x4f, 0x3d, 0x15,

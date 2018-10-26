@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+package ultpb;
+
+// Account and Trust liabilities
+message Liability {
+  // buying liability
+  uint64 Buying = 1;
+  // selling liability
+  uint64 Selling = 2;
+}

@@ -3,6 +3,7 @@ syntax = "proto3";
 package ultpb;
 
 import "asset.proto";
+import "liability.proto";
 
 message Trust {
   // owner of this trust
@@ -13,6 +14,8 @@ message Trust {
   uint64 Balance = 3;
   // upper limit the balance
   uint64 Limit = 4;
+  // liability of trusted asset
+  Liability Liability = 5;
   // trust authorized or not
-  uint32 Authorized = 5;
+  uint32 Authorized = 6;
 }
