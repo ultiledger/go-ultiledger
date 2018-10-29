@@ -5,9 +5,6 @@ import (
 	"fmt"
 	"math"
 
-	pb "github.com/golang/protobuf/proto"
-	lru "github.com/hashicorp/golang-lru"
-
 	"github.com/ultiledger/go-ultiledger/crypto"
 	"github.com/ultiledger/go-ultiledger/db"
 	"github.com/ultiledger/go-ultiledger/log"
@@ -18,6 +15,7 @@ var (
 	ErrAccountNotExist  = errors.New("account not exist")
 	ErrBalanceOverflow  = errors.New("account balance overflow")
 	ErrBalanceUnderflow = errors.New("account balance underflow")
+	ErrBalanceUnderfund = errors.New("account balance underfund")
 	ErrTrustOverLimit   = errors.New("trust balance over limit")
 	ErrTrustUnderflow   = errors.New("trust balance underflow")
 )
@@ -27,11 +25,10 @@ type Manager struct {
 	database db.Database
 	bucket   string
 
-	// LRU cache for accounts
-	accounts *lru.Cache
-
 	// master account
 	master *ultpb.Account
+
+	baseReserve uint64
 }
 
 func NewManager(d db.Database) *Manager {
@@ -39,15 +36,12 @@ func NewManager(d db.Database) *Manager {
 		database: d,
 		bucket:   "ACCOUNT",
 	}
+
 	err := am.database.NewBucket(am.bucket)
 	if err != nil {
 		log.Fatalf("create db bucket %s failed: %v", am.bucket, err)
 	}
-	cache, err := lru.New(10000)
-	if err != nil {
-		log.Fatalf("create account manager LRU cache failed: %v", err)
-	}
-	am.accounts = cache
+
 	return am
 }
 
@@ -86,23 +80,12 @@ func (am *Manager) CreateAccount(putter db.Putter, accountID string, balance uin
 		return fmt.Errorf("save account in db failed: %v", err)
 	}
 
-	// save the account in cache
-	am.accounts.Add(acc.AccountID, acc)
-
 	return nil
 }
 
 // Get account information from accountID
 func (am *Manager) GetAccount(getter db.Getter, accountID string) (*ultpb.Account, error) {
-	// first check the LRU cache, if the account is in the cache
-	// we return a deep copy of the account
-	if acc, ok := am.accounts.Get(accountID); ok {
-		a := acc.(*ultpb.Account)
-		accCopy := pb.Clone(a)
-		return accCopy.(*ultpb.Account), nil
-	}
-
-	// then check database
+	// get account from database
 	b, err := getter.Get(am.bucket, []byte(accountID))
 	if err != nil {
 		return nil, fmt.Errorf("get account %s failed: %v", accountID, err)
@@ -115,11 +98,7 @@ func (am *Manager) GetAccount(getter db.Getter, accountID string) (*ultpb.Accoun
 		return nil, fmt.Errorf("account %s decode failed: %v", accountID, err)
 	}
 
-	// cache the account
-	am.accounts.Add(accountID, acc)
-	accCopy := pb.Clone(acc)
-
-	return accCopy.(*ultpb.Account), nil
+	return acc, nil
 }
 
 // Update account information
@@ -156,6 +135,43 @@ func (am *Manager) SubBalance(acc *ultpb.Account, balance uint64) error {
 	}
 
 	acc.Balance -= balance
+
+	return nil
+}
+
+// Increase entry count and check sufficiency of balance
+func (am *Manager) AddEntryCount(acc *ultpb.Account, count uint32) error {
+	if count == 0 {
+		return nil
+	}
+	totalEntry := acc.EntryCount + count
+
+	balance := uint64(totalEntry)*am.baseReserve + acc.Liability.Selling
+
+	if balance > acc.Balance {
+		return ErrBalanceUnderfund
+	}
+
+	acc.EntryCount = totalEntry
+
+	return nil
+}
+
+// Decrease entry count
+func (am *Manager) SubEntryCount(acc *ultpb.Account, count uint32) error {
+	if count == 0 {
+		return nil
+	}
+	totalEntry := acc.EntryCount - count
+
+	balance := uint64(totalEntry)*am.baseReserve + acc.Liability.Selling
+
+	// this should not happen since we are substracting entry count
+	if balance > acc.Balance {
+		return ErrBalanceUnderfund
+	}
+
+	acc.EntryCount = totalEntry
 
 	return nil
 }
@@ -229,9 +245,7 @@ func (am *Manager) GetTrust(getter db.Getter, accountID string, asset *ultpb.Ass
 		return nil, fmt.Errorf("decode trust failed: %v", err)
 	}
 
-	trustCopy := pb.Clone(trust)
-
-	return trustCopy.(*ultpb.Trust), nil
+	return trust, nil
 }
 
 // Update trust information
@@ -276,6 +290,52 @@ func (am *Manager) SubTrustBalance(trust *ultpb.Trust, balance uint64) error {
 	}
 
 	trust.Balance -= balance
+
+	return nil
+}
+
+// Get offer from database
+func (am *Manager) GetOffer(getter db.Getter, offerID string) (*ultpb.Offer, error) {
+	// get offer in db
+	b, err := getter.Get(am.bucket, []byte(offerID))
+	if err != nil {
+		return nil, fmt.Errorf("get offer from db failed: %v", err)
+	}
+
+	offer, err := ultpb.DecodeOffer(b)
+	if err != nil {
+		return nil, fmt.Errorf("decode offer failed: %v", err)
+	}
+
+	if offer.OfferID != offerID {
+		return nil, errors.New("offerID is incompatible")
+	}
+
+	return offer, nil
+}
+
+// Update offer in database
+func (am *Manager) SaveOffer(putter db.Putter, offer *ultpb.Offer) error {
+	offerb, err := ultpb.Encode(offer)
+	if err != nil {
+		return fmt.Errorf("encode offer failed: %v", err)
+	}
+
+	// update offer in db
+	err = putter.Put(am.bucket, []byte(offer.OfferID), offerb)
+	if err != nil {
+		return fmt.Errorf("save offer in db failed: %v", err)
+	}
+
+	return nil
+}
+
+// Delete offer in database
+func (am *Manager) DeleteOffer(deleter db.Deleter, offerID string) error {
+	err := deleter.Delete(am.bucket, []byte(offerID))
+	if err != nil {
+		return fmt.Errorf("deleter offer in db failed: %v", err)
+	}
 
 	return nil
 }
