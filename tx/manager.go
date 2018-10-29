@@ -19,6 +19,7 @@ import (
 	"github.com/ultiledger/go-ultiledger/rpc/rpcpb"
 	"github.com/ultiledger/go-ultiledger/tx/op"
 	"github.com/ultiledger/go-ultiledger/ultpb"
+	"github.com/ultiledger/go-ultiledger/util"
 )
 
 var (
@@ -139,14 +140,6 @@ func (tm *Manager) Stop() {
 	close(tm.stopChan)
 }
 
-// Find the max between two uint64 values
-func MaxUint64(x uint64, y uint64) uint64 {
-	if x >= y {
-		return x
-	}
-	return y
-}
-
 // Add transaction to internal pending set
 func (tm *Manager) AddTx(txKey string, tx *ultpb.Tx) error {
 	if tm.txSet.Contains(txKey) {
@@ -165,7 +158,7 @@ func (tm *Manager) AddTx(txKey string, tx *ultpb.Tx) error {
 	maxSeq := tx.SequenceNumber
 	if h, ok := tm.accTxMap[tx.AccountID]; ok {
 		totalFees += h.TotalFees
-		maxSeq = MaxUint64(maxSeq, h.MaxSeqNum)
+		maxSeq = util.MaxUint64(maxSeq, h.MaxSeqNum)
 	} else {
 		tm.accTxMap[tx.AccountID] = NewTxHistory()
 	}

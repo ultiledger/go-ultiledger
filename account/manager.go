@@ -117,6 +117,18 @@ func (am *Manager) SaveAccount(putter db.Putter, acc *ultpb.Account) error {
 	return nil
 }
 
+// Get the rest limit of native asset the account can have
+func (am *Manager) GetRestLimit(acc *ultpb.Account) uint64 {
+	return math.MaxUint64 - acc.Balance - acc.Liability.Buying
+}
+
+// Get the available balance of the account
+func (am *Manager) GetBalance(acc *ultpb.Account) uint64 {
+	minBalance := uint64(acc.EntryCount) * am.baseReserve
+	balance := acc.Balance - minBalance - acc.Liability.Selling
+	return balance
+}
+
 // Add balance to account and check balance overflow
 func (am *Manager) AddBalance(acc *ultpb.Account, balance uint64) error {
 	if acc.Balance > math.MaxUint64-balance {
@@ -270,6 +282,16 @@ func (am *Manager) SaveTrust(putter db.Putter, trust *ultpb.Trust) error {
 	}
 
 	return nil
+}
+
+// Get rest limit of custom asset the trust can have
+func (am *Manager) GetTrustRestLimit(trust *ultpb.Trust) uint64 {
+	return math.MaxUint64 - trust.Balance - trust.Liability.Buying
+}
+
+// Get available balance for trust
+func (am *Manager) GetTrustBalance(trust *ultpb.Trust) uint64 {
+	return trust.Balance - trust.Liability.Selling
 }
 
 // Add balance to trust and check out of limit

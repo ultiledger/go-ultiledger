@@ -297,14 +297,6 @@ func (e *Engine) RecvTxSet(txsetHash string, txset *TxSet) error {
 	return nil
 }
 
-// Find the max between two uint64 values
-func MaxUint64(x uint64, y uint64) uint64 {
-	if x >= y {
-		return x
-	}
-	return y
-}
-
 // RecvStatement deals with received broadcast statement
 func (e *Engine) RecvStatement(stmt *ultpb.Statement) error {
 	// ignore own message
