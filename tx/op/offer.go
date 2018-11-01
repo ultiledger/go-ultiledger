@@ -12,16 +12,16 @@ import (
 	"github.com/ultiledger/go-ultiledger/util"
 )
 
-// Operation for creating a new offer
+// Operation for managing offers
 type Offer struct {
-	AM           *account.Manager
-	AccountID    string
-	SellingAsset *ultpb.Asset
-	BuyingAsset  *ultpb.Asset
-	Amount       uint64
-	Price        *ultpb.Price
-	OfferID      string
-	Passive      uint32
+	AM        *account.Manager
+	AccountID string
+	SellAsset *ultpb.Asset
+	BuyAsset  *ultpb.Asset
+	Amount    int64
+	Price     *ultpb.Price
+	OfferID   string
+	Passive   int32
 }
 
 func (of *Offer) Apply(dt db.Tx) error {
@@ -34,7 +34,7 @@ func (of *Offer) Apply(dt db.Tx) error {
 		return fmt.Errorf("get account failed: %v", err)
 	}
 
-	sellingTrust, buyingTrust, err := of.loadTrust(dt)
+	sellTrust, buyTrust, err := of.loadTrust(dt)
 	if err != nil {
 		return fmt.Errorf("load selling and buying trust failed: %s", err)
 	}
@@ -58,7 +58,7 @@ func (of *Offer) Apply(dt db.Tx) error {
 
 		// delete the offer
 		if of.Amount == 0 {
-			err = of.AM.SubEntryCount(acc, uint32(1))
+			err = of.AM.SubEntryCount(acc, int32(1))
 			if err != nil {
 				return fmt.Errorf("decrease account entry account failed: %v", err)
 			}
@@ -71,19 +71,19 @@ func (of *Offer) Apply(dt db.Tx) error {
 	}
 
 	// create a new offer
-	sellingOffer := &ultpb.Offer{
-		AccountID:    of.AccountID,
-		SellingAsset: of.SellingAsset,
-		BuyingAsset:  of.BuyingAsset,
-		Amount:       of.Amount,
-		Price:        of.Price,
-		OfferID:      of.OfferID,
-		Passive:      of.Passive,
+	sellOffer := &ultpb.Offer{
+		AccountID: of.AccountID,
+		SellAsset: of.SellAsset,
+		BuyAsset:  of.BuyAsset,
+		Amount:    of.Amount,
+		Price:     of.Price,
+		OfferID:   of.OfferID,
+		Passive:   of.Passive,
 	}
 
 	// temporarily increase entry count
 	if newOffer {
-		err = of.AM.AddEntryCount(acc, uint32(1))
+		err = of.AM.AddEntryCount(acc, int32(1))
 		if err != nil {
 			return fmt.Errorf("increase account entry account failed: %v", err)
 		}
@@ -93,33 +93,33 @@ func (of *Offer) Apply(dt db.Tx) error {
 		}
 	}
 
-	// get the limit of BuyingAsset we can buy
-	var buyLimit uint64
-	if of.BuyingAsset.AssetType == ultpb.AssetType_NATIVE {
+	// get the limit of BuyAsset we can buy
+	var buyLimit int64
+	if of.BuyAsset.AssetType == ultpb.AssetType_NATIVE {
 		buyLimit = of.AM.GetRestLimit(acc)
 	} else {
-		buyLimit = of.AM.GetTrustRestLimit(buyingTrust)
+		buyLimit = of.AM.GetTrustRestLimit(buyTrust)
 	}
 
-	if buyLimit < of.GetBuyingLiability(sellingOffer) {
+	if buyLimit < of.GetBuyLiability(sellOffer) {
 		return fmt.Errorf("account out of buying limit")
 	}
 
-	// get the limit of SellingAsset we can sell
-	var sellLimit uint64
-	if of.SellingAsset.AssetType == ultpb.AssetType_NATIVE {
+	// get the limit of SellAsset we can sell
+	var sellLimit int64
+	if of.SellAsset.AssetType == ultpb.AssetType_NATIVE {
 		sellLimit = of.AM.GetBalance(acc)
 	} else {
-		sellLimit = of.AM.GetTrustBalance(sellingTrust)
+		sellLimit = of.AM.GetTrustBalance(sellTrust)
 	}
 
-	if sellLimit < of.GetSellingLiability(sellingOffer) {
+	if sellLimit < of.GetSellLiability(sellOffer) {
 		return fmt.Errorf("account underfund")
 	}
 
 	// decrease entry count
 	if newOffer {
-		err = of.AM.SubEntryCount(acc, uint32(1))
+		err = of.AM.SubEntryCount(acc, int32(1))
 		if err != nil {
 			return fmt.Errorf("increase account entry account failed: %v", err)
 		}
@@ -134,77 +134,77 @@ func (of *Offer) Apply(dt db.Tx) error {
 	}
 
 	// get the sell limit for the offer
-	maxSellLimit := util.MinUint64(sellLimit, sellingOffer.Amount)
+	maxSellLimit := util.MinInt64(sellLimit, sellOffer.Amount)
 
 	return nil
 }
 
 // Get buying liability of provided offer
-func (of *Offer) GetBuyingLiability(offer *ultpb.Offer) uint64 {
+func (of *Offer) GetBuyLiability(offer *ultpb.Offer) int64 {
 	return 0
 }
 
 // Get selling liability of provided offer
-func (of *Offer) GetSellingLiability(offer *ultpb.Offer) uint64 {
+func (of *Offer) GetSellLiability(offer *ultpb.Offer) int64 {
 	return 0
 }
 
 // Load selling and buying trust
 func (of *Offer) loadTrust(dt db.Tx) (*ultpb.Trust, *ultpb.Trust, error) {
-	var sellingTrust, buyingTrust *ultpb.Trust
+	var sellTrust, buyTrust *ultpb.Trust
 	var err error
 
 	// load selling trust
-	if of.SellingAsset.AssetType != ultpb.AssetType_NATIVE {
-		sellingTrust, err = of.AM.GetTrust(dt, of.AccountID, of.SellingAsset)
+	if of.SellAsset.AssetType != ultpb.AssetType_NATIVE {
+		sellTrust, err = of.AM.GetTrust(dt, of.AccountID, of.SellAsset)
 		if err != nil {
 			return nil, nil, fmt.Errorf("get selling trust failed: %v", err)
 		}
 
-		_, err = of.AM.GetAccount(dt, of.SellingAsset.Issuer)
+		_, err = of.AM.GetAccount(dt, of.SellAsset.Issuer)
 		if err != nil {
 			return nil, nil, fmt.Errorf("get selling asset issuer failed: %v", err)
 		}
 
-		if sellingTrust.Balance == 0 {
+		if sellTrust.Balance == 0 {
 			return nil, nil, errors.New("selling trust is underfund")
 		}
 
-		if sellingTrust.Authorized == 0 {
+		if sellTrust.Authorized == 0 {
 			return nil, nil, errors.New("selling trust is not authorized")
 		}
 	}
 
 	// load buying trust
-	if of.BuyingAsset.AssetType != ultpb.AssetType_NATIVE {
-		buyingTrust, err = of.AM.GetTrust(dt, of.AccountID, of.BuyingAsset)
+	if of.BuyAsset.AssetType != ultpb.AssetType_NATIVE {
+		buyTrust, err = of.AM.GetTrust(dt, of.AccountID, of.BuyAsset)
 		if err != nil {
 			return nil, nil, fmt.Errorf("get buying trust failed: %v", err)
 		}
 
-		_, err = of.AM.GetAccount(dt, of.BuyingAsset.Issuer)
+		_, err = of.AM.GetAccount(dt, of.BuyAsset.Issuer)
 		if err != nil {
 			return nil, nil, fmt.Errorf("get buying asset issuer failed: %v", err)
 		}
 
-		if buyingTrust.Authorized == 0 {
+		if buyTrust.Authorized == 0 {
 			return nil, nil, errors.New("buying trust is not authorized")
 		}
 	}
 
-	return sellingTrust, buyingTrust, nil
+	return sellTrust, buyTrust, nil
 }
 
 func (of *Offer) validate() error {
-	if err := ValidateAsset(of.SellingAsset); err != nil {
+	if err := ValidateAsset(of.SellAsset); err != nil {
 		return fmt.Errorf("asset for selling is invalid: %v", err)
 	}
 
-	if err := ValidateAsset(of.BuyingAsset); err != nil {
+	if err := ValidateAsset(of.BuyAsset); err != nil {
 		return fmt.Errorf("asset for buying is invalid: %v", err)
 	}
 
-	if pb.Equal(of.SellingAsset, of.BuyingAsset) {
+	if pb.Equal(of.SellAsset, of.BuyAsset) {
 		return errors.New("identical asset for offer")
 	}
 

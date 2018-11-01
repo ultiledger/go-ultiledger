@@ -13,7 +13,7 @@ type CreateAccount struct {
 	AM           *account.Manager
 	SrcAccountID string
 	DstAccountID string
-	Balance      uint64
+	Balance      int64
 }
 
 func (op *CreateAccount) Apply(dt db.Tx) error {

@@ -28,7 +28,7 @@ type Manager struct {
 	// master account
 	master *ultpb.Account
 
-	baseReserve uint64
+	baseReserve int64
 }
 
 func NewManager(d db.Database) *Manager {
@@ -46,7 +46,7 @@ func NewManager(d db.Database) *Manager {
 }
 
 // Create master account with native asset (ULT) and initial balances
-func (am *Manager) CreateMasterAccount(networkID []byte, balance uint64) error {
+func (am *Manager) CreateMasterAccount(networkID []byte, balance int64) error {
 	pubKey, privKey, err := crypto.GetAccountKeypairFromSeed(networkID)
 	if err != nil {
 		return err
@@ -62,7 +62,7 @@ func (am *Manager) CreateMasterAccount(networkID []byte, balance uint64) error {
 }
 
 // Create a new account with initial balance
-func (am *Manager) CreateAccount(putter db.Putter, accountID string, balance uint64, signer string) error {
+func (am *Manager) CreateAccount(putter db.Putter, accountID string, balance int64, signer string) error {
 	acc := &ultpb.Account{
 		AccountID: accountID,
 		Balance:   balance,
@@ -118,20 +118,20 @@ func (am *Manager) SaveAccount(putter db.Putter, acc *ultpb.Account) error {
 }
 
 // Get the rest limit of native asset the account can have
-func (am *Manager) GetRestLimit(acc *ultpb.Account) uint64 {
-	return math.MaxUint64 - acc.Balance - acc.Liability.Buying
+func (am *Manager) GetRestLimit(acc *ultpb.Account) int64 {
+	return math.MaxInt64 - acc.Balance - acc.Liability.Buying
 }
 
 // Get the available balance of the account
-func (am *Manager) GetBalance(acc *ultpb.Account) uint64 {
-	minBalance := uint64(acc.EntryCount) * am.baseReserve
+func (am *Manager) GetBalance(acc *ultpb.Account) int64 {
+	minBalance := int64(acc.EntryCount) * am.baseReserve
 	balance := acc.Balance - minBalance - acc.Liability.Selling
 	return balance
 }
 
 // Add balance to account and check balance overflow
-func (am *Manager) AddBalance(acc *ultpb.Account, balance uint64) error {
-	if acc.Balance > math.MaxUint64-balance {
+func (am *Manager) AddBalance(acc *ultpb.Account, balance int64) error {
+	if acc.Balance > math.MaxInt64-balance {
 		return ErrBalanceOverflow
 	}
 
@@ -141,7 +141,7 @@ func (am *Manager) AddBalance(acc *ultpb.Account, balance uint64) error {
 }
 
 // Subtract balance from account and check balance underflow
-func (am *Manager) SubBalance(acc *ultpb.Account, balance uint64) error {
+func (am *Manager) SubBalance(acc *ultpb.Account, balance int64) error {
 	if acc.Balance < balance {
 		return ErrBalanceUnderflow
 	}
@@ -152,13 +152,13 @@ func (am *Manager) SubBalance(acc *ultpb.Account, balance uint64) error {
 }
 
 // Increase entry count and check sufficiency of balance
-func (am *Manager) AddEntryCount(acc *ultpb.Account, count uint32) error {
+func (am *Manager) AddEntryCount(acc *ultpb.Account, count int32) error {
 	if count == 0 {
 		return nil
 	}
 	totalEntry := acc.EntryCount + count
 
-	balance := uint64(totalEntry)*am.baseReserve + acc.Liability.Selling
+	balance := int64(totalEntry)*am.baseReserve + acc.Liability.Selling
 
 	if balance > acc.Balance {
 		return ErrBalanceUnderfund
@@ -170,13 +170,13 @@ func (am *Manager) AddEntryCount(acc *ultpb.Account, count uint32) error {
 }
 
 // Decrease entry count
-func (am *Manager) SubEntryCount(acc *ultpb.Account, count uint32) error {
+func (am *Manager) SubEntryCount(acc *ultpb.Account, count int32) error {
 	if count == 0 {
 		return nil
 	}
 	totalEntry := acc.EntryCount - count
 
-	balance := uint64(totalEntry)*am.baseReserve + acc.Liability.Selling
+	balance := int64(totalEntry)*am.baseReserve + acc.Liability.Selling
 
 	// this should not happen since we are substracting entry count
 	if balance > acc.Balance {
@@ -189,7 +189,7 @@ func (am *Manager) SubEntryCount(acc *ultpb.Account, count uint32) error {
 }
 
 // Create a new trust for issued asset
-func (am *Manager) CreateTrust(putter db.Putter, accountID string, asset *ultpb.Asset, limit uint64) error {
+func (am *Manager) CreateTrust(putter db.Putter, accountID string, asset *ultpb.Asset, limit int64) error {
 	// self-trust is not necessary
 	if accountID == asset.Issuer {
 		return nil
@@ -231,8 +231,8 @@ func (am *Manager) GetTrust(getter db.Getter, accountID string, asset *ultpb.Ass
 		tst := &ultpb.Trust{
 			AccountID:  accountID,
 			Asset:      asset,
-			Balance:    math.MaxUint64,
-			Limit:      math.MaxUint64,
+			Balance:    math.MaxInt64,
+			Limit:      math.MaxInt64,
 			Authorized: 1,
 		}
 		return tst, nil
@@ -285,17 +285,17 @@ func (am *Manager) SaveTrust(putter db.Putter, trust *ultpb.Trust) error {
 }
 
 // Get rest limit of custom asset the trust can have
-func (am *Manager) GetTrustRestLimit(trust *ultpb.Trust) uint64 {
-	return math.MaxUint64 - trust.Balance - trust.Liability.Buying
+func (am *Manager) GetTrustRestLimit(trust *ultpb.Trust) int64 {
+	return math.MaxInt64 - trust.Balance - trust.Liability.Buying
 }
 
 // Get available balance for trust
-func (am *Manager) GetTrustBalance(trust *ultpb.Trust) uint64 {
+func (am *Manager) GetTrustBalance(trust *ultpb.Trust) int64 {
 	return trust.Balance - trust.Liability.Selling
 }
 
 // Add balance to trust and check out of limit
-func (am *Manager) AddTrustBalance(trust *ultpb.Trust, balance uint64) error {
+func (am *Manager) AddTrustBalance(trust *ultpb.Trust, balance int64) error {
 	if trust.Balance+balance > trust.Limit {
 		return ErrTrustOverLimit
 	}
@@ -306,7 +306,7 @@ func (am *Manager) AddTrustBalance(trust *ultpb.Trust, balance uint64) error {
 }
 
 // Substract balance from trust and check balance underfund
-func (am *Manager) SubTrustBalance(trust *ultpb.Trust, balance uint64) error {
+func (am *Manager) SubTrustBalance(trust *ultpb.Trust, balance int64) error {
 	if trust.Balance < balance {
 		return ErrTrustUnderflow
 	}

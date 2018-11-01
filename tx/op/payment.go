@@ -36,7 +36,7 @@ type Payment struct {
 	SrcAccountID string
 	DstAccountID string
 	Asset        *ultpb.Asset
-	Amount       uint64
+	Amount       int64
 }
 
 func (p *Payment) Apply(dt db.Tx) error {
@@ -73,10 +73,10 @@ type PathPayment struct {
 	AM           *account.Manager
 	SrcAccountID string
 	SrcAsset     *ultpb.Asset
-	SrcAmount    uint64
+	SrcAmount    int64
 	DstAccountID string
 	DstAsset     *ultpb.Asset
-	DstAmount    uint64
+	DstAmount    int64
 	Path         []*ultpb.Asset
 }
 
