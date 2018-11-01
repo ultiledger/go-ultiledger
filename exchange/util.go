@@ -1,19 +1,15 @@
 package exchange
 
 import (
+	"math/big"
+
 	"github.com/ultiledger/go-ultiledger/ultpb"
 )
 
 // Compare two price
 func ComparePrice(lhs *ultpb.Price, rhs *ultpb.Price) int {
-	l := lhs.Numerator * rhs.Denominator
-	r := lhs.Denominator * rhs.Numerator
+	l := big.NewRat(lhs.Numerator, lhs.Denominator)
+	r := big.NewRat(rhs.Numerator, rhs.Denominator)
 
-	if l < r {
-		return -1
-	} else if l > r {
-		return 1
-	}
-
-	return 0
+	return l.Cmp(r)
 }
