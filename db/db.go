@@ -22,7 +22,6 @@ type Database interface {
 	Deleter
 	Close()
 	Begin() (Tx, error)
-	NewBatch() Batch
 	NewBucket(bucket string) error
 }
 
@@ -33,13 +32,4 @@ type Tx interface {
 	Deleter
 	Rollback() error
 	Commit() error
-}
-
-// Batch combines multiple updates and writes them to database.
-type Batch interface {
-	Putter
-	Deleter
-	ValueSize() int
-	Write() error
-	Reset()
 }

@@ -1,7 +1,6 @@
 package db
 
 import (
-	"fmt"
 	"log"
 	"time"
 
@@ -93,11 +92,6 @@ func (bt *boltdb) Begin() (Tx, error) {
 	return btx, nil
 }
 
-// NewBatch creates a Batch object which can be used for batch writes.
-func (bt *boltdb) NewBatch() Batch {
-	return &boltdbBatch{db: bt.db}
-}
-
 // boltdbTx wraps boltdb Tx to provide a desired interface.
 type boltdbTx struct {
 	tx *bolt.Tx
@@ -133,77 +127,4 @@ func (btx *boltdbTx) Rollback() error {
 
 func (btx *boltdbTx) Commit() error {
 	return btx.tx.Commit()
-}
-
-type kv struct {
-	bucket string
-	key    []byte
-	value  []byte
-	delete bool
-}
-
-type boltdbBatch struct {
-	db   *bolt.DB
-	kvs  []*kv
-	size int
-}
-
-func (bb *boltdbBatch) Put(bucket string, key, value []byte) error {
-	bb.kvs = append(bb.kvs, &kv{
-		bucket: bucket,
-		key:    key,
-		value:  value,
-		delete: false,
-	})
-	bb.size += len(value)
-	return nil
-}
-
-func (bb *boltdbBatch) Delete(bucket string, key []byte) error {
-	bb.kvs = append(bb.kvs, &kv{
-		bucket: bucket,
-		key:    key,
-		delete: true,
-	})
-	bb.size += 1
-	return nil
-}
-
-func (bb *boltdbBatch) Write() error {
-	if len(bb.kvs) == 0 {
-		return nil
-	}
-
-	if err := bb.db.Batch(func(tx *bolt.Tx) error {
-		for _, kv := range bb.kvs {
-			b := tx.Bucket([]byte(kv.bucket))
-			if b == nil {
-				return fmt.Errorf("bucket %s not exist", kv.bucket)
-			}
-			if kv.delete {
-				err := b.Delete(kv.key)
-				if err != nil {
-					return fmt.Errorf("delete key %s failed: %v", string(kv.key), err)
-				}
-				continue
-			}
-			err := b.Put(kv.key, kv.value)
-			if err != nil {
-				return fmt.Errorf("put key %s failed: %v", string(kv.key), err)
-			}
-		}
-		return nil
-	}); err != nil {
-		return err
-	}
-	return nil
-}
-
-func (bb *boltdbBatch) ValueSize() int {
-	return bb.size
-}
-
-func (bb *boltdbBatch) Reset() {
-	bb.kvs = nil
-	bb.size = 0
 }

@@ -30,7 +30,6 @@ It has these top-level messages:
 	Liability
 	Price
 	Offer
-	OfferList
 	Op
 	Tx
 	TxSet

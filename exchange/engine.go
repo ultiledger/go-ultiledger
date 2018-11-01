@@ -15,14 +15,33 @@ type Engine struct {
 }
 
 // Fill asset exchange order
-func (e *Engine) Fill(dt db.Getter, o *Order) error {
+func (e *Engine) FillOrder(dt db.Getter, o *Order) error {
 	// load reciprocal offers of the order
 	err := e.loadOffers(dt, o.BuyAsset.AssetName, o.SellAsset.AssetName)
 	if err != nil {
 		return fmt.Errorf("load reciprocal offers failed: %v", err)
 	}
 
+	// define the price threshold to be the reciprocal
+	// price of input price
+	threshold := &ultpb.Price{
+		Numerator:   o.Price.Denominator,
+		Denominator: o.Price.Numerator,
+	}
+	for _, offer := range e.offers {
+		if ComparePrice(threshold, offer.Price) < 0 {
+			break
+		}
+
+		e.fill(o, offer)
+	}
+
 	return nil
+}
+
+// Fill the order with specified reciprocal offer
+func (e *Engine) fill(o *Order, offer *ultpb.Offer) {
+
 }
 
 // Load offers which sell lhsAsset and buy rhsAsset,

@@ -26,8 +26,3 @@ message Offer {
   int32 Passive = 7;
 }
 
-// OfferList provides a convenient encapsulation for 
-// a list of offers
-message OfferList {
-  repeated Offer Offers = 1;
-}

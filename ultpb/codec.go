@@ -152,15 +152,6 @@ func DecodeOffer(b []byte) (*Offer, error) {
 	return offer, nil
 }
 
-// Decode pb message to offer list
-func DecodeOfferList(b []byte) (*OfferList, error) {
-	offerList := &OfferList{}
-	if err := proto.Unmarshal(b, offerList); err != nil {
-		return nil, err
-	}
-	return offerList, nil
-}
-
 // Decode pb message to quorum
 func DecodeQuorum(b []byte) (*Quorum, error) {
 	quorum := &Quorum{}
