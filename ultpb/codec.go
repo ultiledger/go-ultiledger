@@ -9,6 +9,7 @@ import (
 	b58 "github.com/mr-tron/base58/base58"
 
 	"github.com/ultiledger/go-ultiledger/crypto"
+	"github.com/ultiledger/go-ultiledger/util"
 )
 
 // Hash tx and encode to tx ULTKey
@@ -37,7 +38,7 @@ func GetTxSetKey(ts *TxSet) (string, error) {
 	}
 
 	// argsort by hash
-	hashSlice := NewStringSlice(false, hashes...)
+	hashSlice := util.NewStringSlice(false, hashes...)
 	sort.Sort(hashSlice)
 
 	// append all the hash to buffer
@@ -149,6 +150,15 @@ func DecodeOffer(b []byte) (*Offer, error) {
 		return nil, err
 	}
 	return offer, nil
+}
+
+// Decode pb message to offer list
+func DecodeOfferList(b []byte) (*OfferList, error) {
+	offerList := &OfferList{}
+	if err := proto.Unmarshal(b, offerList); err != nil {
+		return nil, err
+	}
+	return offerList, nil
 }
 
 // Decode pb message to quorum

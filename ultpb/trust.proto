@@ -11,11 +11,11 @@ message Trust {
   // trusted asset
   Asset Asset = 2;
   // balance of the asset
-  uint64 Balance = 3;
+  int64 Balance = 3;
   // upper limit the balance
-  uint64 Limit = 4;
+  int64 Limit = 4;
   // liability of trusted asset
   Liability Liability = 5;
   // trust authorized or not
-  uint32 Authorized = 6;
+  int32 Authorized = 6;
 }

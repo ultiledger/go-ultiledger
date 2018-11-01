@@ -20,11 +20,11 @@ message LedgerHeader {
   // sequence number of this ledger
   uint64 SeqNum = 6;
   // total number of tokens in existence
-  uint64 TotalTokens = 7;
+  int64 TotalTokens = 7;
   // base fee per operation
-  uint64 BaseFee = 8;
+  int64 BaseFee = 8;
   // base reserver for an account
-  uint64 BaseReserve = 9;
+  int64 BaseReserve = 9;
   // close time
   int64 CloseTime = 10;
 }

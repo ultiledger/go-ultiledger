@@ -5,7 +5,7 @@ package ultpb;
 // Account and Trust liabilities
 message Liability {
   // buying liability
-  uint64 Buying = 1;
+  int64 Buying = 1;
   // selling liability
-  uint64 Selling = 2;
+  int64 Selling = 2;
 }

@@ -5,8 +5,8 @@ package ultpb;
 import "asset.proto";
 
 message Price {
-  uint64 Numerator = 1;
-  uint64 Denominator = 2;
+  int64 Numerator = 1;
+  int64 Denominator = 2;
 }
 
 message Offer {
@@ -15,13 +15,19 @@ message Offer {
   // ID of the offer
   string OfferID = 2;
   // asset for selling
-  Asset SellingAsset = 3;
+  Asset SellAsset = 3;
   // asset for buying
-  Asset BuyingAsset = 4;
+  Asset BuyAsset = 4;
   // amount of asset for selling
-  uint64 Amount = 5;
-  // price of the offer
+  int64 Amount = 5;
+  // price of the selling asset in terms of buying asset
   Price Price = 6;
   // passive offer?
-  uint32 Passive = 7;
+  int32 Passive = 7;
+}
+
+// OfferList provides a convenient encapsulation for 
+// a list of offers
+message OfferList {
+  repeated Offer Offers = 1;
 }

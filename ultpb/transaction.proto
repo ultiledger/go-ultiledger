@@ -30,7 +30,7 @@ message Tx {
   // the source account for sending asset to the new account
   string AccountID = 1;
   // fee to pay
-  uint64 Fee = 2;
+  int64 Fee = 2;
   // extra note about the transaction
   string Note = 3;
   // unique transaction sequence number
@@ -52,7 +52,7 @@ message CreateAccountOp {
   // destination account
   string AccountID = 1;
   // initial balance in ULUs
-  uint64 Balance = 2;
+  int64 Balance = 2;
 }
 
 // Peer to peer payment
@@ -70,7 +70,7 @@ message PathPaymentOp {
   // source asset to send
   Asset SrcAsset = 1;
   // amount of source asset to send
-  uint64 SrcAmount = 2;
+  int64 SrcAmount = 2;
   // destination account of the path payment
   string AccountID = 3; 
   // destination asset type   
@@ -84,7 +84,7 @@ message TrustOp {
   // asset for trust
   Asset Asset = 2;
   // limit of trust
-  uint64 Limit = 3;
+  int64 Limit = 3;
 }
 
 // Trust authorization management
@@ -94,7 +94,7 @@ message AllowTrustOp {
   // asset of trust
   Asset Asset = 2;
   // authorization flag
-  uint32 Authorized = 3;  
+  int32 Authorized = 3;  
 }
 
 // Offer management
@@ -104,11 +104,11 @@ message OfferOp {
   // asset for buying
   Asset BuyingAsset = 2;
   // amount of asset for selling
-  uint64 Amount = 3;
+  int64 Amount = 3;
   // price in fractional format
   Price Price = 4;
   // ID of this offer
   string OfferID = 5;
   // whether the offer is passive
-  uint32 Passive = 6;
+  int32 Passive = 6;
 }
