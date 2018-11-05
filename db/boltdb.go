@@ -1,6 +1,7 @@
 package db
 
 import (
+	"bytes"
 	"log"
 	"time"
 
@@ -74,6 +75,21 @@ func (bt *boltdb) Get(bucket string, key []byte) ([]byte, error) {
 	return val, nil
 }
 
+// Get retrieves the values of the keys with prefix from database.
+func (bt *boltdb) GetAll(bucket string, keyPrefix []byte) ([][]byte, error) {
+	var vals [][]byte
+	if err := bt.db.View(func(tx *bolt.Tx) error {
+		c := tx.Bucket([]byte(bucket)).Cursor()
+		for k, v := c.Seek(keyPrefix); k != nil && bytes.HasPrefix(k, keyPrefix); k, v = c.Next() {
+			vals = append(vals, v)
+		}
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+	return vals, nil
+}
+
 // Close closes the underlying database.
 func (bt *boltdb) Close() {
 	if bt.db != nil {
@@ -101,6 +117,15 @@ func (btx *boltdbTx) Get(bucket string, key []byte) ([]byte, error) {
 	b := btx.tx.Bucket([]byte(bucket))
 	v := b.Get(key)
 	return v, nil
+}
+
+func (btx *boltdbTx) GetAll(bucket string, keyPrefix []byte) ([][]byte, error) {
+	var vals [][]byte
+	c := btx.tx.Bucket([]byte(bucket)).Cursor()
+	for k, v := c.Seek(keyPrefix); k != nil && bytes.HasPrefix(k, keyPrefix); k, v = c.Next() {
+		vals = append(vals, v)
+	}
+	return vals, nil
 }
 
 func (btx *boltdbTx) Put(bucket string, key, value []byte) error {

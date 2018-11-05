@@ -2,7 +2,10 @@ package db
 
 // Getter wraps the database read operation.
 type Getter interface {
+	// Get the value of key in bucket.
 	Get(bucket string, key []byte) ([]byte, error)
+	// Get all values of keys with the prefix in bucket.
+	GetAll(bucket string, keyPrefix []byte) ([][]byte, error)
 }
 
 // Putter wraps the database write operation.
