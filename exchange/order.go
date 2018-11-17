@@ -4,20 +4,25 @@ import (
 	"github.com/ultiledger/go-ultiledger/ultpb"
 )
 
-// Asset buying and selling order
+// Order contains the information for selling AssetX for
+// AssetY, every time an order is added to the exchange,
+// we should search the existing offers that sell AssetY
+// for AssetX to fill the order.
 type Order struct {
 	// asset to sell
-	SellAsset *ultpb.Asset
-	// max amount of SellAsset we can sell
-	MaxSellAmount int64
+	AssetX *ultpb.Asset
+	// max amount of AssetX we can sell
+	MaxAssetX int64
 	// asset to buy
-	BuyAsset *ultpb.Asset
-	// max amount of BuyAmount we can buy
-	MaxBuyAmount int64
-	// price of SellAsset in terms of BuyAsset
+	AssetY *ultpb.Asset
+	// max amount of AssetY we can buy
+	MaxAssetY int64
+	// price of AssetX in terms of AssetY (price = AssetY / AssetX)
 	Price *ultpb.Price
-	// defacto amount of SellAsset we have sold after filling order
-	SoldAmount int64
-	// defacto amount of BuyAsset we have bought after filling order
-	BoughtAmount int64
+	// amount of ETH we have sold after filling order
+	AssetXSold int64
+	// amount of BTC we have bought after filling order
+	AssetYBought int64
+	// whether the order is partially filled
+	Partial bool
 }
