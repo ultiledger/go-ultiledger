@@ -23,6 +23,6 @@ type Order struct {
 	AssetXSold int64
 	// amount of BTC we have bought after filling order
 	AssetYBought int64
-	// whether the order is partially filled
-	Partial bool
+	// whether the order is fully filled
+	Full bool
 }

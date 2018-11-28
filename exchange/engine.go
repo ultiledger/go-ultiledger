@@ -152,9 +152,9 @@ func (e *Engine) exchange(order *Order, maxAssetY int64, maxAssetX int64, offerP
 	order.AssetYBought = assetYBought
 	// If valudCmp < 0, the current offer can fill the order
 	if valueCmp < 0 {
-		order.Partial = false
+		order.Full = true
 	} else {
-		order.Partial = true
+		order.Full = false
 	}
 
 	return nil
