@@ -17,5 +17,6 @@ package main
 import "github.com/ultiledger/go-ultiledger/cmd/ulthub/app"
 
 func main() {
+	// test by ding.guo
 	app.Execute()
 }
