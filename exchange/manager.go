@@ -9,8 +9,8 @@ import (
 	"github.com/ultiledger/go-ultiledger/ultpb"
 )
 
-// Engine manages offers and fills asset exchange orders.
-type Engine struct {
+// Manager manages offers and fills asset exchange orders.
+type Manager struct {
 	AM     *account.Manager
 	bucket string
 	offers []*ultpb.Offer
@@ -19,10 +19,10 @@ type Engine struct {
 // Fill order by loading existing offers from db and fill
 // the order until the order is totally filled or there are
 // not enough offers to use for filling the order.
-func (e *Engine) FillOrder(dt db.Tx, o *Order) error {
+func (m *Manager) FillOrder(dt db.Tx, o *Order) error {
 	// The order is selling AssetX for AssetY, so we need to
 	// load offers that sell AssetY for AssetX.
-	err := e.loadOffers(dt, o.AssetY.AssetName, o.AssetX.AssetName)
+	err := m.loadOffers(dt, o.AssetY.AssetName, o.AssetX.AssetName)
 	if err != nil {
 		return fmt.Errorf("load offers failed: %v", err)
 	}
@@ -33,12 +33,14 @@ func (e *Engine) FillOrder(dt db.Tx, o *Order) error {
 		Numerator:   o.Price.Denominator,
 		Denominator: o.Price.Numerator,
 	}
-	for _, offer := range e.offers {
+	for _, offer := range m.offers {
 		if ComparePrice(threshold, offer.Price) < 0 {
 			break
 		}
-
-		e.fill(dt, o, offer)
+		m.fill(dt, o, offer)
+		if o.Full == true {
+			break
+		}
 	}
 
 	return nil
@@ -46,22 +48,22 @@ func (e *Engine) FillOrder(dt db.Tx, o *Order) error {
 
 // Fill the order with loaded offer. The order is selling AssetX
 // for AssetY and the offer is selling AssetY for AssetX.
-func (e *Engine) fill(dt db.Tx, o *Order, offer *ultpb.Offer) error {
+func (m *Manager) fill(dt db.Tx, o *Order, offer *ultpb.Offer) error {
 	// Load seller account of the offer.
-	acc, err := e.AM.GetAccount(dt, offer.AccountID)
+	acc, err := m.AM.GetAccount(dt, offer.AccountID)
 	if err != nil {
 		return fmt.Errorf("load seller account of offer failed: %v", err)
 	}
 
 	var assetXTrust, assetYTrust *ultpb.Trust
 	if offer.SellAsset.AssetType != ultpb.AssetType_NATIVE {
-		assetYTrust, err = e.AM.GetTrust(dt, offer.AccountID, offer.SellAsset)
+		assetYTrust, err = m.AM.GetTrust(dt, offer.AccountID, offer.SellAsset)
 		if err != nil {
 			return fmt.Errorf("load sell asset trust for reciprocal offer failed: %v", err)
 		}
 	}
 	if offer.BuyAsset.AssetType != ultpb.AssetType_NATIVE {
-		assetXTrust, err = e.AM.GetTrust(dt, offer.AccountID, offer.BuyAsset)
+		assetXTrust, err = m.AM.GetTrust(dt, offer.AccountID, offer.BuyAsset)
 		if err != nil {
 			return fmt.Errorf("load buy asset trust for reciprocal offer failed: %v", err)
 		}
@@ -69,11 +71,11 @@ func (e *Engine) fill(dt db.Tx, o *Order, offer *ultpb.Offer) error {
 
 	// Maximum AssetY the offer can sell and maximum AssetX
 	// the offer can buy.
-	maxAssetY := e.getMaxToSell(acc, assetYTrust)
-	maxAssetX := e.getMaxToBuy(acc, assetXTrust)
+	maxAssetY := m.getMaxToSell(acc, assetYTrust)
+	maxAssetX := m.getMaxToBuy(acc, assetXTrust)
 
 	// Exchange the asset with consistent rules.
-	err = e.exchange(o, maxAssetY, maxAssetX, offer.Price, false)
+	err = m.exchange(o, maxAssetY, maxAssetX, offer.Price, false)
 	if err != nil {
 		return fmt.Errorf("exchange assets failed: %v", err)
 	}
@@ -82,20 +84,20 @@ func (e *Engine) fill(dt db.Tx, o *Order, offer *ultpb.Offer) error {
 	// information in order after exchange.
 	if o.AssetYBought != 0 {
 		if assetYTrust != nil {
-			err = e.AM.SubTrustBalance(assetYTrust, o.AssetYBought)
+			err = m.AM.SubTrustBalance(assetYTrust, o.AssetYBought)
 			if err != nil {
 				return fmt.Errorf("substract trust balance failed: %v", err)
 			}
-			err = e.AM.SaveTrust(dt, assetYTrust)
+			err = m.AM.SaveTrust(dt, assetYTrust)
 			if err != nil {
 				return fmt.Errorf("save trust failed: %v", err)
 			}
 		} else {
-			err = e.AM.SubBalance(acc, o.AssetYBought)
+			err = m.AM.SubBalance(acc, o.AssetYBought)
 			if err != nil {
 				return fmt.Errorf("substract account balance failed: %v", err)
 			}
-			err = e.AM.SaveAccount(dt, acc)
+			err = m.AM.SaveAccount(dt, acc)
 			if err != nil {
 				return fmt.Errorf("save account failed: %v", err)
 			}
@@ -107,7 +109,7 @@ func (e *Engine) fill(dt db.Tx, o *Order, offer *ultpb.Offer) error {
 
 // Exchange the assets for filling the order with selling limits
 // of AssetY and buying limits of AssetX of the offer.
-func (e *Engine) exchange(order *Order, maxAssetY int64, maxAssetX int64, offerPrice *ultpb.Price, checkError bool) error {
+func (m *Manager) exchange(order *Order, maxAssetY int64, maxAssetX int64, offerPrice *ultpb.Price, checkError bool) error {
 	// Note that the input price is the price of selling
 	// AssetY for AssetX. We need to recover the order
 	// price by exchanging the denominator and numberator.
@@ -117,9 +119,9 @@ func (e *Engine) exchange(order *Order, maxAssetY int64, maxAssetX int64, offerP
 	}
 
 	// Scaled order value in terms of AssetY.
-	orderValue := e.getOfferValue(order.MaxAssetX, order.MaxAssetY, orderPrice)
+	orderValue := m.getOfferValue(order.MaxAssetX, order.MaxAssetY, orderPrice)
 	// Scaled offer value in terms of AssetY.
-	offerValue := e.getOfferValue(maxAssetY, maxAssetX, offerPrice)
+	offerValue := m.getOfferValue(maxAssetY, maxAssetX, offerPrice)
 
 	valueCmp := orderValue.Cmp(offerValue)
 
@@ -161,7 +163,7 @@ func (e *Engine) exchange(order *Order, maxAssetY int64, maxAssetX int64, offerP
 }
 
 // Get the scaled value of the offer.
-func (e *Engine) getOfferValue(maxToSell int64, maxToBuy int64, price *ultpb.Price) *big.Int {
+func (m *Manager) getOfferValue(maxToSell int64, maxToBuy int64, price *ultpb.Price) *big.Int {
 	sellValue := MultiplyInt64(maxToSell, price.Numerator)
 	buyValue := MultiplyInt64(maxToBuy, price.Denominator)
 
@@ -173,29 +175,29 @@ func (e *Engine) getOfferValue(maxToSell int64, maxToBuy int64, price *ultpb.Pri
 }
 
 // Get the maximum amount of asset the account or trust can sell.
-func (e *Engine) getMaxToSell(acc *ultpb.Account, sellTrust *ultpb.Trust) int64 {
+func (m *Manager) getMaxToSell(acc *ultpb.Account, sellTrust *ultpb.Trust) int64 {
 	var balance int64
 
 	if sellTrust != nil && sellTrust.Authorized > 0 {
-		balance = e.AM.GetTrustBalance(sellTrust)
+		balance = m.AM.GetTrustBalance(sellTrust)
 		return balance
 	}
 
-	balance = e.AM.GetBalance(acc)
+	balance = m.AM.GetBalance(acc)
 
 	return balance
 }
 
 // Get the maximum amount of asset the account or trust can buy.
-func (e *Engine) getMaxToBuy(acc *ultpb.Account, buyTrust *ultpb.Trust) int64 {
+func (m *Manager) getMaxToBuy(acc *ultpb.Account, buyTrust *ultpb.Trust) int64 {
 	var balance int64
 
 	if buyTrust != nil {
-		balance = e.AM.GetTrustRestLimit(buyTrust)
+		balance = m.AM.GetTrustRestLimit(buyTrust)
 		return balance
 	}
 
-	balance = e.AM.GetRestLimit(acc)
+	balance = m.AM.GetRestLimit(acc)
 
 	return balance
 }
@@ -203,9 +205,9 @@ func (e *Engine) getMaxToBuy(acc *ultpb.Account, buyTrust *ultpb.Trust) int64 {
 // Load offers which sell lhsAsset and buy rhsAsset,
 // the result offers are also filted by whether their
 // prices are cheaper than supplied price threshold.
-func (e *Engine) loadOffers(dt db.Getter, lhsAsset string, rhsAsset string) error {
+func (m *Manager) loadOffers(dt db.Getter, lhsAsset string, rhsAsset string) error {
 	prefix := []byte(lhsAsset + "_" + rhsAsset)
-	bs, err := dt.GetAll(e.bucket, prefix)
+	bs, err := dt.GetAll(m.bucket, prefix)
 	if err != nil {
 		return fmt.Errorf("load offer list failed: %v", err)
 	}
@@ -222,7 +224,7 @@ func (e *Engine) loadOffers(dt db.Getter, lhsAsset string, rhsAsset string) erro
 
 	//TODO(bobonovski) Sort offers by price in increasing order
 
-	e.offers = offers
+	m.offers = offers
 
 	return nil
 }
