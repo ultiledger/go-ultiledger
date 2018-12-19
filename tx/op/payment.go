@@ -3,11 +3,13 @@ package op
 import (
 	"errors"
 	"fmt"
+	"math"
 
 	pb "github.com/golang/protobuf/proto"
 
 	"github.com/ultiledger/go-ultiledger/account"
 	"github.com/ultiledger/go-ultiledger/db"
+	"github.com/ultiledger/go-ultiledger/exchange"
 	"github.com/ultiledger/go-ultiledger/ultpb"
 )
 
@@ -33,6 +35,7 @@ func ValidateAsset(asset *ultpb.Asset) error {
 // Peer to peer payment in specified asset.
 type Payment struct {
 	AM           *account.Manager
+	EM           *exchange.Manager
 	SrcAccountID string
 	DstAccountID string
 	Asset        *ultpb.Asset
@@ -54,6 +57,7 @@ func (p *Payment) Apply(dt db.Tx) error {
 	// so we construct a path payment to reuse the logic.
 	pp := &PathPayment{
 		AM:           p.AM,
+		EM:           p.EM,
 		SrcAccountID: p.SrcAccountID,
 		SrcAsset:     p.Asset,
 		SrcAmount:    p.Amount,
@@ -71,6 +75,7 @@ func (p *Payment) Apply(dt db.Tx) error {
 // Path payment from source asset to destination asset.
 type PathPayment struct {
 	AM           *account.Manager
+	EM           *exchange.Manager
 	SrcAccountID string
 	SrcAsset     *ultpb.Asset
 	SrcAmount    int64
@@ -100,8 +105,7 @@ func (pp *PathPayment) Apply(dt db.Tx) error {
 	}
 
 	// save the last asset and amount exchanged
-	asset := pp.DstAsset
-	amount := pp.DstAmount
+	asset, amount := pp.DstAsset, pp.DstAmount
 
 	// build asset path
 	var path []*ultpb.Asset
@@ -157,6 +161,19 @@ func (pp *PathPayment) Apply(dt db.Tx) error {
 				return fmt.Errorf("load source account failed: %v", err)
 			}
 		}
+		// exchange assets
+		order := &exchange.Order{
+			AssetX:    path[i],
+			MaxAssetX: math.MaxInt64,
+			AssetY:    asset,
+			MaxAssetY: amount,
+		}
+		err = pp.EM.FillOrder(dt, order)
+		if err != nil {
+			return fmt.Errorf("exchange assets failed: %v", err)
+		}
+		asset = path[i]
+		amount = order.AssetXSold
 	}
 
 	if amount > pp.SrcAmount {
