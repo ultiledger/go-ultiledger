@@ -13,6 +13,7 @@ import (
 	"github.com/ultiledger/go-ultiledger/account"
 	"github.com/ultiledger/go-ultiledger/crypto"
 	"github.com/ultiledger/go-ultiledger/db"
+	"github.com/ultiledger/go-ultiledger/exchange"
 	"github.com/ultiledger/go-ultiledger/log"
 	"github.com/ultiledger/go-ultiledger/peer"
 	"github.com/ultiledger/go-ultiledger/rpc"
@@ -30,11 +31,12 @@ var (
 
 // ManagerContext represents contextual information TxManager needs
 type ManagerContext struct {
-	Database    db.Database      // database instance
-	AM          *account.Manager // account manager
-	PM          *peer.Manager    // peer manager
-	BaseReserve uint64           // global base reserve for an account
-	Seed        string           // local node seed for signing message
+	Database    db.Database       // database instance
+	AM          *account.Manager  // account manager
+	PM          *peer.Manager     // peer manager
+	EM          *exchange.Manager // exchange manager
+	BaseReserve int64             // global base reserve for an account
+	Seed        string            // local node seed for signing message
 }
 
 func ValidateManagerContext(mc *ManagerContext) error {
@@ -64,10 +66,11 @@ type Manager struct {
 
 	seed string
 
-	baseReserve uint64
+	baseReserve int64
 
 	am *account.Manager
 	pm *peer.Manager
+	em *exchange.Manager
 
 	// transactions status
 	txStatus *lru.Cache
@@ -101,6 +104,7 @@ func NewManager(ctx *ManagerContext) *Manager {
 		baseReserve: ctx.BaseReserve,
 		am:          ctx.AM,
 		pm:          ctx.PM,
+		em:          ctx.EM,
 		accTxMap:    make(map[string]*TxHistory),
 		txChan:      make(chan *ultpb.Tx),
 		stopChan:    make(chan struct{}),
@@ -169,7 +173,7 @@ func (tm *Manager) AddTx(txKey string, tx *ultpb.Tx) error {
 	}
 
 	// check whether the accounts has sufficient balance
-	balance := acc.Balance - tm.baseReserve*uint64(acc.EntryCount)
+	balance := acc.Balance - tm.baseReserve*int64(acc.EntryCount)
 	if balance < totalFees {
 		return fmt.Errorf("account %s insufficient balance", tx.AccountID)
 	}
@@ -272,6 +276,16 @@ func (tm *Manager) ApplyTxList(txList []*ultpb.Tx) error {
 					SrcAccountID: tx.AccountID,
 					DstAccountID: ca.AccountID,
 					Balance:      ca.Balance,
+				})
+			case ultpb.OpType_PAYMENT:
+				payment := o.GetPayment()
+				ops = append(ops, &op.Payment{
+					AM:           tm.am,
+					EM:           tm.em,
+					SrcAccountID: tx.AccountID,
+					DstAccountID: payment.AccountID,
+					Asset:        payment.Asset,
+					Amount:       payment.Amount,
 				})
 			default:
 				log.Fatalf("received invalid op type: %v", o.OpType)

@@ -134,7 +134,8 @@ func (of *Offer) Apply(dt db.Tx) error {
 	}
 
 	// get the sell limit for the offer
-	maxSellLimit := util.MinInt64(sellLimit, sellOffer.Amount)
+	// maxSellLimit := util.MinInt64(sellLimit, sellOffer.Amount)
+	util.MinInt64(sellLimit, sellOffer.Amount)
 
 	return nil
 }

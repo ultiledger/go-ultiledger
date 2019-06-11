@@ -11,7 +11,7 @@ type TxHistory struct {
 	// maximum sequence number of the tx list
 	MaxSeqNum uint64
 	// total fees of the tx list
-	TotalFees uint64
+	TotalFees int64
 	// transaction map
 	txMap map[string]*ultpb.Tx
 }
@@ -19,7 +19,7 @@ type TxHistory struct {
 func NewTxHistory() *TxHistory {
 	h := &TxHistory{
 		MaxSeqNum: uint64(0),
-		TotalFees: uint64(0),
+		TotalFees: int64(0),
 		txMap:     make(map[string]*ultpb.Tx),
 	}
 	return h
@@ -51,7 +51,7 @@ func (th *TxHistory) DeleteTxList(txKeys []string) {
 
 	// recalculate total fees and max seq
 	maxseq := uint64(0)
-	totalFees := uint64(0)
+	totalFees := int64(0)
 	for _, tx := range th.txMap {
 		if tx.SequenceNumber > maxseq {
 			maxseq = tx.SequenceNumber
