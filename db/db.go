@@ -23,7 +23,7 @@ type Database interface {
 	Getter
 	Putter
 	Deleter
-	Close()
+	Close() error
 	Begin() (Tx, error)
 	NewBucket(bucket string) error
 }

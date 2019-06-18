@@ -203,7 +203,7 @@ func (m *Manager) getMaxToBuy(acc *ultpb.Account, buyTrust *ultpb.Trust) int64 {
 }
 
 // Load offers which sell lhsAsset and buy rhsAsset,
-// the result offers are also filted by whether their
+// the result offers are also filtered by whether their
 // prices are cheaper than supplied price threshold.
 func (m *Manager) loadOffers(dt db.Getter, lhsAsset string, rhsAsset string) error {
 	prefix := []byte(lhsAsset + "_" + rhsAsset)

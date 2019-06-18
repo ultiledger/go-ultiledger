@@ -38,9 +38,9 @@ var (
 	GenesisVersion      = uint32(1)
 	GenesisMaxTxSetSize = uint32(100)
 	GenesisSeqNum       = uint64(1)
-	GenesisTotalTokens  = uint64(4500000000000000000)
-	GenesisBaseFee      = uint64(1000)
-	GenesisBaseReserve  = uint64(1000000000)
+	GenesisTotalTokens  = int64(4500000000000000000)
+	GenesisBaseFee      = int64(1000)
+	GenesisBaseReserve  = int64(1000000000)
 )
 
 // ManagerContext contains contextural information Manager needs

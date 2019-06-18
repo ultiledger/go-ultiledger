@@ -10,6 +10,7 @@ import (
 	"github.com/ultiledger/go-ultiledger/account"
 	"github.com/ultiledger/go-ultiledger/consensus"
 	"github.com/ultiledger/go-ultiledger/db"
+	"github.com/ultiledger/go-ultiledger/db/boltdb"
 	"github.com/ultiledger/go-ultiledger/future"
 	"github.com/ultiledger/go-ultiledger/ledger"
 	"github.com/ultiledger/go-ultiledger/log"
@@ -69,7 +70,7 @@ func NewNode(conf *Config) *Node {
 	seed := conf.Seed
 
 	// create database store
-	database := db.NewBoltDB(conf.DBPath)
+	database := boltdb.New(conf.DBPath)
 
 	// peer and account managers are independent
 	pm := peer.NewManager(conf.Peers, addr, nodeID)

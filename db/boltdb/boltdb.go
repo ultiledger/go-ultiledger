@@ -1,4 +1,4 @@
-package db
+package boltdb
 
 import (
 	"bytes"
@@ -6,17 +6,19 @@ import (
 	"time"
 
 	"github.com/boltdb/bolt"
+
+	"github.com/ultiledger/go-ultiledger/db"
 )
 
 type boltdb struct {
 	db *bolt.DB
 }
 
-// NewBoltDB creates a new boltdb instance which can be used by multiple
+// New creates a new boltdb instance which can be used by multiple
 // goroutines of the same process, BoltDB obtains a file lock on the data
 // file so multiple processes cannot open the same database at the same time.
 // It will panic if the database cannot be created or opened.
-func NewBoltDB(path string) Database {
+func New(path string) db.Database {
 	// open a database in specified path
 	bt, err := bolt.Open(path, 0600, &bolt.Options{Timeout: 1 * time.Second})
 	if err != nil {
@@ -91,15 +93,16 @@ func (bt *boltdb) GetAll(bucket string, keyPrefix []byte) ([][]byte, error) {
 }
 
 // Close closes the underlying database.
-func (bt *boltdb) Close() {
+func (bt *boltdb) Close() error {
 	if bt.db != nil {
 		bt.db.Close()
 	}
+	return nil
 }
 
 // Begin returns a writable database transaction object
 // which can be used to manually managing transaction.
-func (bt *boltdb) Begin() (Tx, error) {
+func (bt *boltdb) Begin() (db.Tx, error) {
 	tx, err := bt.db.Begin(true)
 	if err != nil {
 		return nil, err
