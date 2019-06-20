@@ -12,7 +12,6 @@ import (
 )
 
 var (
-	ErrAccountNotExist  = errors.New("account not exist")
 	ErrBalanceOverflow  = errors.New("account balance overflow")
 	ErrBalanceUnderflow = errors.New("account balance underflow")
 	ErrBalanceUnderfund = errors.New("account balance underfund")
@@ -20,7 +19,7 @@ var (
 	ErrTrustUnderflow   = errors.New("trust balance underflow")
 )
 
-// Manager manages the creation of accounts
+// Manager manages the creation and updating of accounts
 type Manager struct {
 	database db.Database
 	bucket   string
@@ -83,16 +82,16 @@ func (am *Manager) CreateAccount(putter db.Putter, accountID string, balance int
 	return nil
 }
 
-// Get account information from accountID
+// Get account information
 func (am *Manager) GetAccount(getter db.Getter, accountID string) (*ultpb.Account, error) {
-	// get account from database
 	b, err := getter.Get(am.bucket, []byte(accountID))
 	if err != nil {
 		return nil, fmt.Errorf("get account %s failed: %v", accountID, err)
 	}
 	if b == nil {
-		return nil, ErrAccountNotExist
+		return nil, nil
 	}
+
 	acc, err := ultpb.DecodeAccount(b)
 	if err != nil {
 		return nil, fmt.Errorf("account %s decode failed: %v", accountID, err)
@@ -108,7 +107,6 @@ func (am *Manager) SaveAccount(putter db.Putter, acc *ultpb.Account) error {
 		return fmt.Errorf("encode account failed: %v", err)
 	}
 
-	// update account in db
 	err = putter.Put(am.bucket, []byte(acc.AccountID), accb)
 	if err != nil {
 		return fmt.Errorf("save account in db failed: %v", err)
@@ -251,6 +249,9 @@ func (am *Manager) GetTrust(getter db.Getter, accountID string, asset *ultpb.Ass
 	if err != nil {
 		return nil, fmt.Errorf("get trust from db failed: %v", err)
 	}
+	if b == nil {
+		return nil, nil
+	}
 
 	trust, err := ultpb.DecodeTrust(b)
 	if err != nil {
@@ -279,6 +280,23 @@ func (am *Manager) SaveTrust(putter db.Putter, trust *ultpb.Trust) error {
 	err = putter.Put(am.bucket, key, trustb)
 	if err != nil {
 		return fmt.Errorf("save account in db failed: %v", err)
+	}
+
+	return nil
+}
+
+// Delete the trust.
+func (am *Manager) DeleteTrust(deleter db.Deleter, accountID string, asset *ultpb.Asset) error {
+	assetb, err := ultpb.Encode(asset)
+	if err != nil {
+		return fmt.Errorf("encode asset failed: %v", err)
+	}
+	key := []byte(accountID)
+	key = append(key, assetb...)
+
+	err = deleter.Delete(am.bucket, key)
+	if err != nil {
+		return fmt.Errorf("delete trust from db failed: %v", err)
 	}
 
 	return nil
