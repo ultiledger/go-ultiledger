@@ -104,10 +104,10 @@ func (pp *PathPayment) Apply(dt db.Tx) error {
 		return ErrInvalidPaymentAmount
 	}
 
-	// save the last asset and amount exchanged
+	// Save the last asset and amount exchanged.
 	asset, amount := pp.DstAsset, pp.DstAmount
 
-	// build asset path
+	// Build asset exchange path.
 	var path []*ultpb.Asset
 	path = append(path, pp.SrcAsset)
 	path = append(path, pp.Path...)
@@ -125,7 +125,6 @@ func (pp *PathPayment) Apply(dt db.Tx) error {
 			return fmt.Errorf("save account failed: %v", err)
 		}
 	} else {
-		// load asset issuer
 		_, err := pp.AM.GetAccount(dt, asset.Issuer)
 		if err != nil {
 			return fmt.Errorf("get asset issuer failed: %v", err)
@@ -154,14 +153,14 @@ func (pp *PathPayment) Apply(dt db.Tx) error {
 		if pb.Equal(path[i], asset) {
 			continue
 		}
-		// check whether asset issuer exists
+		// Check whether asset issuer exists.
 		if path[i].AssetType != ultpb.AssetType_NATIVE {
-			_, err := pp.AM.GetAccount(dt, pp.SrcAccountID)
+			_, err := pp.AM.GetAccount(dt, path[i].Issuer)
 			if err != nil {
-				return fmt.Errorf("load source account failed: %v", err)
+				return fmt.Errorf("get issuer account failed: %v", err)
 			}
 		}
-		// exchange assets
+		// Exchange assets.
 		order := &exchange.Order{
 			AssetX:    path[i],
 			MaxAssetX: math.MaxInt64,
@@ -180,9 +179,8 @@ func (pp *PathPayment) Apply(dt db.Tx) error {
 		return errors.New("deduced src payment amount is over the limit")
 	}
 
-	// update source account balance
+	// Update source account balance.
 	if asset.AssetType == ultpb.AssetType_NATIVE {
-		// load source account
 		srcAccount, err := pp.AM.GetAccount(dt, pp.SrcAccountID)
 		if err != nil {
 			return fmt.Errorf("load source account failed: %v", err)
@@ -198,20 +196,16 @@ func (pp *PathPayment) Apply(dt db.Tx) error {
 		if err != nil {
 			return fmt.Errorf("get asset issuer failed: %v", err)
 		}
-
 		trust, err := pp.AM.GetTrust(dt, pp.SrcAccountID, asset)
 		if err != nil {
 			return fmt.Errorf("get dst trust failed: %v", err)
 		}
-
 		if trust.Authorized == 0 {
 			return ErrPaymentNotAuthorized
 		}
-
 		if err := pp.AM.SubTrustBalance(trust, amount); err != nil {
 			return fmt.Errorf("add trust balance failed: %v", err)
 		}
-
 		if err := pp.AM.SaveTrust(dt, trust); err != nil {
 			return fmt.Errorf("save trust failed: %v", err)
 		}

@@ -84,7 +84,28 @@ func (m *Manager) fill(dt db.Tx, o *Order, offer *ultpb.Offer) error {
 	// information in order after exchange.
 	if o.AssetYBought != 0 {
 		if assetYTrust != nil {
-			err = m.AM.SubTrustBalance(assetYTrust, o.AssetYBought)
+			err = m.AM.AddTrustBalance(assetYTrust, o.AssetYBought)
+			if err != nil {
+				return fmt.Errorf("add trust balance failed: %v", err)
+			}
+			err = m.AM.SaveTrust(dt, assetYTrust)
+			if err != nil {
+				return fmt.Errorf("save trust failed: %v", err)
+			}
+		} else {
+			err = m.AM.AddBalance(acc, o.AssetYBought)
+			if err != nil {
+				return fmt.Errorf("add account balance failed: %v", err)
+			}
+			err = m.AM.SaveAccount(dt, acc)
+			if err != nil {
+				return fmt.Errorf("save account failed: %v", err)
+			}
+		}
+	}
+	if o.AssetXSold != 0 {
+		if assetXTrust != nil {
+			err = m.AM.SubTrustBalance(assetXTrust, o.AssetXSold)
 			if err != nil {
 				return fmt.Errorf("substract trust balance failed: %v", err)
 			}
@@ -93,7 +114,7 @@ func (m *Manager) fill(dt db.Tx, o *Order, offer *ultpb.Offer) error {
 				return fmt.Errorf("save trust failed: %v", err)
 			}
 		} else {
-			err = m.AM.SubBalance(acc, o.AssetYBought)
+			err = m.AM.SubBalance(acc, o.AssetXSold)
 			if err != nil {
 				return fmt.Errorf("substract account balance failed: %v", err)
 			}
