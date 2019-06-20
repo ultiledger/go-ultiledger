@@ -16,37 +16,37 @@ type CreateAccount struct {
 	Balance      int64
 }
 
-func (op *CreateAccount) Apply(dt db.Tx) error {
+func (c *CreateAccount) Apply(dt db.Tx) error {
 	// validate parameters
-	if op.SrcAccountID == op.DstAccountID {
+	if c.SrcAccountID == c.DstAccountID {
 		return errors.New("src and dst account is the same")
 	}
-	if op.Balance == 0 {
+	if c.Balance == 0 {
 		return errors.New("init balance for dst account is zero")
 	}
 
 	// get src account
-	srcAcc, err := op.AM.GetAccount(dt, op.SrcAccountID)
+	srcAcc, err := c.AM.GetAccount(dt, c.SrcAccountID)
 	if err != nil {
-		return fmt.Errorf("get src account %s failed: %v", op.SrcAccountID, err)
+		return fmt.Errorf("get src account %s failed: %v", c.SrcAccountID, err)
 	}
 
 	// check src account has enough ULUs
-	if srcAcc.Balance < op.Balance {
+	if srcAcc.Balance < c.Balance {
 		return fmt.Errorf("src account is underfund")
 	}
 
 	// update the src account
-	srcAcc.Balance -= op.Balance
-	err = op.AM.SaveAccount(dt, srcAcc)
+	srcAcc.Balance -= c.Balance
+	err = c.AM.SaveAccount(dt, srcAcc)
 	if err != nil {
-		return fmt.Errorf("update account %s failed: %v", op.SrcAccountID, err)
+		return fmt.Errorf("update account %s failed: %v", c.SrcAccountID, err)
 	}
 
 	// create the dst account
-	err = op.AM.CreateAccount(dt, op.DstAccountID, op.Balance, op.SrcAccountID)
+	err = c.AM.CreateAccount(dt, c.DstAccountID, c.Balance, c.SrcAccountID)
 	if err != nil {
-		return fmt.Errorf("create account %s failed: %v", op.DstAccountID, err)
+		return fmt.Errorf("create account %s failed: %v", c.DstAccountID, err)
 	}
 
 	return nil
