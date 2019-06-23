@@ -372,7 +372,7 @@ func (e *Engine) queryQuorum(quorumHash string) (*Quorum, error) {
 	return quorum, nil
 }
 
-// Query txset infomation from peers
+// Query txset information from peers
 func (e *Engine) queryTxSet(txsetHash string) (*TxSet, error) {
 	clients := e.pm.GetLiveClients()
 	metadata := e.pm.GetMetadata()

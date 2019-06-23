@@ -91,6 +91,7 @@ func GetNodeKeypair() (string, string, error) {
 	return publicKey, seed, err
 }
 
+// Generate account keypair from provided seed.
 func GetAccountKeypairFromSeed(seed []byte) (string, string, error) {
 	if len(seed) != 32 {
 		return "", "", errors.New("Invalid seed, byte length is not 32")
@@ -113,7 +114,7 @@ func GetAccountKeypairFromSeed(seed []byte) (string, string, error) {
 
 }
 
-// sign the data with provided seed (equivalent private key)
+// Sign the data with provided seed (equivalent private key).
 func Sign(seed string, data []byte) (string, error) {
 	pk, err := getPrivateKey(seed)
 	if err != nil {
@@ -126,7 +127,8 @@ func Sign(seed string, data []byte) (string, error) {
 	return signStr, nil
 }
 
-// verify the data signature
+// Verify the data signature with encoded string representation
+// of the public key.
 func Verify(publicKey, signature string, data []byte) bool {
 	pk, err := DecodeKey(publicKey)
 	if err != nil {
@@ -140,7 +142,7 @@ func Verify(publicKey, signature string, data []byte) bool {
 	return ed25519.Verify(pub, data, sn)
 }
 
-// verify the data signature using ULTKey
+// Verify the data signature using ULTKey.
 func VerifyByKey(pk *ULTKey, signature string, data []byte) bool {
 	sn, err := b58.Decode(signature)
 	if err != nil {

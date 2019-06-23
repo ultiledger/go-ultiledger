@@ -6,7 +6,7 @@ import (
 	"github.com/ultiledger/go-ultiledger/ultpb"
 )
 
-// TxHistory is used to hold unconfirmed transactions
+// TxHistory is used to hold unconfirmed transactions.
 type TxHistory struct {
 	// maximum sequence number of the tx list
 	MaxSeqNum uint64
