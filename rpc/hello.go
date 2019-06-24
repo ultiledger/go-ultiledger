@@ -12,7 +12,7 @@ import (
 )
 
 // Hello checks the health of remote peer and at the
-// same time exchanges nodeID (public key) between peers
+// same time exchanges nodeID (public key) between peers.
 func Hello(client rpcpb.NodeClient, md metadata.MD) (string, string, error) {
 	ctx := metadata.NewOutgoingContext(context.Background(), md)
 	ctx, cancel := context.WithTimeout(ctx, time.Duration(1*time.Second))

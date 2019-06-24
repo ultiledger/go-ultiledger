@@ -30,13 +30,13 @@ const (
 	BallotPhaseExternalize
 )
 
-// Information about externalized value
+// Information about externalized value.
 type ExternalizeValue struct {
 	Index uint64 // index of decree
 	Value string // consensus value
 }
 
-// DecreeContext contains contextual information Decree needs
+// DecreeContext contains contextual information Decree needs.
 type DecreeContext struct {
 	Index           uint64  // decree index
 	NodeID          string  // local node ID
@@ -77,7 +77,7 @@ func ValidateDecreeContext(dc *DecreeContext) error {
 }
 
 // Decree is an abstractive decision the consensus engine
-// should reach in each round
+// should reach in each round.
 type Decree struct {
 	index           uint64
 	nodeID          string

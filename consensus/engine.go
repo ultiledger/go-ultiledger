@@ -26,7 +26,7 @@ var (
 	ErrInvalidSeqNum       = errors.New("invalid sequence number")
 )
 
-// EngineContext represents contextual information Engine needs
+// EngineContext represents contextual information Engine needs.
 type EngineContext struct {
 	Database db.Database      // database instance
 	Seed     string           // node seed
@@ -66,7 +66,7 @@ func ValidateEngineContext(ec *EngineContext) error {
 	return nil
 }
 
-// Engine is the driver of underlying consensus protocol
+// Engine is the driver of underlying federated consensus protocol.
 type Engine struct {
 	database db.Database
 	bucket   string
@@ -264,13 +264,13 @@ func (e *Engine) Start() {
 	}()
 }
 
-// Stop the consensus engine
+// Stop the consensus engine.
 func (e *Engine) Stop() {
 	close(e.stopChan)
 	e.validator.Stop()
 }
 
-// Get the quorum of the quorum hash
+// Get the quorum of the quorum hash.
 func (e *Engine) GetQuorum(quorumHash string) (*Quorum, error) {
 	q, ok := e.validator.GetQuorum(quorumHash)
 	if !ok {
@@ -279,7 +279,7 @@ func (e *Engine) GetQuorum(quorumHash string) (*Quorum, error) {
 	return q, nil
 }
 
-// Get the txset of the txset hash
+// Get the txset of the txset hash.
 func (e *Engine) GetTxSet(txsetHash string) (*TxSet, error) {
 	txs, ok := e.validator.GetTxSet(txsetHash)
 	if !ok {
@@ -288,7 +288,7 @@ func (e *Engine) GetTxSet(txsetHash string) (*TxSet, error) {
 	return txs, nil
 }
 
-// Recv downloaded txset
+// Recv downloaded txset.
 func (e *Engine) RecvTxSet(txsetHash string, txset *TxSet) error {
 	err := e.validator.RecvTxSet(txsetHash, txset)
 	if err != nil {
@@ -297,7 +297,7 @@ func (e *Engine) RecvTxSet(txsetHash string, txset *TxSet) error {
 	return nil
 }
 
-// RecvStatement deals with received broadcast statement
+// RecvStatement deals with received broadcast statement.
 func (e *Engine) RecvStatement(stmt *ultpb.Statement) error {
 	// ignore own message
 	if stmt.NodeID == e.nodeID {
@@ -313,7 +313,7 @@ func (e *Engine) RecvStatement(stmt *ultpb.Statement) error {
 	return nil
 }
 
-// Broadcast consensus message through rpc broadcast
+// Broadcast consensus message through rpc broadcast.
 func (e *Engine) broadcastStatement(stmt *ultpb.Statement) error {
 	clients := e.pm.GetLiveClients()
 	metadata := e.pm.GetMetadata()
@@ -343,7 +343,7 @@ func (e *Engine) broadcastStatement(stmt *ultpb.Statement) error {
 	return nil
 }
 
-// Query quorum infomation from peers
+// Query quorum infomation from peers.
 func (e *Engine) queryQuorum(quorumHash string) (*Quorum, error) {
 	clients := e.pm.GetLiveClients()
 	metadata := e.pm.GetMetadata()
@@ -372,7 +372,7 @@ func (e *Engine) queryQuorum(quorumHash string) (*Quorum, error) {
 	return quorum, nil
 }
 
-// Query txset information from peers
+// Query txset information from peers.
 func (e *Engine) queryTxSet(txsetHash string) (*TxSet, error) {
 	clients := e.pm.GetLiveClients()
 	metadata := e.pm.GetMetadata()
@@ -401,7 +401,7 @@ func (e *Engine) queryTxSet(txsetHash string) (*TxSet, error) {
 	return txset, nil
 }
 
-// Try to propose current transaction set for consensus
+// Try to propose current transaction set for consensus.
 func (e *Engine) Propose() error {
 	txSet := &TxSet{
 		PrevLedgerHash: e.lm.CurrLedgerHeaderHash(),
@@ -448,7 +448,7 @@ func (e *Engine) Propose() error {
 	return nil
 }
 
-// Nominate a new consensus value for specified decree
+// Nominate a new consensus value for specified decree.
 func (e *Engine) nominate(idx uint64, prevValue string, currValue string) error {
 	// get new slot
 	if _, ok := e.decrees[idx]; !ok {
@@ -471,7 +471,7 @@ func (e *Engine) nominate(idx uint64, prevValue string, currValue string) error 
 	return nil
 }
 
-// Externalize a consensus value with decree index
+// Externalize a consensus value with decree index.
 func (e *Engine) Externalize(idx uint64, value string) error {
 	// skip old externalized value
 	if idx < e.lm.NextLedgerHeaderSeq() {
