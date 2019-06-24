@@ -17,6 +17,8 @@ type Config struct {
 	Port string
 	// addresses of initial peers
 	Peers []string
+	// maximum number of peers to connect
+	MaxPeers int
 	// node ID (public key derived from seed)
 	NodeID string
 	// seed of this node
@@ -41,6 +43,9 @@ func NewConfig(v *viper.Viper) (*Config, error) {
 	}
 	if v.GetString("seed") == "" {
 		return nil, errors.New("node seed is empty")
+	}
+	if v.GetInt("max_peers") == 0 {
+		return nil, errors.New("max peers is zero")
 	}
 	if v.GetString("db_backend") == "" {
 		return nil, errors.New("db backend is empty")

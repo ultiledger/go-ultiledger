@@ -14,7 +14,7 @@ import (
 	"github.com/ultiledger/go-ultiledger/rpc/rpcpb"
 )
 
-// Manager manages the CRUD of peers
+// Manager manages known remote peers.
 type Manager struct {
 	// Network address of the node
 	addr string
@@ -41,7 +41,7 @@ type Manager struct {
 	nodeIDs mapset.Set
 
 	// peers waiting to be connected, each peer has three
-	// chances to be connected.
+	// chances to be connected
 	pendingPeers map[string]int
 
 	// channel for stopping pending peers connection
@@ -55,12 +55,12 @@ type Manager struct {
 	deleteChan chan *Peer
 }
 
-func NewManager(ps []string, addr string, nodeID string) *Manager {
+func NewManager(ps []string, addr string, nodeID string, maxPeers int) *Manager {
 	return &Manager{
 		addr:         addr,
 		nodeID:       nodeID,
 		metadata:     metadata.Pairs(addr, nodeID),
-		maxPeers:     100, // hard code for now
+		maxPeers:     maxPeers,
 		initPeers:    ps,
 		pendingPeers: make(map[string]int),
 		livePeers:    make(map[string]*Peer),
@@ -106,7 +106,7 @@ func (pm *Manager) Start() {
 	}()
 }
 
-// Stop the peer manager
+// Stop the peer manager.
 func (pm *Manager) Stop() {
 	close(pm.stopChan)
 	pm.pendingPeers = nil
@@ -118,7 +118,7 @@ func (pm *Manager) Stop() {
 	pm.peerLock.Unlock()
 }
 
-// Get a list of rpc clients from live peers
+// Get a list of rpc clients from live peers.
 func (pm *Manager) GetLiveClients() []rpcpb.NodeClient {
 	pm.peerLock.RLock()
 	defer pm.peerLock.RUnlock()
@@ -133,7 +133,7 @@ func (pm *Manager) GetMetadata() metadata.MD {
 	return pm.metadata
 }
 
-// Add new peer with network addr
+// Add new peer with network addr.
 func (pm *Manager) AddPeerAddr(addr string) error {
 	select {
 	case pm.peerAddrChan <- addr:
@@ -143,7 +143,7 @@ func (pm *Manager) AddPeerAddr(addr string) error {
 	return nil
 }
 
-// connects the remote peer with provided network address
+// Connects the remote peer with provided network address.
 func (pm *Manager) connectPeer(addr string) (*Peer, error) {
 	conn, err := grpc.Dial(addr, grpc.WithInsecure(), grpc.WithBlock(), grpc.WithTimeout(1*time.Second))
 	if err != nil {
@@ -160,7 +160,7 @@ func (pm *Manager) connectPeer(addr string) (*Peer, error) {
 	return p, nil
 }
 
-// connect to peers periodically
+// Connect to new peers periodically.
 func (pm *Manager) connect() {
 	ticker := time.NewTicker(1 * time.Second)
 	for {

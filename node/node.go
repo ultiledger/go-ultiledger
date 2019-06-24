@@ -73,7 +73,7 @@ func NewNode(conf *Config) *Node {
 	database := boltdb.New(conf.DBPath)
 
 	// peer and account managers are independent
-	pm := peer.NewManager(conf.Peers, addr, nodeID)
+	pm := peer.NewManager(conf.Peers, addr, nodeID, conf.MaxPeers)
 	am := account.NewManager(database)
 
 	// tx manager depends on peer and account manager

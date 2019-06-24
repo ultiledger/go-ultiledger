@@ -7,7 +7,7 @@ import (
 	"github.com/ultiledger/go-ultiledger/rpc/rpcpb"
 )
 
-// Peer represents the overall information about the remote peer
+// Peer represents the overall information about the remote peer.
 type Peer struct {
 	// peer network address (ip:port)
 	Addr string
@@ -17,10 +17,8 @@ type Peer struct {
 	Role string
 	// connection time
 	ConnTime int64
-
 	// metadata for outgoing context
 	metadata metadata.MD
-
 	// grpc service client
 	client rpcpb.NodeClient
 	// underlying network connection
