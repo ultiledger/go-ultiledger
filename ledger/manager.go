@@ -43,7 +43,7 @@ var (
 	GenesisBaseReserve  = int64(1000000000)
 )
 
-// ManagerContext contains contextural information Manager needs
+// ManagerContext contains contextural information the ledger manager needs.
 type ManagerContext struct {
 	Database db.Database
 	AM       *account.Manager
@@ -70,7 +70,7 @@ func ValidateManagerContext(mc *ManagerContext) error {
 	return nil
 }
 
-// ledger manager is responsible for all the operations on ledgers
+// Ledger manager is responsible for all the operations on the ledger.
 type Manager struct {
 	// db store and corresponding bucket
 	database db.Database
@@ -143,7 +143,7 @@ func NewManager(ctx *ManagerContext) *Manager {
 	return lm
 }
 
-// Start the ledger manager
+// Start the ledger manager.
 func (lm *Manager) Start() {
 	lm.downloader.Start()
 
@@ -190,13 +190,13 @@ func (lm *Manager) Start() {
 	}()
 }
 
-// Stop the ledger manager
+// Stop the ledger manager.
 func (lm *Manager) Stop() {
 	close(lm.stopChan)
 	lm.downloader.Stop()
 }
 
-// Start the genesis ledger and initialize master account
+// Create the genesis ledger and initialize master account.
 func (lm *Manager) CreateGenesisLedger() error {
 	lm.ledgerState = LedgerStateSynced
 	// close genesis ledger
@@ -207,7 +207,7 @@ func (lm *Manager) CreateGenesisLedger() error {
 	return nil
 }
 
-// Get the current latest ledger header
+// Get the current latest ledger header.
 func (lm *Manager) CurrLedgerHeader() *ultpb.LedgerHeader {
 	// current ledger header should always exist
 	if lm.currLedgerHeader == nil {
@@ -216,7 +216,7 @@ func (lm *Manager) CurrLedgerHeader() *ultpb.LedgerHeader {
 	return lm.currLedgerHeader
 }
 
-// Get the hash of current latest ledger header
+// Get the hash of current latest ledger header.
 func (lm *Manager) CurrLedgerHeaderHash() string {
 	// current ledger header hash should always exist
 	if lm.currLedgerHeaderHash == "" {
@@ -225,7 +225,7 @@ func (lm *Manager) CurrLedgerHeaderHash() string {
 	return lm.currLedgerHeaderHash
 }
 
-// Get the sequence number of next ledger header
+// Get the sequence number of next ledger header.
 func (lm *Manager) NextLedgerHeaderSeq() uint64 {
 	// current ledger header should always exist
 	if lm.currLedgerHeader == nil {
@@ -234,7 +234,13 @@ func (lm *Manager) NextLedgerHeaderSeq() uint64 {
 	return lm.currLedgerHeader.SeqNum + 1
 }
 
+// Check whether the ledger is synced.
+func (lm *Manager) LedgerSynced() bool {
+	return lm.ledgerState == LedgerStateSynced
+}
+
 // Receive externalized consensus value and do appropriate operations
+// depend on current state of the ledger.
 func (lm *Manager) RecvExtVal(index uint64, value string, txset *ultpb.TxSet) error {
 	log.Infow("received ext value", "seq", index, "value", value, "prevhash", txset.PrevLedgerHash, "txcount", len(txset.TxList))
 
@@ -249,7 +255,7 @@ func (lm *Manager) RecvExtVal(index uint64, value string, txset *ultpb.TxSet) er
 					return fmt.Errorf("close ledger failed: %v", err)
 				}
 			} else {
-				log.Fatalw("ledger inconsistent", "currhash", lm.CurrLedgerHeaderHash())
+				log.Fatalw("ledger hash inconsistent", "prevHash", txset.PrevLedgerHash, "currhash", lm.CurrLedgerHeaderHash())
 			}
 			log.Infow("ledger closed successfully", "prevHash", lm.prevLedgerHeaderHash, "currHash", lm.currLedgerHeaderHash, "nextSeq", lm.NextLedgerHeaderSeq())
 			lm.ledgerState = LedgerStateSynced
@@ -272,7 +278,7 @@ func (lm *Manager) RecvExtVal(index uint64, value string, txset *ultpb.TxSet) er
 	return nil
 }
 
-// CloseLedger closes current ledger with new consensus value
+// CloseLedger closes current ledger with new consensus value.
 func (lm *Manager) closeLedger(index uint64, value string, txset *ultpb.TxSet) error {
 	// apply transactions
 	err := lm.tm.ApplyTxList(txset.TxList)
