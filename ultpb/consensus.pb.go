@@ -42,8 +42,7 @@ func (x StatementType) String() string {
 }
 func (StatementType) EnumDescriptor() ([]byte, []int) { return fileDescriptor2, []int{0} }
 
-// ConsensusValue is used for reaching consensus in
-// Federated Byzantine Agreement
+// ConsensusValue is used for reaching consensus in FBA.
 type ConsensusValue struct {
 	// hash of the transaction set
 	TxSetHash string `protobuf:"bytes,1,opt,name=TxSetHash" json:"TxSetHash,omitempty"`
@@ -81,7 +80,7 @@ func (m *ConsensusValue) GetCloseTime() int64 {
 
 // Each ULTNode is associated with a quorum, every message
 // related to FBA consensus should contain the quorum of
-// the node
+// the node.
 type Quorum struct {
 	Threshold   float64   `protobuf:"fixed64,1,opt,name=Threshold" json:"Threshold,omitempty"`
 	Validators  []string  `protobuf:"bytes,2,rep,name=Validators" json:"Validators,omitempty"`
@@ -114,7 +113,7 @@ func (m *Quorum) GetNestQuorums() []*Quorum {
 	return nil
 }
 
-// Nominate statement is used to find a candidate value for ballot protocol
+// Nominate statement is used to find a candidate value for ballot protocol.
 type Nominate struct {
 	VoteList   []string `protobuf:"bytes,1,rep,name=VoteList" json:"VoteList,omitempty"`
 	AcceptList []string `protobuf:"bytes,2,rep,name=AcceptList" json:"AcceptList,omitempty"`
@@ -147,7 +146,7 @@ func (m *Nominate) GetQuorumHash() string {
 	return ""
 }
 
-// Ballot is used to finalize a consensus value for a specific decree
+// Ballot is used to finalize a consensus value for a specific decree.
 type Ballot struct {
 	// ballot counter
 	Counter uint32 `protobuf:"varint,1,opt,name=Counter" json:"Counter,omitempty"`
@@ -174,7 +173,7 @@ func (m *Ballot) GetValue() string {
 	return ""
 }
 
-// Prepare message for ballot protocol
+// Prepare message for ballot protocol.
 type Prepare struct {
 	// current ballot
 	B *Ballot `protobuf:"bytes,1,opt,name=B" json:"B,omitempty"`
@@ -236,7 +235,7 @@ func (m *Prepare) GetQuorumHash() string {
 	return ""
 }
 
-// Confirm message for ballot protocol
+// Confirm message for ballot protocol.
 type Confirm struct {
 	// current ballot
 	B *Ballot `protobuf:"bytes,1,opt,name=B" json:"B,omitempty"`
@@ -289,7 +288,7 @@ func (m *Confirm) GetQuorumHash() string {
 	return ""
 }
 
-// Externalize message for ballot protocol
+// Externalize message for ballot protocol.
 type Externalize struct {
 	// lowest confirmed committed ballot
 	B *Ballot `protobuf:"bytes,1,opt,name=B" json:"B,omitempty"`

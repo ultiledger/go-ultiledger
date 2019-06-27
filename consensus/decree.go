@@ -38,14 +38,14 @@ type ExternalizeValue struct {
 
 // DecreeContext contains contextual information Decree needs.
 type DecreeContext struct {
-	Index           uint64  // decree index
-	NodeID          string  // local node ID
-	Quorum          *Quorum // local node quorum
-	QuorumHash      string  // local node quorum hash
-	LM              *ledger.Manager
-	Validator       *Validator
+	Index           uint64                   // decree index
+	NodeID          string                   // local node ID
+	Quorum          *Quorum                  // local node quorum
+	QuorumHash      string                   // local node quorum hash
 	StmtChan        chan<- *Statement        // channel for broadcasting statement
 	ExternalizeChan chan<- *ExternalizeValue // channel for notifying externlized value
+	LM              *ledger.Manager
+	Validator       *Validator
 }
 
 func ValidateDecreeContext(dc *DecreeContext) error {
@@ -146,7 +146,7 @@ func NewDecree(ctx *DecreeContext) *Decree {
 	return d
 }
 
-// Nominate nominates a consensus value for the decree
+// Nominate nominates a consensus value for the decree.
 func (d *Decree) Nominate(prevHash, currHash string) error {
 	d.nominationStart = true
 
@@ -192,8 +192,8 @@ func (d *Decree) Recv(stmt *Statement) error {
 }
 
 // Accept statement by checking the following two conditions:
-// 1. voted nodes of the statment form V-blocking for local node
-// 2. all the nodes in the quorum have voted the statement
+// 1. Voted nodes of the statment form V-blocking for local node.
+// 2. All the nodes in the quorum have voted the statement.
 func (d *Decree) federatedAccept(voteFilter func(*Statement) bool, acceptFilter func(*Statement) bool, stmts map[string]*Statement) bool {
 	// filter nodes with voteFilter
 	nodes := mapset.NewSet()
@@ -276,7 +276,7 @@ func (d *Decree) federatedRatify(filter func(*Statement) bool, stmts map[string]
 	return false
 }
 
-// Get the quorum from statement
+// Extract the quorum from statement.
 func (d *Decree) getStatementQuorum(stmt *Statement) *Quorum {
 	var quorum *Quorum
 	// extract quorum hash
@@ -312,7 +312,7 @@ func (d *Decree) getStatementQuorum(stmt *Statement) *Quorum {
 }
 
 /* Nomination Protocol */
-// Receive nomination from peers or local node
+// Receive nomination from peers or local node.
 func (d *Decree) recvNomination(stmt *Statement) error {
 	nom := stmt.GetNominate()
 
@@ -363,7 +363,7 @@ func (d *Decree) recvNomination(stmt *Statement) error {
 	return nil
 }
 
-// assemble a nomination and broadcast it to other peers
+// Assemble a nomination and broadcast it to other peers.
 func (d *Decree) sendNomination() error {
 	// create an abstract nomination statement
 	nom := &Nominate{
@@ -396,7 +396,7 @@ func (d *Decree) sendNomination() error {
 	return nil
 }
 
-// Promote votes to accepts and accepts to candidates for nomination
+// Promote votes to accepts and accepts to candidates for nomination.
 func (d *Decree) promoteVotes(newNom *Nominate) (bool, bool, error) {
 	acceptUpdated := false
 	for _, vote := range newNom.VoteList {
@@ -432,7 +432,7 @@ func (d *Decree) promoteVotes(newNom *Nominate) (bool, bool, error) {
 	return acceptUpdated, candidateUpdated, nil
 }
 
-// Combine the candidates set into a single candidate value
+// Combine the candidates set into a single candidate value.
 func (d *Decree) combineCandidates() (string, error) {
 	// query lastest closed ledger header
 	headerHash := d.lm.CurrLedgerHeaderHash()
@@ -507,7 +507,7 @@ func (d *Decree) combineCandidates() (string, error) {
 }
 
 // Check whether the first input string is smaller than the second one
-// after byte-wise OR
+// after byte-wise OR.
 func lessBytesOr(l string, r string, h string) bool {
 	lb, _ := b58.Decode(l)
 	rb, _ := b58.Decode(r)
@@ -538,7 +538,7 @@ func bytesOr(l string, r string) string {
 }
 
 /* Ballot Protocol */
-// Receive ballot statement from peer or local nodes
+// Receive ballot statement from peer or local node.
 func (d *Decree) recvBallot(stmt *Statement) error {
 	// make sure we received statement with the same decree index
 	if stmt.Index != d.index {
@@ -576,7 +576,7 @@ func (d *Decree) recvBallot(stmt *Statement) error {
 	return nil
 }
 
-// Assemble a ballot statement based on current ballot phase and broadcast it
+// Assemble a ballot statement based on current ballot phase and broadcast it.
 func (d *Decree) sendBallot() error {
 	d.checkBallotInvariants()
 
@@ -641,7 +641,7 @@ func (d *Decree) sendBallot() error {
 	return nil
 }
 
-// Step the ballot state forward with the input ballot statement
+// Step the ballot state forward with the input ballot statement.
 func (d *Decree) step(stmt *Statement) error {
 	d.ballotMsgCount += 1
 	if d.ballotMsgCount == 10 { // TODO(bobonovski) adaptive threshold?
@@ -683,7 +683,7 @@ func (d *Decree) step(stmt *Statement) error {
 	return nil
 }
 
-// Forward ballot counter
+// Forward ballot counter.
 func (d *Decree) update() bool {
 	if d.currentPhase != BallotPhasePrepare && d.currentPhase != BallotPhaseConfirm {
 		return false
@@ -789,7 +789,7 @@ func (d *Decree) abandonBallot(c uint32) bool {
 	return updated
 }
 
-// Accept new ballot statement as prepared using federated voting
+// Accept new ballot statement as prepared using federated voting.
 func (d *Decree) acceptPrepared(stmt *Statement) bool {
 	// it is only necessary to call this method when
 	// current phase is in prepare or confirm.
@@ -846,7 +846,7 @@ func (d *Decree) acceptPrepared(stmt *Statement) bool {
 	return false
 }
 
-// Update internal q and p ballot states with new accepted ballot
+// Update internal q and p ballot states with new accepted ballot.
 func (d *Decree) setAcceptPrepared(b *Ballot) bool {
 	updated := false
 	if d.pBallot != nil { // b < p
@@ -871,7 +871,7 @@ func (d *Decree) setAcceptPrepared(b *Ballot) bool {
 	return updated
 }
 
-// Extract unique prepared candidate ballots from statement
+// Extract unique prepared candidate ballots from statement.
 func (d *Decree) preparedCandidates(stmt *Statement) []*Ballot {
 	// filter duplicate ballots with the same values
 	ballots := mapset.NewSet()
@@ -950,7 +950,7 @@ func (d *Decree) preparedCandidates(stmt *Statement) []*Ballot {
 	return candidates
 }
 
-// Confirm new ballot statement as prepared by ratifying accepted prepared ballots
+// Confirm new ballot statement as prepared by ratifying accepted prepared ballots.
 func (d *Decree) confirmPrepared(stmt *Statement) bool {
 	if d.currentPhase != BallotPhasePrepare || d.pBallot == nil {
 		return false
@@ -1011,7 +1011,7 @@ func (d *Decree) confirmPrepared(stmt *Statement) bool {
 	return false
 }
 
-// Update internal c and h ballots with new confirmed prepared ballots
+// Update internal c and h ballots with new confirmed prepared ballots.
 func (d *Decree) setConfirmPrepared(cb *Ballot, hb *Ballot) bool {
 	// save the next ballot value to use
 	d.nextValue = hb.Value
@@ -1036,7 +1036,7 @@ func (d *Decree) setConfirmPrepared(cb *Ballot, hb *Ballot) bool {
 	return updated
 }
 
-// Accept commit statement for the ballot
+// Accept commit statement for the ballot.
 func (d *Decree) acceptCommit(stmt *Statement) bool {
 	if d.currentPhase != BallotPhasePrepare && d.currentPhase != BallotPhaseConfirm {
 		return false
@@ -1092,7 +1092,7 @@ func (d *Decree) acceptCommit(stmt *Statement) bool {
 	return false
 }
 
-// Update internal c and h ballots with new accepted commit ballots
+// Update internal c and h ballots with new accepted commit ballots.
 func (d *Decree) setAcceptCommit(cb *Ballot, hb *Ballot) bool {
 	// save the next ballot value to use
 	d.nextValue = hb.Value
@@ -1124,7 +1124,7 @@ func (d *Decree) setAcceptCommit(cb *Ballot, hb *Ballot) bool {
 	return updated
 }
 
-// Find lower and higher counter for commit ballot
+// Find lower and higher counter for commit ballot.
 func (d *Decree) findCommitInterval(counters []uint32, filter func(l, r uint32) bool) (uint32, uint32) {
 	var lb, rb uint32
 
@@ -1146,7 +1146,7 @@ func (d *Decree) findCommitInterval(counters []uint32, filter func(l, r uint32) 
 	return lb, rb
 }
 
-// Extract commit lower and higher counters
+// Extract commit lower and higher counters.
 func (d *Decree) getCommitCounters(b *Ballot) []uint32 {
 	counters := mapset.NewSet()
 
@@ -1190,7 +1190,7 @@ func (d *Decree) getCommitCounters(b *Ballot) []uint32 {
 	return ctrs
 }
 
-// Confirm the commit ballot using federated voting
+// Confirm the commit ballot using federated voting.
 func (d *Decree) confirmCommit(stmt *Statement) bool {
 	if d.currentPhase != BallotPhaseConfirm {
 		return false
@@ -1241,7 +1241,7 @@ func (d *Decree) confirmCommit(stmt *Statement) bool {
 }
 
 // Update internal c and h ballots with confirmed commit ballot
-// and trigger externalization of the commit value
+// and trigger externalization of the commit value.
 func (d *Decree) setConfirmCommit(cb *Ballot, hb *Ballot) bool {
 	// update commit and higher ballot
 	d.cBallot = cb
@@ -1266,7 +1266,7 @@ func (d *Decree) setConfirmCommit(cb *Ballot, hb *Ballot) bool {
 	return true
 }
 
-// Update the current ballot if needed
+// Update the current ballot if needed.
 func (d *Decree) updateBallotIfNeeded(b *Ballot) bool {
 	updated := false
 	if d.currentBallot == nil || compareBallots(d.currentBallot, b) < 0 {
@@ -1276,7 +1276,7 @@ func (d *Decree) updateBallotIfNeeded(b *Ballot) bool {
 	return updated
 }
 
-// Update the current ballot phase
+// Update the current ballot phase.
 func (d *Decree) updateBallotPhase(val string, force bool) bool {
 	if !force && d.currentBallot != nil {
 		return false
@@ -1292,7 +1292,7 @@ func (d *Decree) updateBallotPhase(val string, force bool) bool {
 	return updated
 }
 
-// Update the current ballot phase with specified counter
+// Update the current ballot phase with specified counter.
 func (d *Decree) updateBallotPhaseWithCounter(val string, counter uint32) bool {
 	if d.currentPhase != BallotPhasePrepare && d.currentPhase != BallotPhaseConfirm {
 		return false
@@ -1312,7 +1312,7 @@ func (d *Decree) updateBallotPhaseWithCounter(val string, counter uint32) bool {
 	return updated
 }
 
-// Update the current ballot value
+// Update the current ballot value.
 func (d *Decree) updateBallotValue(b *Ballot) bool {
 	if d.currentPhase != BallotPhasePrepare && d.currentPhase != BallotPhaseConfirm {
 		return false
@@ -1340,7 +1340,7 @@ func (d *Decree) updateBallotValue(b *Ballot) bool {
 	return updated
 }
 
-// Update the current ballot
+// Update the current ballot.
 func (d *Decree) updateBallot(b *Ballot) {
 	if d.currentPhase == BallotPhaseExternalize {
 		log.Fatal("should not update ballot in externalize phase")
@@ -1414,8 +1414,8 @@ func (d *Decree) checkBallotInvariants() {
 }
 
 // Validate ballot by checking:
-// 1. ballot counters are in expected states
-// 2. ballot values are normal and satisfy consensus constraints
+// 1. Ballot counters are in expected states.
+// 2. Ballot values are normal and satisfy consensus constraints.
 func (d *Decree) validateBallot(stmt *Statement) error {
 	if stmt == nil {
 		return fmt.Errorf("ballot statement is nil")
@@ -1494,7 +1494,7 @@ func (d *Decree) validateBallot(stmt *Statement) error {
 	return valueErr
 }
 
-// Validate consensus value
+// Validate consensus value.
 func (d *Decree) validateConsensusValue(val string) error {
 	vb, err := b58.Decode(val)
 	if err != nil {
@@ -1511,7 +1511,7 @@ func (d *Decree) validateConsensusValue(val string) error {
 	return nil
 }
 
-// Validate statement quorum
+// Validate statement quorum.
 func (d *Decree) validateQuorum(quorum *Quorum, depth int) error {
 	if depth > 2 {
 		return errors.New("quorum nesting too deep")

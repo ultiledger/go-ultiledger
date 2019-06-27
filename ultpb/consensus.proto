@@ -2,8 +2,7 @@ syntax = "proto3";
 
 package ultpb;
 
-// ConsensusValue is used for reaching consensus in 
-// Federated Byzantine Agreement
+// ConsensusValue is used for reaching consensus in FBA. 
 message ConsensusValue {
   // hash of the transaction set
   string TxSetHash = 1;
@@ -15,21 +14,21 @@ message ConsensusValue {
 
 // Each ULTNode is associated with a quorum, every message
 // related to FBA consensus should contain the quorum of 
-// the node
+// the node.
 message Quorum {
   double Threshold = 1;
   repeated string Validators = 2;
   repeated Quorum NestQuorums = 3;
 }
 
-// Nominate statement is used to find a candidate value for ballot protocol
+// Nominate statement is used to find a candidate value for ballot protocol.
 message Nominate {
   repeated string VoteList = 1;
   repeated string AcceptList = 2;
   string QuorumHash = 3;
 }
 
-// Ballot is used to finalize a consensus value for a specific decree
+// Ballot is used to finalize a consensus value for a specific decree.
 message Ballot {
   // ballot counter
   uint32 Counter = 1;
@@ -37,7 +36,7 @@ message Ballot {
   string Value = 2;
 }
 
-// Prepare message for ballot protocol
+// Prepare message for ballot protocol.
 message Prepare {
   // current ballot
   Ballot B = 1;
@@ -52,7 +51,7 @@ message Prepare {
   string QuorumHash = 6;
 }
 
-// Confirm message for ballot protocol
+// Confirm message for ballot protocol.
 message Confirm {
   // current ballot
   Ballot B = 1;
@@ -65,7 +64,7 @@ message Confirm {
   string QuorumHash = 5; 
 }
 
-// Externalize message for ballot protocol
+// Externalize message for ballot protocol.
 message Externalize {
   // lowest confirmed committed ballot
   Ballot B = 1;
