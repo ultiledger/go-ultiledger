@@ -1,8 +1,8 @@
 package ledger
 
 import (
-	"encoding/binary"
 	"errors"
+	"strconv"
 	"sync"
 
 	b58 "github.com/mr-tron/base58/base58"
@@ -175,9 +175,8 @@ func (d *Downloader) runTask(done <-chan bool, taskChan <-chan uint64) <-chan *C
 		metadata := d.pm.GetMetadata()
 
 		// encode the ledger index
-		buf := make([]byte, binary.MaxVarintLen64)
-		n := binary.PutUvarint(buf, i)
-		payload := buf[:n]
+		seq := strconv.FormatUint(i, 10)
+		payload := []byte(seq)
 
 		// sign the data
 		sign, err := crypto.Sign(d.seed, payload)

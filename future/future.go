@@ -84,7 +84,7 @@ type Quorum struct {
 // Future for node server to query ledger.
 type Ledger struct {
 	deferError
-	LedgerSeq uint64
+	LedgerSeq string
 	Ledger    *ultpb.Ledger
 }
 

@@ -298,8 +298,8 @@ func (d *Decree) getStatementQuorum(stmt *Statement) *Quorum {
 	}
 
 	if quorum == nil && hash != "" {
-		quorum, ok := d.validator.GetQuorum(hash)
-		if !ok {
+		quorum, err := d.validator.GetQuorum(hash)
+		if err != nil || quorum == nil {
 			// this should not happen as we will only receive
 			// validated statements with full information in
 			// consensus protocol
@@ -466,8 +466,8 @@ func (d *Decree) combineCandidates() (string, error) {
 	var txset *TxSet
 	var txsetHash string
 	for _, cv := range vals {
-		ts, ok := d.validator.GetTxSet(cv.TxSetHash)
-		if !ok {
+		ts, err := d.validator.GetTxSet(cv.TxSetHash)
+		if err != nil || ts == nil {
 			continue
 		}
 		if ts.PrevLedgerHash != headerHash {

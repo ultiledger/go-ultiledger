@@ -197,49 +197,53 @@ func (v *Validator) RecvTxSet(txsetHash string, txset *TxSet) error {
 }
 
 // Get the quorum of the corresponding quorum hash,
-func (v *Validator) GetQuorum(quorumHash string) (*Quorum, bool) {
+func (v *Validator) GetQuorum(quorumHash string) (*Quorum, error) {
 	if q, ok := v.quorumCache.Get(quorumHash); ok {
-		return q.(*Quorum), true
+		return q.(*Quorum), nil
 	}
 
 	qb, err := v.database.Get(v.bucket, []byte(quorumHash))
-	if err != nil || qb == nil {
-		return nil, false
+	if err != nil {
+		return nil, fmt.Errorf("get quorum from db failed: %v", err)
+	}
+	if qb == nil {
+		return nil, nil
 	}
 
 	quorum, err := ultpb.DecodeQuorum(qb)
 	if err != nil {
-		log.Errorf("decode quorum failed: %v", err, "quorumHash", quorumHash)
-		return nil, false
+		return nil, fmt.Errorf("decode quorum failed: %v", err)
 	}
 
 	// cache the quorum
 	v.quorumCache.Add(quorumHash, quorum)
 
-	return quorum, true
+	return quorum, nil
 }
 
 // Get the txset of the corresponding txset hash
-func (v *Validator) GetTxSet(txsetHash string) (*TxSet, bool) {
+func (v *Validator) GetTxSet(txsetHash string) (*TxSet, error) {
 	if txs, ok := v.txsetCache.Get(txsetHash); ok {
-		return txs.(*TxSet), true
+		return txs.(*TxSet), nil
 	}
 
 	txb, err := v.database.Get(v.bucket, []byte(txsetHash))
-	if err != nil || txb == nil {
-		return nil, false
+	if err != nil {
+		return nil, fmt.Errorf("get txset from db failed: %v", err)
+	}
+	if txb == nil {
+		return nil, nil
 	}
 
 	txset, err := ultpb.DecodeTxSet(txb)
 	if err != nil {
-		log.Errorf("decode txset failed: %v", err, "txsetHash", txsetHash)
-		return nil, false
+		return nil, fmt.Errorf("decode txset failed: %v", err)
 	}
 
 	// cache the txset
 	v.txsetCache.Add(txsetHash, txset)
 
-	return txset, true
+	return txset, nil
 }
 
 // Monitor downloaded statement and dispatch to ready channel
@@ -272,14 +276,15 @@ func (v *Validator) download() {
 		case stmt := <-v.downloadChan:
 			// no need to check error since we have already passed the validity check
 			quorumHash, _ := extractQuorumHash(stmt)
-			if _, ok := v.GetQuorum(quorumHash); !ok {
+			quorum, _ := v.GetQuorum(quorumHash)
+			if quorum == nil {
 				v.quorumDownloadChan <- quorumHash
 			}
 
 			txsetHashes, _ := extractTxSetHash(stmt)
 			for _, txsetHash := range txsetHashes {
-				_, ok := v.GetTxSet(txsetHash)
-				if !ok {
+				txset, _ := v.GetTxSet(txsetHash)
+				if txset == nil {
 					v.txsetDownloadChan <- txsetHash
 				}
 			}
@@ -296,7 +301,11 @@ func (v *Validator) validate(stmt *Statement) (bool, error) {
 		return false, fmt.Errorf("extract quorum hash from statement failed: %v", err)
 	}
 
-	if _, ok := v.GetQuorum(quorumHash); !ok {
+	quorum, err := v.GetQuorum(quorumHash)
+	if err != nil {
+		return false, fmt.Errorf("query quorum failed: %v", err)
+	}
+	if quorum == nil {
 		return false, nil
 	}
 
@@ -306,8 +315,11 @@ func (v *Validator) validate(stmt *Statement) (bool, error) {
 	}
 
 	for _, txsetHash := range txsetHashes {
-		_, ok := v.GetTxSet(txsetHash)
-		if !ok {
+		txset, err := v.GetTxSet(txsetHash)
+		if err != nil {
+			return false, fmt.Errorf("query txset failed: %v", err)
+		}
+		if txset == nil {
 			return false, nil
 		}
 	}

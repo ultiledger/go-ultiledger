@@ -3,6 +3,7 @@ package ledger
 import (
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	lru "github.com/hashicorp/golang-lru"
@@ -32,6 +33,7 @@ var (
 	ErrInsufficientForFee = errors.New("insufficient balance for fee")
 	ErrInsufficientForTx  = errors.New("insufficient balance for tx")
 	ErrInvalidSeqNum      = errors.New("invalid sequence number")
+	ErrLedgerNotExist     = errors.New("ledger not exist")
 )
 
 var (
@@ -242,6 +244,27 @@ func (lm *Manager) LedgerSynced() bool {
 	return lm.ledgerState == LedgerStateSynced
 }
 
+// Get the ledger header by ledger sequence.
+func (lm *Manager) GetLedger(seq string) (*ultpb.Ledger, error) {
+	lgr, ok := lm.headers.Get(seq)
+	if ok {
+		return lgr.(*ultpb.Ledger), nil
+	}
+	lb, err := lm.database.Get(lm.bucket, []byte(seq))
+	if err != nil {
+		return nil, fmt.Errorf("query ledger from db failed: %v", err)
+	}
+	if lb == nil {
+		return nil, nil
+	}
+	ledger, err := ultpb.DecodeLedger(lb)
+	if err != nil {
+		return nil, fmt.Errorf("decode ledger failed: %v", err)
+	}
+	lm.headers.Add(seq, ledger)
+	return ledger, nil
+}
+
 // Receive externalized consensus value and do appropriate operations
 // depend on current state of the ledger.
 func (lm *Manager) RecvExtVal(index uint64, value string, txset *ultpb.TxSet) error {
@@ -352,7 +375,10 @@ func (lm *Manager) advanceLedger(seq uint64, prevHeaderHash string, txHash strin
 		return fmt.Errorf("encode ledger header to key failed: %v", err)
 	}
 
-	lm.database.Put(lm.bucket, []byte(h), b)
+	// save the ledger header
+	seqStr := strconv.FormatUint(header.SeqNum, 10)
+	lm.database.Put(lm.bucket, []byte(seqStr), b)
+	lm.headers.Add(seqStr, header)
 
 	// advance current ledger header
 	lm.prevLedgerHeader = lm.currLedgerHeader

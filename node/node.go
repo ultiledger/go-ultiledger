@@ -48,6 +48,7 @@ type Node struct {
 	txFuture     chan *future.Tx
 	peerFuture   chan *future.Peer
 	stmtFuture   chan *future.Statement
+	ledgerFuture chan *future.Ledger
 	quorumFuture chan *future.Quorum
 	txsetFuture  chan *future.TxSet
 	txsFuture    chan *future.TxStatus
@@ -114,6 +115,7 @@ func NewNode(conf *Config) *Node {
 	peerFuture := make(chan *future.Peer)
 	stmtFuture := make(chan *future.Statement)
 	txsFuture := make(chan *future.TxStatus)
+	ledgerFuture := make(chan *future.Ledger)
 	quorumFuture := make(chan *future.Quorum)
 	txsetFuture := make(chan *future.TxSet)
 
@@ -126,6 +128,7 @@ func NewNode(conf *Config) *Node {
 		TxFuture:       txFuture,
 		StmtFuture:     stmtFuture,
 		TxStatusFuture: txsFuture,
+		LedgerFuture:   ledgerFuture,
 		QuorumFuture:   quorumFuture,
 		TxSetFuture:    txsetFuture,
 	}
@@ -222,6 +225,13 @@ func (n *Node) eventLoop() {
 				log.Errorf("recv statement failed: %v", err)
 			}
 			sf.Respond(err)
+		case lf := <-n.ledgerFuture:
+			ledger, err := n.lm.GetLedger(lf.LedgerSeq)
+			if err != nil {
+				log.Errorf("query ledger failed: %v", err)
+			}
+			lf.Ledger = ledger
+			lf.Respond(err)
 		case qf := <-n.quorumFuture:
 			quorum, err := n.engine.GetQuorum(qf.QuorumHash)
 			if err != nil {

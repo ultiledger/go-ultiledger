@@ -36,6 +36,8 @@ type NodeServer struct {
 	// future for adding consensus statement
 	stmtFuture chan<- *future.Statement
 
+	// future for query ledger
+	ledgerFuture chan<- *future.Ledger
 	// future for query quorum
 	quorumFuture chan<- *future.Quorum
 	// future for query txset
@@ -52,6 +54,7 @@ type ServerContext struct {
 	PeerFuture     chan *future.Peer      // channel for sending discovered peer to node
 	TxFuture       chan *future.Tx        // channel for sending received tx to node
 	StmtFuture     chan *future.Statement // channel for sending received statement to node
+	LedgerFuture   chan *future.Ledger    // channel for sending ledger query to ledger manager
 	QuorumFuture   chan *future.Quorum    // channel for sending quorum query to consensus engine
 	TxSetFuture    chan *future.TxSet     // channel for sending txset query to consensus engine
 	TxStatusFuture chan *future.TxStatus  // channel for sending txstatus query to consensus engine
@@ -79,6 +82,9 @@ func ValidateServerContext(sc *ServerContext) error {
 	if sc.StmtFuture == nil {
 		return errors.New("statement future channel is nil")
 	}
+	if sc.LedgerFuture == nil {
+		return errors.New("ledger future channel is nil")
+	}
 	if sc.QuorumFuture == nil {
 		return errors.New("quorum future channel is nil")
 	}
@@ -103,6 +109,7 @@ func NewNodeServer(ctx *ServerContext) *NodeServer {
 		peerFuture:   ctx.PeerFuture,
 		txFuture:     ctx.TxFuture,
 		stmtFuture:   ctx.StmtFuture,
+		ledgerFuture: ctx.LedgerFuture,
 		quorumFuture: ctx.QuorumFuture,
 		txsetFuture:  ctx.TxSetFuture,
 		txsFuture:    ctx.TxStatusFuture,
@@ -235,6 +242,9 @@ func (s *NodeServer) Query(ctx context.Context, req *rpcpb.QueryRequest) (*rpcpb
 		if err := qf.Error(); err != nil {
 			return resp, fmt.Errorf("query quorum failed: %v", err)
 		}
+		if qf.Quorum == nil {
+			return resp, errors.New("cannot find quorum")
+		}
 		qb, err := ultpb.Encode(qf.Quorum)
 		if err != nil {
 			return resp, fmt.Errorf("encode quorum failed: %v", err)
@@ -247,11 +257,29 @@ func (s *NodeServer) Query(ctx context.Context, req *rpcpb.QueryRequest) (*rpcpb
 		if err := txf.Error(); err != nil {
 			return resp, fmt.Errorf("query txset failed: %v", err)
 		}
+		if txf.TxSet == nil {
+			return resp, errors.New("cannot find txset")
+		}
 		txb, err := ultpb.Encode(txf.TxSet)
 		if err != nil {
 			return resp, fmt.Errorf("encode txset failed: %v", err)
 		}
 		resp.Data = txb
+	case rpcpb.QueryMsgType_LEDGER:
+		lf := &future.Ledger{LedgerSeq: string(req.Data)}
+		lf.Init()
+		s.ledgerFuture <- lf
+		if err := lf.Error(); err != nil {
+			return resp, fmt.Errorf("query ledger failed: %v", err)
+		}
+		if lf.Ledger == nil {
+			return resp, errors.New("cannot find ledger")
+		}
+		lb, err := ultpb.Encode(lf.Ledger)
+		if err != nil {
+			return resp, fmt.Errorf("encode ledger failed: %v", err)
+		}
+		resp.Data = lb
 	}
 
 	return resp, nil

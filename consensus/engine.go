@@ -272,18 +272,18 @@ func (e *Engine) Stop() {
 
 // Get the quorum of the quorum hash.
 func (e *Engine) GetQuorum(quorumHash string) (*Quorum, error) {
-	q, ok := e.validator.GetQuorum(quorumHash)
-	if !ok {
-		return nil, fmt.Errorf("quorum of quorum hash %s not exist", quorumHash)
+	q, err := e.validator.GetQuorum(quorumHash)
+	if err != nil {
+		return nil, fmt.Errorf("query quorum failed: %v", err)
 	}
 	return q, nil
 }
 
 // Get the txset of the txset hash.
 func (e *Engine) GetTxSet(txsetHash string) (*TxSet, error) {
-	txs, ok := e.validator.GetTxSet(txsetHash)
-	if !ok {
-		return nil, fmt.Errorf("txset of txset hash %s not exist", txsetHash)
+	txs, err := e.validator.GetTxSet(txsetHash)
+	if err != nil {
+		return nil, fmt.Errorf("query txset failed: %v", err)
 	}
 	return txs, nil
 }
@@ -488,9 +488,12 @@ func (e *Engine) Externalize(idx uint64, value string) error {
 		return fmt.Errorf("decode consensus value failed: %v", err)
 	}
 
-	txset, ok := e.validator.GetTxSet(cv.TxSetHash)
-	if !ok {
-		return fmt.Errorf("get txset %s failed", cv.TxSetHash)
+	txset, err := e.validator.GetTxSet(cv.TxSetHash)
+	if err != nil {
+		return fmt.Errorf("get txset failed: %v", err)
+	}
+	if txset == nil {
+		return errors.New("txset not exist")
 	}
 
 	// send value to ledger manager
