@@ -37,9 +37,7 @@ message SubmitTxRequest {
   string Signature = 3;
 }
 
-message SubmitTxResponse {
-  TxStatus TxStatus = 1;
-}
+message SubmitTxResponse {}
 
 message QueryTxRequest {
   // transaction ULTKey

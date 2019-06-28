@@ -7,7 +7,9 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 
+	"github.com/ultiledger/go-ultiledger/log"
 	"github.com/ultiledger/go-ultiledger/rpc/rpcpb"
 )
 
@@ -23,10 +25,14 @@ func Hello(client rpcpb.NodeClient, md metadata.MD) (string, string, error) {
 	req := rpcpb.HelloRequest{}
 	_, err := client.Hello(ctx, &req, grpc.Header(&header))
 	if err != nil {
+		st, ok := status.FromError(err)
+		if ok {
+			log.Errorf("say hello to peer failed: %v", st.Message())
+		}
 		return "", "", err
 	}
 	if len(header.Get("Addr")) == 0 || len(header.Get("NodeID")) == 0 {
-		return "", "", errors.New("empty peer IP or NodeID")
+		return "", "", errors.New("empty peerip or nodeid")
 	}
 
 	return header.Get("Addr")[0], header.Get("NodeID")[0], nil

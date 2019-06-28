@@ -8,7 +8,9 @@ import (
 	"time"
 
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 
+	"github.com/ultiledger/go-ultiledger/log"
 	"github.com/ultiledger/go-ultiledger/rpc/rpcpb"
 )
 
@@ -17,7 +19,7 @@ var (
 	ErrEmptySignature = errors.New("empty digital signature")
 )
 
-// For reusing broadcast signal type
+// For reusing broadcast signal type.
 var taskPool *sync.Pool
 
 func init() {
@@ -28,7 +30,7 @@ func init() {
 	}
 }
 
-// Broadcast consensus statements
+// Broadcast consensus statements.
 func BroadcastStatement(clients []rpcpb.NodeClient, md metadata.MD, payload []byte, signature string) error {
 	if len(payload) == 0 {
 		return ErrEmptyPayload
@@ -48,7 +50,7 @@ func BroadcastStatement(clients []rpcpb.NodeClient, md metadata.MD, payload []by
 	return nil
 }
 
-// Broadcast transaction
+// Broadcast transaction.
 func BroadcastTx(clients []rpcpb.NodeClient, md metadata.MD, payload []byte, signature string) error {
 	if len(payload) == 0 {
 		return ErrEmptyPayload
@@ -68,7 +70,7 @@ func BroadcastTx(clients []rpcpb.NodeClient, md metadata.MD, payload []byte, sig
 	return nil
 }
 
-// Broadcast supplied request concurrently
+// Broadcast supplied request concurrently.
 func broadcast(clients []rpcpb.NodeClient, md metadata.MD, req *rpcpb.NotifyRequest) error {
 	done := make(chan bool)
 	tasks := prepareTask(done, clients, md, req)
@@ -76,14 +78,13 @@ func broadcast(clients []rpcpb.NodeClient, md metadata.MD, req *rpcpb.NotifyRequ
 	for i := 0; i < 10; i++ {
 		workers[i] = runTask(done, tasks)
 	}
-	for resp := range mergeResponse(done, workers...) {
-		fmt.Println(resp) // for eliminating compile error
+	for _ = range mergeResponse(done, workers...) {
 	}
 	close(done)
 	return nil
 }
 
-// Internal concurrent broadcast task
+// Internal concurrent broadcast task.
 type task struct {
 	client   rpcpb.NodeClient
 	metadata metadata.MD
@@ -109,7 +110,7 @@ func prepareTask(done <-chan bool, clients []rpcpb.NodeClient, md metadata.MD, r
 	return taskChan
 }
 
-// Run task by invoking notify method
+// Run task by invoking notify method.
 func runTask(done <-chan bool, taskChan <-chan *task) <-chan *rpcpb.NotifyResponse {
 	responseChan := make(chan *rpcpb.NotifyResponse)
 	notify := func(t *task) *rpcpb.NotifyResponse {
@@ -118,7 +119,13 @@ func runTask(done <-chan bool, taskChan <-chan *task) <-chan *rpcpb.NotifyRespon
 		defer cancel()
 		// we still have to return the response even if
 		// error happend and in this case response is nil
-		resp, _ := t.client.Notify(ctx, t.req)
+		resp, err := t.client.Notify(ctx, t.req)
+		if err != nil {
+			st, ok := status.FromError(err)
+			if ok {
+				log.Errorf("notify peer failed: %v", st.Message())
+			}
+		}
 		return resp
 	}
 	go func() {

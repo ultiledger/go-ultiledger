@@ -7,7 +7,9 @@ import (
 	"fmt"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 
 	"github.com/ultiledger/go-ultiledger/crypto"
 	"github.com/ultiledger/go-ultiledger/future"
@@ -144,26 +146,26 @@ func (s *NodeServer) validate(ctx context.Context, data []byte, signature string
 	return nil
 }
 
-// Hello retrieves network address and nodeID from context and
-// respond with network address and nodeID of local node
+// Hello retrieves network address and nodeid from context and
+// respond with network address and nodeid of local node.
 func (s *NodeServer) Hello(ctx context.Context, req *rpcpb.HelloRequest) (*rpcpb.HelloResponse, error) {
 	resp := &rpcpb.HelloResponse{}
 
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
-		return resp, errors.New("retrieve incoming context failed")
+		return resp, status.Error(codes.NotFound, "retrieve incoming context failed")
 	}
 	if len(md.Get("Addr")) == 0 || len(md.Get("NodeID")) == 0 {
-		return resp, errors.New("network address or nodeID is absent")
+		return resp, status.Error(codes.NotFound, "network address or nodeid is missing")
 	}
 
 	// validate nodeID
 	k, err := crypto.DecodeKey(md.Get("NodeID")[0])
 	if err != nil {
-		return resp, fmt.Errorf("decode nodeID to crypto key failed: %v", err)
+		return resp, status.Error(codes.InvalidArgument, "decode nodeid to crypto key failed")
 	}
 	if k.Code != crypto.KeyTypeNodeID {
-		return resp, errors.New("invalid nodeID key type")
+		return resp, status.Error(codes.InvalidArgument, "invalid nodeid key type")
 	}
 	s.nodeKey[md.Get("Addr")[0]] = k
 
@@ -171,8 +173,8 @@ func (s *NodeServer) Hello(ctx context.Context, req *rpcpb.HelloRequest) (*rpcpb
 	f := &future.Peer{Addr: md.Get("Addr")[0]}
 	f.Init()
 	s.peerFuture <- f
-	if err := f.Error(); err != nil { // just log error message
-		log.Error(err)
+	if err := f.Error(); err != nil {
+		log.Errorf("add peer to peer manager failed: %v", err)
 	}
 
 	grpc.SendHeader(ctx, metadata.Pairs("Addr", s.addr, "NodeID", s.nodeID))
@@ -186,59 +188,42 @@ func (s *NodeServer) SubmitTx(ctx context.Context, req *rpcpb.SubmitTxRequest) (
 	// decode pb to tx
 	tx, err := ultpb.DecodeTx(req.Data)
 	if err != nil {
-		resp.TxStatus.StatusCode = rpcpb.TxStatusCode_REJECTED
-		resp.TxStatus.ErrorMessage = "decode request data failed"
-		return resp, err
+		return resp, status.Error(codes.InvalidArgument, "decode tx failed")
 	}
 
 	// get account key
 	accKey, err := crypto.DecodeKey(tx.AccountID)
 	if err != nil {
-		resp.TxStatus.StatusCode = rpcpb.TxStatusCode_REJECTED
-		resp.TxStatus.ErrorMessage = "decode account key failed"
-		return resp, err
+		return resp, status.Error(codes.InvalidArgument, "decode account key failed")
 	}
 	if accKey.Code != crypto.KeyTypeAccountID {
-		resp.TxStatus.StatusCode = rpcpb.TxStatusCode_REJECTED
-		resp.TxStatus.ErrorMessage = "invalid account key type"
-		return resp, errors.New("invalid account ID")
+		return resp, status.Error(codes.InvalidArgument, "invalid account key type")
 	}
 
 	// verify signature
 	if !crypto.VerifyByKey(accKey, req.Signature, req.Data) {
-		resp.TxStatus.StatusCode = rpcpb.TxStatusCode_REJECTED
-		resp.TxStatus.ErrorMessage = "signature verification failed"
-		return resp, errors.New("invalid signature")
+		return resp, status.Error(codes.InvalidArgument, "signature verification failed")
 	}
 
 	// verify tx key
 	txKey, err := crypto.DecodeKey(req.TxKey)
 	if err != nil {
-		resp.TxStatus.StatusCode = rpcpb.TxStatusCode_REJECTED
-		resp.TxStatus.ErrorMessage = "decode tx key failed"
-		return resp, errors.New("decode tx key failed")
+		return resp, status.Error(codes.InvalidArgument, "decode tx key failed")
 	}
 	txHash, err := ultpb.SHA256HashBytes(tx)
 	if err != nil {
-		resp.TxStatus.StatusCode = rpcpb.TxStatusCode_REJECTED
-		resp.TxStatus.ErrorMessage = "compute tx hash failed"
-		return resp, errors.New("compute tx hash failed")
+		return resp, status.Error(codes.Internal, "compute tx hash failed")
 	}
 	if !bytes.Equal(txHash[:], txKey.Hash[:]) {
-		resp.TxStatus.StatusCode = rpcpb.TxStatusCode_REJECTED
-		resp.TxStatus.ErrorMessage = "tx key hash mismatch"
-		return resp, errors.New("tx key hash mismatch")
+		return resp, status.Error(codes.Internal, "tx key hash mismatch")
 	}
 
 	f := &future.Tx{Tx: tx, TxKey: req.TxKey}
 	f.Init()
 	s.txFuture <- f
 	if err := f.Error(); err != nil {
-		resp.TxStatus.StatusCode = rpcpb.TxStatusCode_REJECTED
-		resp.TxStatus.ErrorMessage = err.Error()
-		return resp, fmt.Errorf("submit tx failed: %v", err)
+		return resp, status.Errorf(codes.Internal, "submit tx failed: %v", err)
 	}
-	resp.TxStatus.StatusCode = rpcpb.TxStatusCode_ACCEPTED
 	return resp, nil
 }
 
@@ -250,19 +235,19 @@ func (s *NodeServer) QueryTx(ctx context.Context, req *rpcpb.QueryTxRequest) (*r
 	f.Init()
 	s.txsFuture <- f
 	if err := f.Error(); err != nil {
-		return resp, fmt.Errorf("query tx status failed: %v", err)
+		return resp, status.Errorf(codes.Internal, "query tx status failed: %v", err)
 	}
 	resp.TxStatus = f.TxStatus
 	return resp, nil
 }
 
 // Query accepts information query requests from peers and
-// return encoded information if the node has it
+// return encoded information if the node has it.
 func (s *NodeServer) Query(ctx context.Context, req *rpcpb.QueryRequest) (*rpcpb.QueryResponse, error) {
 	resp := &rpcpb.QueryResponse{}
 
 	if err := s.validate(ctx, req.Data, req.Signature); err != nil {
-		return resp, fmt.Errorf("input validation faile: %v", err)
+		return resp, status.Errorf(codes.InvalidArgument, "input validation failed: %v", err)
 	}
 
 	switch req.MsgType {
@@ -271,14 +256,14 @@ func (s *NodeServer) Query(ctx context.Context, req *rpcpb.QueryRequest) (*rpcpb
 		qf.Init()
 		s.quorumFuture <- qf
 		if err := qf.Error(); err != nil {
-			return resp, fmt.Errorf("query quorum failed: %v", err)
+			return resp, status.Errorf(codes.Internal, "query quorum failed: %v", err)
 		}
 		if qf.Quorum == nil {
-			return resp, errors.New("cannot find quorum")
+			return resp, status.Error(codes.NotFound, "quorum not found")
 		}
 		qb, err := ultpb.Encode(qf.Quorum)
 		if err != nil {
-			return resp, fmt.Errorf("encode quorum failed: %v", err)
+			return resp, status.Error(codes.Internal, "encode quorum failed")
 		}
 		resp.Data = qb
 	case rpcpb.QueryMsgType_TXSET:
@@ -286,14 +271,14 @@ func (s *NodeServer) Query(ctx context.Context, req *rpcpb.QueryRequest) (*rpcpb
 		txf.Init()
 		s.txsetFuture <- txf
 		if err := txf.Error(); err != nil {
-			return resp, fmt.Errorf("query txset failed: %v", err)
+			return resp, status.Errorf(codes.Internal, "query txset failed: %v", err)
 		}
 		if txf.TxSet == nil {
-			return resp, errors.New("cannot find txset")
+			return resp, status.Error(codes.NotFound, "txset not found")
 		}
 		txb, err := ultpb.Encode(txf.TxSet)
 		if err != nil {
-			return resp, fmt.Errorf("encode txset failed: %v", err)
+			return resp, status.Error(codes.Internal, "encode txset failed")
 		}
 		resp.Data = txb
 	case rpcpb.QueryMsgType_LEDGER:
@@ -301,14 +286,14 @@ func (s *NodeServer) Query(ctx context.Context, req *rpcpb.QueryRequest) (*rpcpb
 		lf.Init()
 		s.ledgerFuture <- lf
 		if err := lf.Error(); err != nil {
-			return resp, fmt.Errorf("query ledger failed: %v", err)
+			return resp, status.Errorf(codes.Internal, "query ledger failed: %v", err)
 		}
 		if lf.Ledger == nil {
-			return resp, errors.New("cannot find ledger")
+			return resp, status.Error(codes.NotFound, "ledger not found")
 		}
 		lb, err := ultpb.Encode(lf.Ledger)
 		if err != nil {
-			return resp, fmt.Errorf("encode ledger failed: %v", err)
+			return resp, status.Error(codes.Internal, "encode ledger failed")
 		}
 		resp.Data = lb
 	}
@@ -322,31 +307,31 @@ func (s *NodeServer) Notify(ctx context.Context, req *rpcpb.NotifyRequest) (*rpc
 	resp := &rpcpb.NotifyResponse{}
 
 	if err := s.validate(ctx, req.Data, req.Signature); err != nil {
-		return resp, fmt.Errorf("input validation faile: %v", err)
+		return resp, status.Errorf(codes.InvalidArgument, "input validation failed: %v", err)
 	}
 
 	switch req.MsgType {
 	case rpcpb.NotifyMsgType_TX:
 		tx, err := ultpb.DecodeTx(req.Data)
 		if err != nil {
-			return resp, fmt.Errorf("decode tx failed: %v", err)
+			return resp, status.Error(codes.InvalidArgument, "decode tx failed")
 		}
 		txf := &future.Tx{Tx: tx}
 		txf.Init()
 		s.txFuture <- txf
 		if err := txf.Error(); err != nil {
-			return resp, fmt.Errorf("add tx failed: %v", err)
+			return resp, status.Errorf(codes.Internal, "add tx failed: %v", err)
 		}
 	case rpcpb.NotifyMsgType_STATEMENT:
 		stmt, err := ultpb.DecodeStatement(req.Data)
 		if err != nil {
-			return resp, fmt.Errorf("decode statement failed: %v", err)
+			return resp, status.Error(codes.InvalidArgument, "decode statement failed")
 		}
 		sf := &future.Statement{Stmt: stmt}
 		sf.Init()
 		s.stmtFuture <- sf
 		if err := sf.Error(); err != nil {
-			return resp, fmt.Errorf("add statement failed: %v", err)
+			return resp, status.Errorf(codes.Internal, "add statement failed: %v", err)
 		}
 	}
 
