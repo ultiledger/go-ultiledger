@@ -186,33 +186,47 @@ func (s *NodeServer) SubmitTx(ctx context.Context, req *rpcpb.SubmitTxRequest) (
 	// decode pb to tx
 	tx, err := ultpb.DecodeTx(req.Data)
 	if err != nil {
+		resp.TxStatus.StatusCode = rpcpb.TxStatusCode_REJECTED
+		resp.TxStatus.ErrorMessage = "decode request data failed"
 		return resp, err
 	}
 
 	// get account key
 	accKey, err := crypto.DecodeKey(tx.AccountID)
 	if err != nil {
+		resp.TxStatus.StatusCode = rpcpb.TxStatusCode_REJECTED
+		resp.TxStatus.ErrorMessage = "decode account key failed"
 		return resp, err
 	}
 	if accKey.Code != crypto.KeyTypeAccountID {
+		resp.TxStatus.StatusCode = rpcpb.TxStatusCode_REJECTED
+		resp.TxStatus.ErrorMessage = "invalid account key type"
 		return resp, errors.New("invalid account ID")
 	}
 
 	// verify signature
 	if !crypto.VerifyByKey(accKey, req.Signature, req.Data) {
+		resp.TxStatus.StatusCode = rpcpb.TxStatusCode_REJECTED
+		resp.TxStatus.ErrorMessage = "signature verification failed"
 		return resp, errors.New("invalid signature")
 	}
 
 	// verify tx key
 	txKey, err := crypto.DecodeKey(req.TxKey)
 	if err != nil {
+		resp.TxStatus.StatusCode = rpcpb.TxStatusCode_REJECTED
+		resp.TxStatus.ErrorMessage = "decode tx key failed"
 		return resp, errors.New("decode tx key failed")
 	}
 	txHash, err := ultpb.SHA256HashBytes(tx)
 	if err != nil {
+		resp.TxStatus.StatusCode = rpcpb.TxStatusCode_REJECTED
+		resp.TxStatus.ErrorMessage = "compute tx hash failed"
 		return resp, errors.New("compute tx hash failed")
 	}
 	if !bytes.Equal(txHash[:], txKey.Hash[:]) {
+		resp.TxStatus.StatusCode = rpcpb.TxStatusCode_REJECTED
+		resp.TxStatus.ErrorMessage = "tx key hash mismatch"
 		return resp, errors.New("tx key hash mismatch")
 	}
 
@@ -220,8 +234,11 @@ func (s *NodeServer) SubmitTx(ctx context.Context, req *rpcpb.SubmitTxRequest) (
 	f.Init()
 	s.txFuture <- f
 	if err := f.Error(); err != nil {
+		resp.TxStatus.StatusCode = rpcpb.TxStatusCode_FAILED
+		resp.TxStatus.ErrorMessage = err.Error()
 		return resp, fmt.Errorf("submit tx failed: %v", err)
 	}
+	resp.TxStatus.StatusCode = rpcpb.TxStatusCode_ACCEPTED
 	return resp, nil
 }
 
