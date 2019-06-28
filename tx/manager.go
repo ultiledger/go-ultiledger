@@ -29,7 +29,7 @@ var (
 	ErrInvalidSeqNum      = errors.New("invalid sequence number")
 )
 
-// ManagerContext represents contextual information TxManager needs
+// ManagerContext represents contextual information TxManager needs.
 type ManagerContext struct {
 	Database    db.Database       // database instance
 	AM          *account.Manager  // account manager
@@ -59,7 +59,7 @@ func ValidateManagerContext(mc *ManagerContext) error {
 }
 
 // Manager manages incoming tx and coordinate with ledger manager
-// and consensus engine
+// and consensus engine.
 type Manager struct {
 	database db.Database
 	bucket   string
@@ -92,7 +92,7 @@ type Manager struct {
 	stopChan chan struct{}
 }
 
-// NewManager creates an instance of Manager with TxManagerContext
+// NewManager creates an instance of Manager with TxManagerContext.
 func NewManager(ctx *ManagerContext) *Manager {
 	if err := ValidateManagerContext(ctx); err != nil {
 		log.Fatalf("tx manager context is invalid: %v", err)
@@ -121,7 +121,7 @@ func NewManager(ctx *ManagerContext) *Manager {
 	return tm
 }
 
-// Start the internal event loop for tx manager
+// Start the internal event loop for tx manager.
 func (tm *Manager) Start() {
 	go func() {
 		for {
@@ -139,12 +139,12 @@ func (tm *Manager) Start() {
 	}()
 }
 
-// Stop tx manager by closing stopChan to notify goroutines to stop
+// Stop tx manager by closing stopChan to notify goroutines to stop.
 func (tm *Manager) Stop() {
 	close(tm.stopChan)
 }
 
-// Add transaction to internal pending set
+// Add transaction to internal pending set.
 func (tm *Manager) AddTx(txKey string, tx *ultpb.Tx) error {
 	if tm.txSet.Contains(txKey) {
 		// directly return for duplicate tx
@@ -200,7 +200,7 @@ func (tm *Manager) AddTx(txKey string, tx *ultpb.Tx) error {
 	return nil
 }
 
-// Apply the tx list by charging fees and applying all the ops
+// Apply the tx list by charging fees and applying all the ops.
 func (tm *Manager) ApplyTxList(txList []*ultpb.Tx) error {
 	// sort tx by sequence number
 	sort.Sort(TxSlice(txList))
@@ -326,7 +326,7 @@ func (tm *Manager) ApplyTxList(txList []*ultpb.Tx) error {
 	return nil
 }
 
-// Get concatenated tx list of each account
+// Get concatenated tx list of each account.
 func (tm *Manager) GetTxList() []*ultpb.Tx {
 	var txList []*ultpb.Tx
 
@@ -340,7 +340,7 @@ func (tm *Manager) GetTxList() []*ultpb.Tx {
 	return txList
 }
 
-// Delete tx list from the manager and update internal fields
+// Delete tx list from the manager and update internal fields.
 func (tm *Manager) DeleteTxList(txList []*ultpb.Tx) {
 	accTxMap := make(map[string][]string)
 	for _, tx := range txList {
@@ -364,7 +364,7 @@ func (tm *Manager) DeleteTxList(txList []*ultpb.Tx) {
 	}
 }
 
-// Get the status of tx
+// Get the status of tx.
 func (tm *Manager) GetTxStatus(txKey string) (*rpcpb.TxStatus, error) {
 	if tx, ok := tm.txStatus.Get(txKey); ok {
 		return tx.(*rpcpb.TxStatus), nil
@@ -401,6 +401,7 @@ func (tm *Manager) UpdateTxStatus(txKey string, status *rpcpb.TxStatus) error {
 	if err != nil {
 		return fmt.Errorf("save status in db failed: %v", err)
 	}
+	tm.txStatus.Add(txKey, status)
 
 	return nil
 }
