@@ -5,6 +5,7 @@ package rpcpb;
 service Node {
   rpc Hello(HelloRequest) returns (HelloResponse) {}
   rpc SubmitTx(SubmitTxRequest) returns (SubmitTxResponse) {}
+  rpc QueryTx(QueryTxRequest) returns (QueryTxResponse) {}
   rpc Notify(NotifyRequest) returns (NotifyResponse) {}
   rpc Query(QueryRequest) returns (QueryResponse) {}
 }
@@ -37,6 +38,15 @@ message SubmitTxRequest {
 }
 
 message SubmitTxResponse {
+  TxStatus TxStatus = 1;
+}
+
+message QueryTxRequest {
+  // transaction ULTKey
+  string TxKey = 1;
+}
+
+message QueryTxResponse {
   TxStatus TxStatus = 1;
 }
 
