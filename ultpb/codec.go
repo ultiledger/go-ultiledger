@@ -179,6 +179,15 @@ func DecodeLedger(b []byte) (*Ledger, error) {
 	return ledger, nil
 }
 
+// Decode pb message to ledger header.
+func DecodeLedgerHeader(b []byte) (*LedgerHeader, error) {
+	ledgerHeader := &LedgerHeader{}
+	if err := proto.Unmarshal(b, ledgerHeader); err != nil {
+		return nil, err
+	}
+	return ledgerHeader, nil
+}
+
 // Decode pb message to consensus value
 func DecodeConsensusValue(b []byte) (*ConsensusValue, error) {
 	cv := &ConsensusValue{}

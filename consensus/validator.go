@@ -11,6 +11,7 @@ import (
 	b58 "github.com/mr-tron/base58/base58"
 
 	"github.com/ultiledger/go-ultiledger/db"
+	"github.com/ultiledger/go-ultiledger/ledger"
 	"github.com/ultiledger/go-ultiledger/log"
 	"github.com/ultiledger/go-ultiledger/ultpb"
 )
@@ -18,6 +19,7 @@ import (
 // ValidatorContext contains contextual information validator needs
 type ValidatorContext struct {
 	Database           db.Database // database instance
+	LM                 *ledger.Manager
 	QuorumDownloadChan chan<- string
 	TxSetDownloadChan  chan<- string
 }
@@ -28,6 +30,9 @@ func ValidateValidatorContext(vc *ValidatorContext) error {
 	}
 	if vc.Database == nil {
 		return fmt.Errorf("db instance is nil")
+	}
+	if vc.LM == nil {
+		return fmt.Errorf("ledger manager is nil")
 	}
 	if vc.QuorumDownloadChan == nil {
 		return fmt.Errorf("quorum download chan is nil")
@@ -45,6 +50,8 @@ type Validator struct {
 	database db.Database
 	bucket   string
 
+	lm *ledger.Manager
+
 	// statements which are downloading
 	rwm       sync.RWMutex
 	downloads map[string]*Statement
@@ -54,8 +61,6 @@ type Validator struct {
 
 	// quorum hash to quorum LRU cache
 	quorumCache *lru.Cache
-	// txset hash to txset LRU cache
-	txsetCache *lru.Cache
 
 	// channel for sending quorum download task
 	quorumDownloadChan chan<- string
@@ -78,6 +83,7 @@ func NewValidator(ctx *ValidatorContext) *Validator {
 	v := &Validator{
 		database:           ctx.Database,
 		bucket:             "VALIDATOR",
+		lm:                 ctx.LM,
 		downloads:          make(map[string]*Statement),
 		statements:         mapset.NewSet(),
 		quorumDownloadChan: ctx.QuorumDownloadChan,
@@ -97,12 +103,6 @@ func NewValidator(ctx *ValidatorContext) *Validator {
 		log.Fatalf("create quorum LRU cache failed: %v", err)
 	}
 	v.quorumCache = qc
-
-	tc, err := lru.New(1000)
-	if err != nil {
-		log.Fatalf("create tx list LRU cache failed: %v", err)
-	}
-	v.txsetCache = tc
 
 	// listening for download task
 	go v.download()
@@ -179,21 +179,20 @@ func (v *Validator) RecvQuorum(quorumHash string, quorum *Quorum) error {
 
 // Receive downloaded txset and save it to db and cache
 func (v *Validator) RecvTxSet(txsetHash string, txset *TxSet) error {
-	// encode txset to pb format
-	tb, err := ultpb.Encode(txset)
+	err := v.lm.AddTxSet(txsetHash, txset)
 	if err != nil {
-		return fmt.Errorf("encode txset failed: %v", err)
+		return err
 	}
-
-	// save the txset in db first
-	err = v.database.Put(v.bucket, []byte(txsetHash), tb)
-	if err != nil {
-		return fmt.Errorf("save tx list to db failed: %v", err)
-	}
-
-	v.txsetCache.Add(txsetHash, txset)
-
 	return nil
+}
+
+// Get the txset from ledger manager.
+func (v *Validator) GetTxSet(txsetHash string) (*TxSet, error) {
+	txset, err := v.lm.GetTxSet(txsetHash)
+	if err != nil {
+		return nil, err
+	}
+	return txset, nil
 }
 
 // Get the quorum of the corresponding quorum hash,
@@ -219,31 +218,6 @@ func (v *Validator) GetQuorum(quorumHash string) (*Quorum, error) {
 	v.quorumCache.Add(quorumHash, quorum)
 
 	return quorum, nil
-}
-
-// Get the txset of the corresponding txset hash
-func (v *Validator) GetTxSet(txsetHash string) (*TxSet, error) {
-	if txs, ok := v.txsetCache.Get(txsetHash); ok {
-		return txs.(*TxSet), nil
-	}
-
-	txb, err := v.database.Get(v.bucket, []byte(txsetHash))
-	if err != nil {
-		return nil, fmt.Errorf("get txset from db failed: %v", err)
-	}
-	if txb == nil {
-		return nil, nil
-	}
-
-	txset, err := ultpb.DecodeTxSet(txb)
-	if err != nil {
-		return nil, fmt.Errorf("decode txset failed: %v", err)
-	}
-
-	// cache the txset
-	v.txsetCache.Add(txsetHash, txset)
-
-	return txset, nil
 }
 
 // Monitor downloaded statement and dispatch to ready channel
@@ -283,7 +257,7 @@ func (v *Validator) download() {
 
 			txsetHashes, _ := extractTxSetHash(stmt)
 			for _, txsetHash := range txsetHashes {
-				txset, _ := v.GetTxSet(txsetHash)
+				txset, _ := v.lm.GetTxSet(txsetHash)
 				if txset == nil {
 					v.txsetDownloadChan <- txsetHash
 				}
@@ -315,7 +289,7 @@ func (v *Validator) validate(stmt *Statement) (bool, error) {
 	}
 
 	for _, txsetHash := range txsetHashes {
-		txset, err := v.GetTxSet(txsetHash)
+		txset, err := v.lm.GetTxSet(txsetHash)
 		if err != nil {
 			return false, fmt.Errorf("query txset failed: %v", err)
 		}

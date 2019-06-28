@@ -75,8 +75,9 @@ func ValidateManagerContext(mc *ManagerContext) error {
 // Ledger manager is responsible for all the operations on the ledger.
 type Manager struct {
 	// db store and corresponding bucket
-	database db.Database
-	bucket   string
+	database    db.Database
+	bucket      string
+	txsetBucket string
 
 	// ledger downloader
 	downloader *Downloader
@@ -89,6 +90,9 @@ type Manager struct {
 
 	// LRU cache for ledger headers
 	headers *lru.Cache
+
+	// LRU cache for txset
+	txsetCache *lru.Cache
 
 	// ledger buffer for unclosed headers
 	buffer *CloseInfoBuffer
@@ -136,11 +140,19 @@ func NewManager(ctx *ManagerContext) *Manager {
 		startTime:   time.Now().Unix(),
 		stopChan:    make(chan struct{}),
 	}
-	cache, err := lru.New(1000)
+
+	cache, err := lru.New(100)
 	if err != nil {
 		log.Fatalf("create ledger manager LRU cache failed: %v", err)
 	}
 	lm.headers = cache
+
+	txscache, err := lru.New(100)
+	if err != nil {
+		log.Fatalf("create txset LRU cache failed: %v", err)
+	}
+	lm.txsetCache = txscache
+
 	err = lm.database.NewBucket(lm.bucket)
 	if err != nil {
 		log.Fatalf("create db bucket %s failed: %v", lm.bucket, err)
@@ -245,24 +257,93 @@ func (lm *Manager) LedgerSynced() bool {
 }
 
 // Get the ledger header by ledger sequence.
-func (lm *Manager) GetLedger(seq string) (*ultpb.Ledger, error) {
-	lgr, ok := lm.headers.Get(seq)
+func (lm *Manager) GetLedgerHeader(seq string) (*ultpb.LedgerHeader, error) {
+	// get ledger header
+	var header *ultpb.LedgerHeader
+	h, ok := lm.headers.Get(seq)
 	if ok {
-		return lgr.(*ultpb.Ledger), nil
+		header = h.(*ultpb.LedgerHeader)
+	} else {
+		lb, err := lm.database.Get(lm.bucket, []byte(seq))
+		if err != nil {
+			return nil, fmt.Errorf("query ledger from db failed: %v", err)
+		}
+		if lb == nil {
+			return nil, nil
+		}
+		header, err = ultpb.DecodeLedgerHeader(lb)
+		if err != nil {
+			return nil, fmt.Errorf("decode ledger failed: %v", err)
+		}
+		lm.headers.Add(seq, header)
 	}
-	lb, err := lm.database.Get(lm.bucket, []byte(seq))
+	return header, nil
+}
+
+// Get the ledger by ledger sequence.
+func (lm *Manager) GetLedger(seq string) (*ultpb.Ledger, error) {
+	// get ledger header
+	header, err := lm.GetLedgerHeader(seq)
 	if err != nil {
-		return nil, fmt.Errorf("query ledger from db failed: %v", err)
+		return nil, fmt.Errorf("get ledger header failed: %v", err)
 	}
-	if lb == nil {
+	if header == nil {
+		return nil, errors.New("ledger header not exist")
+	}
+	// get txset
+	txset, err := lm.GetTxSet(header.TxSetHash)
+	if err != nil {
+		return nil, fmt.Errorf("get txset failed: %v", err)
+	}
+	ledger := &ultpb.Ledger{
+		LedgerHeader: header,
+		TxSet:        txset,
+	}
+	return ledger, nil
+}
+
+// Add txset and save it to db and cache.
+func (lm *Manager) AddTxSet(txsetHash string, txset *ultpb.TxSet) error {
+	// encode txset to pb format
+	tb, err := ultpb.Encode(txset)
+	if err != nil {
+		return fmt.Errorf("encode txset failed: %v", err)
+	}
+
+	// save the txset in db first
+	err = lm.database.Put(lm.txsetBucket, []byte(txsetHash), tb)
+	if err != nil {
+		return fmt.Errorf("save tx list to db failed: %v", err)
+	}
+
+	lm.txsetCache.Add(txsetHash, txset)
+
+	return nil
+}
+
+// Get the txset of the corresponding txset hash.
+func (lm *Manager) GetTxSet(txsetHash string) (*ultpb.TxSet, error) {
+	if txs, ok := lm.txsetCache.Get(txsetHash); ok {
+		return txs.(*ultpb.TxSet), nil
+	}
+
+	txb, err := lm.database.Get(lm.txsetBucket, []byte(txsetHash))
+	if err != nil {
+		return nil, fmt.Errorf("get txset from db failed: %v", err)
+	}
+	if txb == nil {
 		return nil, nil
 	}
-	ledger, err := ultpb.DecodeLedger(lb)
+
+	txset, err := ultpb.DecodeTxSet(txb)
 	if err != nil {
-		return nil, fmt.Errorf("decode ledger failed: %v", err)
+		return nil, fmt.Errorf("decode txset failed: %v", err)
 	}
-	lm.headers.Add(seq, ledger)
-	return ledger, nil
+
+	// cache the txset
+	lm.txsetCache.Add(txsetHash, txset)
+
+	return txset, nil
 }
 
 // Receive externalized consensus value and do appropriate operations
@@ -323,6 +404,8 @@ func (lm *Manager) closeLedger(index uint64, value string, txset *ultpb.TxSet) e
 	if err != nil {
 		return fmt.Errorf("get txset hash failed: %v", err)
 	}
+
+	// TODO(bobonovski) save the txset in db
 
 	err = lm.advanceLedger(index, txset.PrevLedgerHash, txsetHash, value)
 	if err != nil {
