@@ -20,7 +20,7 @@ import (
 // it does not contain any handlers of internal components, all the
 // requests are processed by passing futures to internal Node which
 // controls all the internal components to generate corresponding
-// responses and errors
+// responses and errors.
 type NodeServer struct {
 	addr   string // Network address of this node
 	nodeID string // ID of this node (public key)
@@ -234,11 +234,25 @@ func (s *NodeServer) SubmitTx(ctx context.Context, req *rpcpb.SubmitTxRequest) (
 	f.Init()
 	s.txFuture <- f
 	if err := f.Error(); err != nil {
-		resp.TxStatus.StatusCode = rpcpb.TxStatusCode_FAILED
+		resp.TxStatus.StatusCode = rpcpb.TxStatusCode_REJECTED
 		resp.TxStatus.ErrorMessage = err.Error()
 		return resp, fmt.Errorf("submit tx failed: %v", err)
 	}
 	resp.TxStatus.StatusCode = rpcpb.TxStatusCode_ACCEPTED
+	return resp, nil
+}
+
+// QueryTx querys the status of the transaction.
+func (s *NodeServer) QueryTx(ctx context.Context, req *rpcpb.QueryTxRequest) (*rpcpb.QueryTxResponse, error) {
+	resp := &rpcpb.QueryTxResponse{}
+
+	f := &future.TxStatus{TxKey: req.TxKey}
+	f.Init()
+	s.txsFuture <- f
+	if err := f.Error(); err != nil {
+		return resp, fmt.Errorf("query tx status failed: %v", err)
+	}
+	resp.TxStatus = f.TxStatus
 	return resp, nil
 }
 
