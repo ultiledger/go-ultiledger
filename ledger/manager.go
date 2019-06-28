@@ -102,6 +102,9 @@ type Manager struct {
 	// the number of ledgers processed
 	ledgerHeaderCount int64
 
+	// the largest consensus index that the manager met
+	largestConsensusIndex uint64
+
 	// previous committed ledger header
 	prevLedgerHeader *ultpb.LedgerHeader
 	// hash of previous committed ledger header
@@ -255,20 +258,27 @@ func (lm *Manager) RecvExtVal(index uint64, value string, txset *ultpb.TxSet) er
 					return fmt.Errorf("close ledger failed: %v", err)
 				}
 			} else {
-				log.Fatalw("ledger hash inconsistent", "prevHash", txset.PrevLedgerHash, "currhash", lm.CurrLedgerHeaderHash())
+				log.Fatalw("ledger hash inconsistent", "prevHash", txset.PrevLedgerHash, "currHash", lm.CurrLedgerHeaderHash())
 			}
 			log.Infow("ledger closed successfully", "prevHash", lm.prevLedgerHeaderHash, "currHash", lm.currLedgerHeaderHash, "nextSeq", lm.NextLedgerHeaderSeq())
+			lm.largestConsensusIndex = index
 			lm.ledgerState = LedgerStateSynced
 		} else if index < lm.NextLedgerHeaderSeq() { // old case
-			log.Warnw("received value is old", "nextseq", lm.NextLedgerHeaderSeq())
+			log.Warnw("received consensus value is old", "nextSeq", lm.NextLedgerHeaderSeq())
 		} else { // new case
-			lm.ledgerState = LedgerStateSyncing
 			lm.buffer.Append(&CloseInfo{Index: index, Value: value, TxSet: txset})
+			if index <= lm.largestConsensusIndex {
+				// we came across an older unprocessed consensus value
+				// which should be on the way of downloading.
+				return nil
+			}
 			// start to download missing ledgers
-			err := lm.downloader.AddTask(lm.NextLedgerHeaderSeq(), index-1)
+			err := lm.downloader.AddTask(lm.largestConsensusIndex+1, index-1)
 			if err != nil {
 				return fmt.Errorf("add task to downloader failed: %v", err)
 			}
+			lm.largestConsensusIndex = index
+			lm.ledgerState = LedgerStateSyncing
 		}
 	case LedgerStateSyncing:
 		// append to buffer until local ledger catches up

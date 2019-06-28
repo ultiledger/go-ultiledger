@@ -23,20 +23,20 @@ func (b *CloseInfoBuffer) Clear() {
 	b.infos = nil
 }
 
-// Append info the the tail of the buffer by checking whether
+// Append new info to the tail of the buffer by checking whether
 // the new info is the expected next-to-the-sequence info.
 func (b *CloseInfoBuffer) Append(info *CloseInfo) {
 	if info == nil {
 		return
 	}
+	b.rwm.Lock()
+	defer b.rwm.Unlock()
 	if len(b.infos) > 0 {
 		lastInfo := b.infos[len(b.infos)-1]
 		if lastInfo.Index+1 != info.Index {
 			return
 		}
 	}
-	b.rwm.Lock()
-	defer b.rwm.Unlock()
 	b.infos = append(b.infos, info)
 }
 

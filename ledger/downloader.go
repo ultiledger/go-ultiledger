@@ -15,19 +15,12 @@ import (
 	"github.com/ultiledger/go-ultiledger/ultpb"
 )
 
-type DownloaderState uint8
-
-const (
-	DownloaderStateFree DownloaderState = iota
-	DownloaderStateBusy
-)
-
 type DownloadRange struct {
 	StartIndex uint64
 	EndIndex   uint64
 }
 
-// Downloader downloads missing ledgers from peers
+// Downloader downloads missing ledgers from peers.
 type Downloader struct {
 	database db.Database
 	bucket   string
@@ -38,19 +31,11 @@ type Downloader struct {
 	// seed of local node
 	seed string
 
-	// start and end index of ledger to download
-	// when the downloader is busy
-	startIndex uint64
-	endIndex   uint64
-
 	// next index waiting for processing by ledger manager
 	nextIndex uint64
 
 	// ledger index to close info map
 	infoMap map[uint64]*CloseInfo
-
-	// current state of downloader
-	state DownloaderState
 
 	// channel for dispatching download task
 	rangeChan chan *DownloadRange
@@ -65,79 +50,69 @@ type Downloader struct {
 	stopChan chan struct{}
 }
 
-// Create a new instance of downloader
+// Create a new instance of downloader.
 func NewDownloader(db db.Database, pm *peer.Manager) *Downloader {
 	dlr := &Downloader{
-		database:   db,
-		bucket:     "DOWNLOADER",
-		pm:         pm,
-		startIndex: uint64(0),
-		endIndex:   uint64(0),
-		nextIndex:  uint64(0),
-		infoMap:    make(map[uint64]*CloseInfo),
-		state:      DownloaderStateFree,
-		rangeChan:  make(chan *DownloadRange),
-		readyChan:  make(chan *CloseInfo),
-		stopChan:   make(chan struct{}),
+		database:  db,
+		bucket:    "DOWNLOADER",
+		pm:        pm,
+		nextIndex: uint64(0),
+		infoMap:   make(map[uint64]*CloseInfo),
+		rangeChan: make(chan *DownloadRange, 1),
+		readyChan: make(chan *CloseInfo),
+		stopChan:  make(chan struct{}),
 	}
 
 	return dlr
 }
 
-// Add download task with start index and end index
+// Add download task with start index and end index.
 func (d *Downloader) AddTask(start uint64, end uint64) error {
-	if d.state != DownloaderStateFree {
-		return errors.New("downloader is busy now")
-	}
 	if start > end {
 		return errors.New("invalid ledger index range")
 	}
 
-	d.startIndex = start
-	d.endIndex = end
-	d.nextIndex = start
+	log.Infow("received ledger download task", "start", start, "end", end)
 
-	log.Infow("received ledger download task", "start", d.startIndex, "end", d.endIndex)
-
-	d.rangeChan <- &DownloadRange{StartIndex: d.startIndex, EndIndex: d.endIndex}
+	d.rangeChan <- &DownloadRange{StartIndex: start, EndIndex: end}
 
 	return nil
 }
 
-// Start the downloader
+// Start the downloader.
 func (d *Downloader) Start() {
 	go d.run()
 	go d.reorder()
 }
 
-// Stop the downloader by notifying goroutines to stop
+// Stop the downloader by notifying goroutines to stop.
 func (d *Downloader) Stop() {
 	close(d.stopChan)
 	d.infoMap = nil
 }
 
-// Ready returns downloaded ledgers from start index to end index
+// Ready returns downloaded ledgers from start index to end index.
 func (d *Downloader) Ready() <-chan *CloseInfo {
 	return d.readyChan
 }
 
-// Event loop for handling download task
+// Event loop for handling download task.
 func (d *Downloader) run() {
 	for {
 		select {
 		case tr := <-d.rangeChan:
+			d.nextIndex = tr.StartIndex
 			err := d.download(tr)
 			if err != nil {
 				log.Errorf("download task failed: %v", err, "start", tr.StartIndex, "end", tr.EndIndex)
 			}
-			d.state = DownloaderStateFree
 		case <-d.stopChan:
 			return
 		}
 	}
 }
 
-// Reorder received CloseInfo in expected return order
+// Reorder received CloseInfo in expected return order.
 func (d *Downloader) reorder() {
 	for {
 		select {

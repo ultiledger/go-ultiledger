@@ -7,10 +7,8 @@ import "github.com/ultiledger/go-ultiledger/ultpb"
 type CloseInfo struct {
 	// decree index
 	Index uint64
-
 	// encoded consensus value
 	Value string
-
 	// transaction set
 	TxSet *ultpb.TxSet
 }
