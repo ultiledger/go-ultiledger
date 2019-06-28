@@ -11,7 +11,7 @@ type Future interface {
 	Error() error
 }
 
-// Allow a future to respond an error in the future
+// Allow a future to respond an error in the future.
 type deferError struct {
 	err       error
 	errChan   chan error
@@ -19,7 +19,7 @@ type deferError struct {
 }
 
 // Every future should call this method to initialize
-// underlying error channel
+// underlying error channel.
 func (d *deferError) Init() {
 	d.errChan = make(chan error, 1)
 }
@@ -36,7 +36,7 @@ func (d *deferError) Respond(err error) {
 	d.responded = true
 }
 
-// Error always return the first responded error
+// Error always return the first responded error.
 func (d *deferError) Error() error {
 	if d.err != nil {
 		return d.err
@@ -48,40 +48,47 @@ func (d *deferError) Error() error {
 	return d.err
 }
 
-// Future for node server to add received tx to consensus engine
+// Future for node server to add received tx to consensus engine.
 type Tx struct {
 	deferError
 	TxKey string
 	Tx    *ultpb.Tx
 }
 
-// Future for node server to add new discovered peer address to peer manager
+// Future for node server to add new discovered peer address to peer manager.
 type Peer struct {
 	deferError
 	Addr string
 }
 
-// Future for node server to add consensus statement to consensus engine
+// Future for node server to add consensus statement to consensus engine.
 type Statement struct {
 	deferError
 	Stmt *ultpb.Statement
 }
 
-// Future for node server to query txset
+// Future for node server to query txset.
 type TxSet struct {
 	deferError
 	TxSetHash string
 	TxSet     *ultpb.TxSet
 }
 
-// Future for node server to query quorum
+// Future for node server to query quorum.
 type Quorum struct {
 	deferError
 	QuorumHash string
 	Quorum     *ultpb.Quorum
 }
 
-// Future for node server to query tx status
+// Future for node server to query ledger.
+type Ledger struct {
+	deferError
+	LedgerSeq uint64
+	Ledger    *ultpb.Ledger
+}
+
+// Future for node server to query tx status.
 type TxStatus struct {
 	deferError
 	TxKey    string
