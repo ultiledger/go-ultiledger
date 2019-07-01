@@ -272,6 +272,12 @@ func getSingletonQuorum(nodeID string) *Quorum {
 	return quorum
 }
 
+// Normalize quorum for the convenience of computing node weights.
+func normalizeQuorum(quorum *Quorum, nodeID string) {
+	simplifyQuorum(quorum, nodeID)
+	sortQuorum(quorum)
+}
+
 // Simplify quorum by eliminating unnecessary nesting structures.
 func simplifyQuorum(quorum *Quorum, nodeID string) {
 	// remove self from validators
