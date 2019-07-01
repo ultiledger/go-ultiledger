@@ -10,7 +10,7 @@ import (
 	"github.com/ultiledger/go-ultiledger/ultpb"
 )
 
-// Type alias for proto types
+// Type alias for proto types.
 type (
 	Statement      = ultpb.Statement
 	Nominate       = ultpb.Nominate
@@ -23,7 +23,7 @@ type (
 	ConsensusValue = ultpb.ConsensusValue
 )
 
-// Ballots compare utilities
+// Ballots comparison utilities.
 func lessAndCompatibleBallots(lb *Ballot, rb *Ballot) bool {
 	if compareBallots(lb, rb) <= 0 && compatibleBallots(lb, rb) {
 		return true
@@ -38,7 +38,7 @@ func lessAndIncompatibleBallots(lb *Ballot, rb *Ballot) bool {
 	return false
 }
 
-// Compare two ballots by counter then value
+// Compare two ballots by counter then value.
 func compareBallots(lb *Ballot, rb *Ballot) int {
 	// check input with nil ballot
 	if lb == nil && rb == nil {
@@ -59,7 +59,7 @@ func compareBallots(lb *Ballot, rb *Ballot) int {
 	return strings.Compare(lb.Value, rb.Value)
 }
 
-// Check whether the two ballots has the same value
+// Check whether the two ballots has the same value.
 func compatibleBallots(lb *Ballot, rb *Ballot) bool {
 	if lb == nil || rb == nil {
 		return false
@@ -72,7 +72,7 @@ func compatibleBallots(lb *Ballot, rb *Ballot) bool {
 	return false
 }
 
-// Check whether the latter ballot statement is newer than the first one
+// Check whether the latter ballot statement is newer than the first one.
 func isNewerBallot(lb *Statement, rb *Statement) bool {
 	// check statement type
 	if lb.StatementType != rb.StatementType {
@@ -123,7 +123,7 @@ func isNewerBallot(lb *Statement, rb *Statement) bool {
 	return false
 }
 
-// Check whether the first set is the proper subset of the second subset
+// Check whether the first set is the proper subset of the second subset.
 func isProperSubset(a []string, b []string) bool {
 	if len(a) > len(b) {
 		return false
@@ -142,7 +142,7 @@ func isProperSubset(a []string, b []string) bool {
 	return false
 }
 
-// Check whether the latter nomination contains all the information of the first one
+// Check whether the latter nomination contains all the information of the first one.
 func isNewerNomination(anom *ultpb.Nominate, bnom *ultpb.Nominate) bool {
 	if anom == nil && bnom != nil {
 		return true
@@ -160,7 +160,7 @@ func isNewerNomination(anom *ultpb.Nominate, bnom *ultpb.Nominate) bool {
 	return false
 }
 
-// Check whether the input node set form V-blocking for input quorum
+// Check whether the input node set form V-blocking for input quorum.
 func isVblocking(quorum *ultpb.Quorum, nodeSet mapset.Set) bool {
 	qsize := float64(len(quorum.Validators) + len(quorum.NestQuorums))
 	threshold := int(math.Ceil(qsize * (1.0 - quorum.Threshold)))
@@ -186,7 +186,7 @@ func isVblocking(quorum *ultpb.Quorum, nodeSet mapset.Set) bool {
 	return false
 }
 
-// Check whether the input node set form quorum slice for input quorum
+// Check whether the input node set form quorum slice for input quorum.
 func isQuorumSlice(quorum *ultpb.Quorum, nodeSet mapset.Set) bool {
 	qsize := float64(len(quorum.Validators) + len(quorum.NestQuorums))
 	threshold := int(math.Ceil(qsize * quorum.Threshold))
@@ -212,7 +212,36 @@ func isQuorumSlice(quorum *ultpb.Quorum, nodeSet mapset.Set) bool {
 	return false
 }
 
-// Build a quorum with one node
+// Check whether the quorum is valid.
+func isValidQuorum(quorum *ultpb.Quorum, depth int, extraChecks bool) bool {
+	// quorum depth cannot be greater than two
+	if depth > 2 {
+		return false
+	}
+	if quorum.Threshold <= 0.0 || quorum.Threshold > 1.0 {
+		return false
+	}
+
+	nodes := mapset.NewSet()
+	if extraChecks && quorum.Threshold < 1.0-quorum.Threshold {
+		return false
+	}
+	for _, v := range quorum.Validators {
+		// duplicate validators are not allowed
+		if nodes.Contains(v) {
+			return false
+		}
+		nodes.Add(v)
+	}
+	for _, q := range quorum.NestQuorums {
+		if isValidQuorum(q, depth+1, extraChecks) {
+			return false
+		}
+	}
+	return true
+}
+
+// Build a quorum with one node.
 func getSingletonQuorum(nodeID string) *Quorum {
 	quorum := &Quorum{
 		Threshold:  1.0,
@@ -221,7 +250,7 @@ func getSingletonQuorum(nodeID string) *Quorum {
 	return quorum
 }
 
-// Get current working ballot
+// Get current working ballot.
 func getWorkingBallot(stmt *Statement) *Ballot {
 	var wb *Ballot
 
