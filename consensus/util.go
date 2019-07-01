@@ -2,6 +2,7 @@ package consensus
 
 import (
 	"math"
+	"sort"
 	"strings"
 
 	"github.com/deckarep/golang-set"
@@ -160,6 +161,27 @@ func isNewerNomination(anom *ultpb.Nominate, bnom *ultpb.Nominate) bool {
 	return false
 }
 
+// Get current working ballot.
+func getWorkingBallot(stmt *Statement) *Ballot {
+	var wb *Ballot
+
+	switch stmt.StatementType {
+	case ultpb.StatementType_PREPARE:
+		prepare := stmt.GetPrepare()
+		wb = prepare.B
+	case ultpb.StatementType_CONFIRM:
+		confirm := stmt.GetConfirm()
+		wb = &Ballot{Value: confirm.B.Value, Counter: confirm.LC}
+	case ultpb.StatementType_EXTERNALIZE:
+		ext := stmt.GetExternalize()
+		wb = ext.B
+	default:
+		log.Fatal(ErrUnknownStmtType)
+	}
+
+	return wb
+}
+
 // Check whether the input node set form V-blocking for input quorum.
 func isVblocking(quorum *ultpb.Quorum, nodeSet mapset.Set) bool {
 	qsize := float64(len(quorum.Validators) + len(quorum.NestQuorums))
@@ -250,23 +272,35 @@ func getSingletonQuorum(nodeID string) *Quorum {
 	return quorum
 }
 
-// Get current working ballot.
-func getWorkingBallot(stmt *Statement) *Ballot {
-	var wb *Ballot
-
-	switch stmt.StatementType {
-	case ultpb.StatementType_PREPARE:
-		prepare := stmt.GetPrepare()
-		wb = prepare.B
-	case ultpb.StatementType_CONFIRM:
-		confirm := stmt.GetConfirm()
-		wb = &Ballot{Value: confirm.B.Value, Counter: confirm.LC}
-	case ultpb.StatementType_EXTERNALIZE:
-		ext := stmt.GetExternalize()
-		wb = ext.B
-	default:
-		log.Fatal(ErrUnknownStmtType)
+// Simplify quorum by eliminating unnecessary nesting structures.
+func simplifyQuorum(quorum *Quorum, nodeID string) {
+	// remove self from validators
+	var validators []string
+	for _, v := range quorum.Validators {
+		if v == nodeID {
+			continue
+		}
+		validators = append(validators, v)
 	}
+	quorum.Validators = validators
+	// remove self from nested quorums
+	for i, _ := range quorum.NestQuorums {
+		simplifyQuorum(quorum.NestQuorums[i], nodeID)
+	}
+	// flatten unnecessary nesting quorums
+	if quorum.Threshold == 1.0 && len(quorum.Validators) == 0 && len(quorum.NestQuorums) == 1 {
+		quorum = quorum.NestQuorums[0]
+	}
+}
 
-	return wb
+// Sort the quorum by validators then nest quorums.
+func sortQuorum(quorum *Quorum) {
+	// sort validators
+	sort.Strings(quorum.Validators)
+	// sort validators of nest quorums
+	for i, _ := range quorum.NestQuorums {
+		sortQuorum(quorum.NestQuorums[i])
+	}
+	// sort nest quorums
+	sort.Sort(QuorumSlice(quorum.NestQuorums))
 }
