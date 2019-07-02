@@ -1684,8 +1684,8 @@ func (d *Decree) validateConsensusValueFull(cv *ConsensusValue, isNomination boo
 		}
 	}
 	// check the existance of the txset
-	_, err := d.lm.GetTxSet(cv.TxSetHash)
-	if err != nil {
+	txset, err := d.lm.GetTxSet(cv.TxSetHash)
+	if err != nil || txset == nil {
 		return fmt.Errorf("get txset failed: %v", err)
 	}
 	return nil
