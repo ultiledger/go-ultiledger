@@ -310,3 +310,16 @@ func sortQuorum(quorum *Quorum) {
 	// sort nest quorums
 	sort.Sort(QuorumSlice(quorum.NestQuorums))
 }
+
+// Get all the nodes from the quorum.
+func getQuorumNodes(quorum *Quorum) []string {
+	var nodes []string
+	for _, v := range quorum.Validators {
+		nodes = append(nodes, v)
+	}
+	for _, q := range quorum.NestQuorums {
+		n := getQuorumNodes(q)
+		nodes = append(nodes, n...)
+	}
+	return nodes
+}

@@ -13,7 +13,7 @@ const (
 	RoundDown
 )
 
-// Compare two price
+// Compare two prices.
 func ComparePrice(lhs *ultpb.Price, rhs *ultpb.Price) int {
 	l := big.NewRat(lhs.Numerator, lhs.Denominator)
 	r := big.NewRat(rhs.Numerator, rhs.Denominator)
@@ -21,7 +21,7 @@ func ComparePrice(lhs *ultpb.Price, rhs *ultpb.Price) int {
 	return l.Cmp(r)
 }
 
-// Multiply two int64 number
+// Multiply two int64 numbers.
 func MultiplyInt64(lhs int64, rhs int64) *big.Int {
 	l := big.NewInt(lhs)
 	r := big.NewInt(rhs)
@@ -33,7 +33,7 @@ func MultiplyInt64(lhs int64, rhs int64) *big.Int {
 }
 
 // Divide the value by an int64 number and round
-// the result based on RoundType
+// the result based on RoundType.
 func DivideBigInt(val *big.Int, divisor int64, roundType RoundType) int64 {
 	div := big.NewInt(divisor)
 

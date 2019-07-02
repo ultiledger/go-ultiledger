@@ -2,6 +2,7 @@ package consensus
 
 import (
 	"bytes"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"math"
@@ -90,15 +91,19 @@ type Decree struct {
 	// validator
 	validator *Validator
 
+	// previous consensus value
+	prevConsensusValue string
+
 	// for nomination protocol
-	votes            mapset.Set
-	accepts          mapset.Set
-	candidates       mapset.Set
-	nominations      map[string]*Statement
-	nominationRound  int
-	nominationStart  bool
-	latestNomination *Nominate
-	latestComposite  string // latest composite candidate value
+	votes             mapset.Set
+	accepts           mapset.Set
+	candidates        mapset.Set
+	nominations       map[string]*Statement
+	nominationLeaders []string
+	nominationRound   int
+	nominationStart   bool
+	latestNomination  *Nominate
+	latestComposite   string // latest composite candidate value
 
 	// for ballot protocol
 	currentPhase     BallotPhase
@@ -151,11 +156,38 @@ func (d *Decree) Nominate(prevHash, currHash string) error {
 	d.nominationStart = true
 
 	d.nominationRound++
-	// TODO(bobonovski) compute leader weights
-	d.votes.Add(currHash) // For test
 
-	if err := d.sendNomination(); err != nil {
-		return fmt.Errorf("send nomination failed: %v", err)
+	d.prevConsensusValue = prevHash
+
+	d.updateRoundLeaders()
+
+	// trace whether we have updated any value
+	updated := false
+
+	for _, leader := range d.nominationLeaders {
+		if leader == d.nodeID {
+			if !d.votes.Contains(currHash) {
+				d.votes.Add(currHash)
+				updated = true
+			}
+		} else {
+			if stmt, ok := d.nominations[leader]; ok {
+				nomination, err := d.getConsensusValue(stmt)
+				if err != nil {
+					return fmt.Errorf("get new consensus value from statement failed: %v", err)
+				}
+				if nomination != "" {
+					d.votes.Add(nomination)
+					updated = true
+				}
+			}
+		}
+	}
+
+	if updated {
+		if err := d.sendNomination(); err != nil {
+			return fmt.Errorf("send nomination failed: %v", err)
+		}
 	}
 	return nil
 }
@@ -189,6 +221,120 @@ func (d *Decree) Recv(stmt *Statement) error {
 	}
 
 	return nil
+}
+
+// Get the a new consensus value from existing statement.
+func (d *Decree) getConsensusValue(stmt *Statement) (string, error) {
+	if stmt == nil {
+		return "", errors.New("statement is nil")
+	}
+	maxHashVal, newVote := uint64(0), ""
+	nom := stmt.GetNominate()
+	for _, vote := range nom.VoteList {
+		err := d.validateConsensusValue(vote)
+		if err != nil {
+			log.Errorf("validate consensus value failed: %v", err)
+			continue
+		}
+		if d.votes.Contains(vote) {
+			continue
+		}
+		hashVal := d.getConsensusValueHash(vote)
+		if hashVal > maxHashVal {
+			maxHashVal = hashVal
+			newVote = vote
+		}
+	}
+	return newVote, nil
+}
+
+// Update the leaders of this nomination round.
+func (d *Decree) updateRoundLeaders() {
+	normalizeQuorum(d.quorum, d.nodeID)
+
+	var leaders []string
+	leaders = append(leaders, d.nodeID)
+
+	topPriority := d.getNodePriority(d.quorum, d.nodeID)
+	quorumNodes := getQuorumNodes(d.quorum)
+	for _, node := range quorumNodes {
+		priority := d.getNodePriority(d.quorum, node)
+		if priority > topPriority {
+			topPriority = priority
+			leaders = leaders[:0]
+		}
+		if priority > 0 && priority == topPriority {
+			leaders = append(leaders, node)
+		}
+	}
+	// update current nomination leaders
+	d.nominationLeaders = leaders
+}
+
+// Compute the priority of the node.
+func (d *Decree) getNodePriority(quorum *Quorum, nodeID string) uint64 {
+	var weight, priority uint64
+	if nodeID == d.nodeID {
+		weight = math.MaxInt64
+	} else {
+		weight = d.getNodeWeight(quorum, nodeID)
+	}
+	if weight > 0 && d.getNodeHash(nodeID, false) <= weight {
+		priority = d.getNodeHash(nodeID, true)
+		return priority
+	}
+	return priority
+}
+
+// Compute the weight of the node.
+func (d *Decree) getNodeWeight(quorum *Quorum, nodeID string) uint64 {
+	var weight uint64
+	for _, v := range quorum.Validators {
+		if v == nodeID {
+			weight = uint64(float64(math.MaxInt64) * quorum.Threshold)
+			return weight
+		}
+	}
+	for _, q := range quorum.NestQuorums {
+		nestWeight := d.getNodeWeight(q, nodeID)
+		if nestWeight > 0 {
+			weight = uint64(float64(nestWeight) * quorum.Threshold)
+			return weight
+		}
+	}
+	return 0
+}
+
+// Compute the decree specific hash of the node.
+func (d *Decree) getNodeHash(nodeID string, isPriority bool) uint64 {
+	hashN, hashP := uint64(1), uint64(2)
+	buf := make([]byte, binary.MaxVarintLen64)
+	binary.PutUvarint(buf, d.index)
+	buf = append(buf, []byte(d.prevConsensusValue)...)
+	if isPriority {
+		binary.PutUvarint(buf, hashP)
+	} else {
+		binary.PutUvarint(buf, hashN)
+	}
+	binary.PutUvarint(buf, uint64(d.nominationRound))
+	buf = append(buf, []byte(nodeID)...)
+	// compute the SHA256 hash and use the first 8 bytes as the result
+	result := crypto.SHA256HashUint64(buf)
+	return result
+}
+
+// Compute the decree specific hash of the consensus value.
+func (d *Decree) getConsensusValueHash(nodeID string) uint64 {
+	hashK := uint64(3)
+	buf := make([]byte, binary.MaxVarintLen64)
+	binary.PutUvarint(buf, d.index)
+	buf = append(buf, []byte(d.prevConsensusValue)...)
+	binary.PutUvarint(buf, hashK)
+	binary.PutUvarint(buf, uint64(d.nominationRound))
+	buf = append(buf, []byte(nodeID)...)
+	// compute the SHA256 hash and use the first 8 bytes as the result
+	result := crypto.SHA256HashUint64(buf)
+	return result
 }
 
 // Accept statement by checking the following two conditions:
@@ -1501,13 +1647,42 @@ func (d *Decree) validateConsensusValue(val string) error {
 		return fmt.Errorf("decode hex string failed: %v", err)
 	}
 
-	_, err = ultpb.DecodeConsensusValue(vb)
+	cv, err := ultpb.DecodeConsensusValue(vb)
 	if err != nil {
 		return fmt.Errorf("decode consensus value failed: %v", err)
 	}
 
-	// TODO(bobonovski) define maybe validate state
+	err = d.validateConsensusValueFull(cv, false)
+	if err != nil {
+		return fmt.Errorf("consensus value is not valid: %v", err)
+	}
+	return nil
+}
 
+// Validate consensus value with full checks.
+func (d *Decree) validateConsensusValueFull(cv *ConsensusValue, isNomination bool) error {
+	// check whether the decree index is up to date
+	if !d.lm.LedgerSynced() || d.lm.NextLedgerHeaderSeq() != d.index {
+		return errors.New("consensus value is not compatible with ledger state")
+	}
+	// the propose time should be larger than the close time in closed ledger
+	header := d.lm.CurrLedgerHeader()
+	vb, err := b58.Decode(header.ConsensusValue)
+	if err != nil {
+		return fmt.Errorf("decode hex string failed: %v", err)
+	}
+	headerCV, err := ultpb.DecodeConsensusValue(vb)
+	if err != nil {
+		return fmt.Errorf("decode ledger header consensus value failed: %v", err)
+	}
+	if headerCV.CloseTime > cv.ProposeTime {
+		return errors.New("consensus value is too old")
+	}
+	// check the existance of the txset
+	_, err = d.lm.GetTxSet(cv.TxSetHash)
+	if err != nil {
+		return fmt.Errorf("get txset failed: %v", err)
+	}
 	return nil
 }
 
