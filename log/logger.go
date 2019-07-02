@@ -6,9 +6,10 @@ import (
 )
 
 var rootLogger *zap.SugaredLogger
+var config zap.Config
 
 func init() {
-	config := zap.NewProductionConfig()
+	config = zap.NewProductionConfig()
 	// change stacktrace output level to DPanic so that
 	// we will not get cluttered log in Error level
 	stacktraceOption := zap.AddStacktrace(zapcore.DPanicLevel)
@@ -18,6 +19,14 @@ func init() {
 		panic(err)
 	}
 	rootLogger = logger.Sugar()
+}
+
+func OpenDebug() {
+	config.Level.SetLevel(zap.DebugLevel)
+}
+
+func CloseDebug() {
+	config.Level.SetLevel(zap.InfoLevel)
 }
 
 // Wrap the methods of global sugared logger for purpose
@@ -68,4 +77,16 @@ func Infof(template string, args ...interface{}) {
 
 func Infow(msg string, keysAndValues ...interface{}) {
 	rootLogger.Infow(msg, keysAndValues...)
+}
+
+func Debug(args ...interface{}) {
+	rootLogger.Debug(args...)
+}
+
+func Debugf(template string, args ...interface{}) {
+	rootLogger.Debugf(template, args...)
+}
+
+func Debugw(msg string, keysAndValues ...interface{}) {
+	rootLogger.Debugw(msg, keysAndValues...)
 }
