@@ -132,6 +132,7 @@ func NewManager(ctx *ManagerContext) *Manager {
 	lm := &Manager{
 		database:    ctx.Database,
 		bucket:      "LEDGER",
+		txsetBucket: "TXSET",
 		am:          ctx.AM,
 		tm:          ctx.TM,
 		buffer:      new(CloseInfoBuffer),
@@ -156,6 +157,10 @@ func NewManager(ctx *ManagerContext) *Manager {
 	err = lm.database.NewBucket(lm.bucket)
 	if err != nil {
 		log.Fatalf("create db bucket %s failed: %v", lm.bucket, err)
+	}
+	err = lm.database.NewBucket(lm.txsetBucket)
+	if err != nil {
+		log.Fatalf("create db bucket %s failed: %v", lm.txsetBucket, err)
 	}
 	return lm
 }

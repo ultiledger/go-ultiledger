@@ -28,14 +28,15 @@ var (
 
 // EngineContext represents contextual information Engine needs.
 type EngineContext struct {
-	Database db.Database      // database instance
-	Seed     string           // node seed
-	NodeID   string           // node ID
-	PM       *peer.Manager    // peer manager
-	AM       *account.Manager // account manager
-	LM       *ledger.Manager  // ledger manager
-	TM       *tx.Manager      // tx manager
-	Quorum   *ultpb.Quorum    // initial quorum parsed from config
+	Database        db.Database      // database instance
+	Seed            string           // node seed
+	NodeID          string           // node ID
+	PM              *peer.Manager    // peer manager
+	AM              *account.Manager // account manager
+	LM              *ledger.Manager  // ledger manager
+	TM              *tx.Manager      // tx manager
+	Quorum          *ultpb.Quorum    // initial quorum parsed from config
+	ProposeInterval int              // consensus proposition interval (in seconds)
 }
 
 func ValidateEngineContext(ec *EngineContext) error {
@@ -62,6 +63,9 @@ func ValidateEngineContext(ec *EngineContext) error {
 	}
 	if ec.Quorum == nil {
 		return fmt.Errorf("initial quorum is nil")
+	}
+	if ec.ProposeInterval <= 0 {
+		return fmt.Errorf("propose interval is invalid")
 	}
 	return nil
 }
@@ -113,7 +117,8 @@ type Engine struct {
 	externalizeChan chan *ExternalizeValue
 
 	// channel for listening propose signal
-	proposeChan chan struct{}
+	proposeChan   chan struct{}
+	proposeTicker *time.Ticker
 
 	// channel for stopping goroutines
 	stopChan chan struct{}
@@ -150,6 +155,7 @@ func NewEngine(ctx *EngineContext) *Engine {
 		quorumDownloadChan: make(chan string),
 		externalizeChan:    make(chan *ExternalizeValue),
 		proposeChan:        make(chan struct{}),
+		proposeTicker:      time.NewTicker(time.Second * time.Duration(ctx.ProposeInterval)),
 		stopChan:           make(chan struct{}),
 	}
 
@@ -233,7 +239,11 @@ func (e *Engine) Start() {
 				if _, ok := e.decrees[stmt.Index]; !ok {
 					continue
 				}
-				e.decrees[stmt.Index].Recv(stmt)
+				err := e.decrees[stmt.Index].Recv(stmt)
+				if err != nil {
+					log.Errorf("received statement from validator failed: %v", err)
+					continue
+				}
 			case ext := <-e.externalizeChan:
 				log.Infow("received ext value", "index", ext.Index, "value", ext.Value)
 				err := e.Externalize(ext.Index, ext.Value)
@@ -241,7 +251,7 @@ func (e *Engine) Start() {
 					log.Errorf("externalize value failed: %v", err, "index", ext.Index, "value", ext.Value)
 					continue
 				}
-				time.Sleep(3 * time.Second)
+			case <-e.proposeTicker.C:
 				e.proposeChan <- struct{}{}
 			case <-e.stopChan:
 				return

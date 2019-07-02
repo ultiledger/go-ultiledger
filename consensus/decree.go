@@ -250,15 +250,17 @@ func (d *Decree) getConsensusValue(stmt *Statement) (string, error) {
 
 // Update the leaders of this nomination round.
 func (d *Decree) updateRoundLeaders() {
-	normalizeQuorum(d.quorum, d.nodeID)
+	quorum := (pb.Clone(d.quorum)).(*Quorum)
+
+	normalizeQuorum(quorum, d.nodeID)
 
 	var leaders []string
 	leaders = append(leaders, d.nodeID)
 
-	topPriority := d.getNodePriority(d.quorum, d.nodeID)
-	quorumNodes := getQuorumNodes(d.quorum)
+	topPriority := d.getNodePriority(quorum, d.nodeID)
+	quorumNodes := getQuorumNodes(quorum)
 	for _, node := range quorumNodes {
-		priority := d.getNodePriority(d.quorum, node)
+		priority := d.getNodePriority(quorum, node)
 		if priority > topPriority {
 			topPriority = priority
 			leaders = leaders[:0]
@@ -348,7 +350,6 @@ func (d *Decree) federatedAccept(voteFilter func(*Statement) bool, acceptFilter 
 			nodes.Add(n)
 		}
 	}
-
 	// check V-blocking condition
 	if isVblocking(d.quorum, nodes) {
 		return true
@@ -360,6 +361,7 @@ func (d *Decree) federatedAccept(voteFilter func(*Statement) bool, acceptFilter 
 			nodes.Add(n)
 		}
 	}
+	log.Info(nodes.Cardinality())
 
 	// check quorum condition
 	subnodes := mapset.NewSet()
@@ -775,6 +777,7 @@ func (d *Decree) sendBallot() error {
 	s, ok := d.ballots[stmt.NodeID]
 	if !ok || !pb.Equal(s, stmt) {
 		if err := d.recvBallot(stmt); err != nil {
+			log.Errorf("recv local ballot failed: %v", err)
 			return fmt.Errorf("recv local ballot failed: %v", err)
 		}
 		if d.currentBallot != nil && (d.latestBallotStmt == nil || isNewerBallot(d.latestBallotStmt, stmt)) {
@@ -1667,19 +1670,21 @@ func (d *Decree) validateConsensusValueFull(cv *ConsensusValue, isNomination boo
 	}
 	// the propose time should be larger than the close time in closed ledger
 	header := d.lm.CurrLedgerHeader()
-	vb, err := b58.Decode(header.ConsensusValue)
-	if err != nil {
-		return fmt.Errorf("decode hex string failed: %v", err)
-	}
-	headerCV, err := ultpb.DecodeConsensusValue(vb)
-	if err != nil {
-		return fmt.Errorf("decode ledger header consensus value failed: %v", err)
-	}
-	if headerCV.CloseTime > cv.ProposeTime {
-		return errors.New("consensus value is too old")
+	if header.ConsensusValue != "" {
+		vb, err := b58.Decode(header.ConsensusValue)
+		if err != nil {
+			return fmt.Errorf("decode hex string failed: %v", err)
+		}
+		headerCV, err := ultpb.DecodeConsensusValue(vb)
+		if err != nil {
+			return fmt.Errorf("decode ledger header consensus value failed: %v", err)
+		}
+		if headerCV.CloseTime > cv.ProposeTime {
+			return errors.New("consensus value is too old")
+		}
 	}
 	// check the existance of the txset
-	_, err = d.lm.GetTxSet(cv.TxSetHash)
+	_, err := d.lm.GetTxSet(cv.TxSetHash)
 	if err != nil {
 		return fmt.Errorf("get txset failed: %v", err)
 	}

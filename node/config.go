@@ -29,6 +29,8 @@ type Config struct {
 	DBPath string
 	// initial quorum
 	Quorum *ultpb.Quorum
+	// interval for consensus proposition
+	ProposeInterval int
 }
 
 func NewConfig(v *viper.Viper) (*Config, error) {
@@ -56,6 +58,9 @@ func NewConfig(v *viper.Viper) (*Config, error) {
 	if v.GetStringMap("quorum") == nil {
 		return nil, errors.New("quorum is nil")
 	}
+	if v.GetInt("propose_interval") <= 0 {
+		return nil, errors.New("propose interval is not positive")
+	}
 
 	// construct quorum
 	quorumMap := v.GetStringMap("quorum")
@@ -65,14 +70,15 @@ func NewConfig(v *viper.Viper) (*Config, error) {
 	}
 
 	u := Config{
-		NetworkID: sha256.Sum256([]byte(v.GetString("network_id"))),
-		Port:      v.GetString("port"),
-		Peers:     v.GetStringSlice("peers"),
-		NodeID:    v.GetString("node_id"),
-		Seed:      v.GetString("seed"),
-		DBBackend: v.GetString("db_backend"),
-		DBPath:    v.GetString("db_path"),
-		Quorum:    quorum,
+		NetworkID:       sha256.Sum256([]byte(v.GetString("network_id"))),
+		Port:            v.GetString("port"),
+		Peers:           v.GetStringSlice("peers"),
+		NodeID:          v.GetString("node_id"),
+		Seed:            v.GetString("seed"),
+		DBBackend:       v.GetString("db_backend"),
+		DBPath:          v.GetString("db_path"),
+		Quorum:          quorum,
+		ProposeInterval: v.GetInt("propose_interval"),
 	}
 
 	return &u, nil
