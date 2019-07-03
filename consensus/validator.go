@@ -16,7 +16,7 @@ import (
 	"github.com/ultiledger/go-ultiledger/ultpb"
 )
 
-// ValidatorContext contains contextual information validator needs
+// ValidatorContext contains contextual information validator needs.
 type ValidatorContext struct {
 	Database           db.Database // database instance
 	LM                 *ledger.Manager
@@ -158,7 +158,7 @@ func (v *Validator) Recv(stmt *Statement) error {
 	return nil
 }
 
-// Receive downloaded quorum and save it in db and cache
+// Receive downloaded quorum and save it in db and cache.
 func (v *Validator) RecvQuorum(quorumHash string, quorum *Quorum) error {
 	// encode quorum to pb format
 	qb, err := ultpb.Encode(quorum)
@@ -243,7 +243,7 @@ func (v *Validator) monitor() {
 	}
 }
 
-// Download missing info of the statement
+// Download missing info of the statement.
 func (v *Validator) download() {
 	for {
 		select {
@@ -268,7 +268,7 @@ func (v *Validator) download() {
 	}
 }
 
-// Validate statement by checking whether we have its quorum and tx list
+// Validate statement by checking whether we have its quorum and tx list.
 func (v *Validator) validate(stmt *Statement) (bool, error) {
 	quorumHash, err := extractQuorumHash(stmt)
 	if err != nil {

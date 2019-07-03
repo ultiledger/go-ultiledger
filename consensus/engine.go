@@ -178,7 +178,7 @@ func NewEngine(ctx *EngineContext) *Engine {
 		log.Fatalf("create db bucket %s failed: %v", e.statusBucket, err)
 	}
 
-	cache, err := lru.New(10000)
+	cache, err := lru.New(1000)
 	if err != nil {
 		log.Fatalf("create consensus engine LRU cache failed: %v", err)
 	}

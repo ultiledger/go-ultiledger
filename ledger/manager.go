@@ -7,6 +7,7 @@ import (
 	"time"
 
 	lru "github.com/hashicorp/golang-lru"
+	b58 "github.com/mr-tron/base58/base58"
 
 	"github.com/ultiledger/go-ultiledger/account"
 	"github.com/ultiledger/go-ultiledger/db"
@@ -410,7 +411,21 @@ func (lm *Manager) closeLedger(index uint64, value string, txset *ultpb.TxSet) e
 		return fmt.Errorf("get txset hash failed: %v", err)
 	}
 
-	// TODO(bobonovski) save the txset in db
+	// update the close time of consensus value
+	b, err := b58.Decode(value)
+	if err != nil {
+		return fmt.Errorf("hex decode consensus value failed: %v", err)
+	}
+	cv, err := ultpb.DecodeConsensusValue(b)
+	if err != nil {
+		return fmt.Errorf("decode consensus value failed: %v", err)
+	}
+	cv.CloseTime = time.Now().Unix()
+	b, err = ultpb.Encode(cv)
+	if err != nil {
+		return fmt.Errorf("encode consensus value failed: %v", err)
+	}
+	value = b58.Encode(b)
 
 	err = lm.advanceLedger(index, txset.PrevLedgerHash, txsetHash, value)
 	if err != nil {
