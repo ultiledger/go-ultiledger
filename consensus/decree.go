@@ -1482,7 +1482,6 @@ func (d *Decree) updateBallotValue(b *Ballot) bool {
 		if compareBallots(d.currentBallot, b) <= 0 {
 			d.updateBallot(b)
 			updated = true
-			log.Infof("current ballot updated")
 		}
 	}
 
@@ -1509,12 +1508,14 @@ func (d *Decree) updateBallot(b *Ballot) {
 	}
 }
 
-// Check invariants of ballot states
+// Check invariants of ballot states.
 func (d *Decree) checkBallotInvariants() {
 	if d.currentBallot != nil && d.currentBallot.Counter == 0 {
 		log.Fatal("current ballot is not nil but counter is zero")
 	}
 
+	// q and p ballots are the two hightest ballots accepted as prepared
+	// such that q is imcompatible with p
 	if d.pBallot != nil && d.qBallot != nil {
 		cond := compareBallots(d.qBallot, d.pBallot) <= 0 && !compatibleBallots(d.qBallot, d.pBallot)
 		if !cond {
@@ -1522,6 +1523,7 @@ func (d *Decree) checkBallotInvariants() {
 		}
 	}
 
+	// cBallot <= hBallot <= currentBallot
 	if d.hBallot != nil {
 		if d.currentBallot == nil {
 			log.Fatal("high ballot is not nil but current ballot is nil")
