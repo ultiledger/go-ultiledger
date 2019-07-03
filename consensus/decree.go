@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"math"
 	"sort"
-	"strings"
 
 	"github.com/deckarep/golang-set"
 	pb "github.com/golang/protobuf/proto"
@@ -117,6 +116,10 @@ type Decree struct {
 	nextValue        string // z
 	ballotMsgCount   int
 
+	// maximum number of recursions the step forward
+	// can do in ballot protocol
+	maxRecursions int
+
 	// channel for sending statements
 	statementChan chan<- *Statement
 	// channel for sending externalized value
@@ -144,6 +147,7 @@ func NewDecree(ctx *DecreeContext) *Decree {
 		currentPhase:    BallotPhasePrepare,
 		ballots:         make(map[string]*Statement),
 		ballotMsgCount:  0,
+		maxRecursions:   10,
 		statementChan:   ctx.StmtChan,
 		externalizeChan: ctx.ExternalizeChan,
 	}
@@ -467,7 +471,7 @@ func (d *Decree) recvNomination(stmt *Statement) error {
 		return errors.New("vote and accept list is empty")
 	}
 
-	log.Infow("received nomination", "nodeID", stmt.NodeID, "votes", len(nom.VoteList), "accepts", len(nom.AcceptList))
+	log.Infow("recv nomination", "nodeID", stmt.NodeID, "votes", len(nom.VoteList), "accepts", len(nom.AcceptList))
 
 	// check whether the existing nomination of the remote node
 	// is the proper subset of the new nomination and save the
@@ -692,7 +696,8 @@ func bytesOr(l string, r string) string {
 func (d *Decree) recvBallot(stmt *Statement) error {
 	// make sure we received statement with the same decree index
 	if stmt.Index != d.index {
-		log.Errorf("received incompatible ballot index: local %d, recv %d", d.index, stmt.Index)
+		log.Errorf("recv incompatible ballot index: local %d, recv %d", d.index, stmt.Index)
+		return errors.New("ballot indices are incompatible")
 	}
 
 	log.Infow("received ballot", "nodeID", stmt.NodeID, "decreeIdx", stmt.Index)
@@ -795,11 +800,11 @@ func (d *Decree) sendBallot() error {
 // Step the ballot state forward with the input ballot statement.
 func (d *Decree) step(stmt *Statement) error {
 	d.ballotMsgCount += 1
-	if d.ballotMsgCount == 10 { // TODO(bobonovski) adaptive threshold?
+	if d.ballotMsgCount == d.maxRecursions {
 		return errors.New("max number of invoking reached in step")
 	}
 
-	log.Infof("ballot msg count increase to: %d", d.ballotMsgCount)
+	log.Debugf("ballot msg count increase to: %d", d.ballotMsgCount)
 
 	// update internal ballot states by following operations:
 	// 1. accept the prepared statement
@@ -825,9 +830,9 @@ func (d *Decree) step(stmt *Statement) error {
 
 	d.ballotMsgCount -= 1
 
-	log.Infof("ballot msg count decrease to: %d", d.ballotMsgCount)
+	log.Debug("ballot msg count decrease to: %d", d.ballotMsgCount)
 
-	if d.ballotMsgCount == 0 && d.latestBallotStmt != nil {
+	if updated {
 		d.statementChan <- d.latestBallotStmt
 	}
 
@@ -948,9 +953,9 @@ func (d *Decree) acceptPrepared(stmt *Statement) bool {
 		return false
 	}
 
-	candidates := d.preparedCandidates(stmt)
+	candidates := d.getPreparedCandidates(stmt)
 
-	log.Infof("get %d candidates for accepting prepared", len(candidates))
+	log.Debugf("get %d candidates for accepting prepared", len(candidates))
 
 	for _, cand := range candidates {
 		if d.currentPhase == BallotPhaseConfirm {
@@ -987,7 +992,7 @@ func (d *Decree) acceptPrepared(stmt *Statement) bool {
 				}
 			}
 			if updated {
-				log.Infof("accept prepared ballot updated")
+				log.Debug("accept prepared ballot updated")
 				d.sendBallot()
 			}
 			return updated
@@ -1023,7 +1028,7 @@ func (d *Decree) setAcceptPrepared(b *Ballot) bool {
 }
 
 // Extract unique prepared candidate ballots from statement.
-func (d *Decree) preparedCandidates(stmt *Statement) []*Ballot {
+func (d *Decree) getPreparedCandidates(stmt *Statement) []*Ballot {
 	// filter duplicate ballots with the same values
 	ballots := mapset.NewSet()
 
@@ -1107,9 +1112,9 @@ func (d *Decree) confirmPrepared(stmt *Statement) bool {
 		return false
 	}
 
-	candidates := d.preparedCandidates(stmt)
+	candidates := d.getPreparedCandidates(stmt)
 
-	log.Infof("get %d candidates for confirming prepared", len(candidates))
+	log.Debugf("get %d candidates for confirming prepared", len(candidates))
 
 	// candidate for higher ballot
 	var hCandidate *ultpb.Ballot
@@ -1152,7 +1157,10 @@ func (d *Decree) confirmPrepared(stmt *Statement) bool {
 					cCandidate = cand
 					continue
 				}
-				// TODO(bobonovski) break or continue searching?
+				// candidates are sorted in descending order,
+				// if we cannot ratify the current candidate we
+				// can directly break out of the  loop
+				break
 			}
 		}
 		updated := d.setConfirmPrepared(cCandidate, hCandidate)
@@ -1229,7 +1237,7 @@ func (d *Decree) acceptCommit(stmt *Statement) bool {
 
 	lb, rb := d.findCommitInterval(counters, filter)
 
-	log.Infof("get commit interval %d,%d for accepting commit", lb, rb)
+	log.Debugf("get commit interval %d,%d for accepting commit", lb, rb)
 
 	if lb != 0 {
 		if d.currentPhase != BallotPhaseConfirm || rb > d.hBallot.Counter {
@@ -1379,7 +1387,7 @@ func (d *Decree) confirmCommit(stmt *Statement) bool {
 
 	lb, rb := d.findCommitInterval(counters, filter)
 
-	log.Infof("get commit interval %d,%d for confirming commit", lb, rb)
+	log.Debugf("get commit interval %d,%d for confirming commit", lb, rb)
 
 	if lb != 0 {
 		cBallot := &Ballot{Value: ballot.Value, Counter: lb}
