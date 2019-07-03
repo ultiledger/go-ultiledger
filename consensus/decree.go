@@ -361,7 +361,6 @@ func (d *Decree) federatedAccept(voteFilter func(*Statement) bool, acceptFilter 
 			nodes.Add(n)
 		}
 	}
-	log.Info(nodes.Cardinality())
 
 	// check quorum condition
 	subnodes := mapset.NewSet()
@@ -369,6 +368,7 @@ func (d *Decree) federatedAccept(voteFilter func(*Statement) bool, acceptFilter 
 		if nodes.Equal(subnodes) {
 			break
 		}
+		subnodes.Clear()
 		for n := range nodes.Iter() {
 			nodeID := n.(string)
 			q := d.getStatementQuorum(stmts[nodeID])
@@ -377,7 +377,6 @@ func (d *Decree) federatedAccept(voteFilter func(*Statement) bool, acceptFilter 
 			}
 		}
 		nodes = nodes.Intersect(subnodes)
-		subnodes.Clear()
 	}
 
 	if isQuorumSlice(d.quorum, nodes) {
@@ -406,7 +405,6 @@ func (d *Decree) federatedRatify(filter func(*Statement) bool, stmts map[string]
 		if nodes.Equal(subnodes) {
 			break
 		}
-
 		subnodes.Clear()
 		for n := range nodes.Iter() {
 			nodeID := n.(string)
@@ -493,13 +491,13 @@ func (d *Decree) recvNomination(stmt *Statement) error {
 
 	// send new nomination if votes changed
 	if acceptUpdated {
-		log.Info("nomination accepted votes changed")
+		log.Debug("nomination accepted votes changed")
 		d.sendNomination()
 	}
 
 	// start balloting if candidates changed
 	if candidateUpdated {
-		log.Info("nomination candidate votes changed")
+		log.Debug("nomination candidate votes changed")
 		compValue, err := d.combineCandidates()
 		if err != nil {
 			return fmt.Errorf("combine candidates failed: %v", err)
@@ -556,7 +554,11 @@ func (d *Decree) promoteVotes(newNom *Nominate) (bool, bool, error) {
 			log.Errorw("nomination federated accept vote failed", "vote", vote)
 			continue
 		}
-		// TODO(bobonovski) check the validity of the vote
+		// validate the vote before updating votes and accepts
+		if err := d.validateConsensusValue(vote); err != nil {
+			log.Errorf("nomination validate vote failed: %v", err)
+			continue
+		}
 		d.votes.Add(vote)
 		d.accepts.Add(vote)
 		acceptUpdated = true
@@ -603,10 +605,10 @@ func (d *Decree) combineCandidates() (string, error) {
 		if err != nil {
 			return "", fmt.Errorf("decode consensus value failed: %v", err)
 		}
+		// choose the largest propose time for combined value
 		if cv.ProposeTime > candidate.ProposeTime {
 			candidate.ProposeTime = cv.ProposeTime
 		}
-
 		vals = append(vals, cv)
 	}
 
@@ -1454,7 +1456,7 @@ func (d *Decree) updateBallotPhaseWithCounter(val string, counter uint32) bool {
 
 	updated := d.updateBallotValue(b)
 	if updated {
-		log.Infof("current ballot updated")
+		log.Debug("current ballot updated")
 		d.sendBallot()
 	}
 
@@ -1473,7 +1475,7 @@ func (d *Decree) updateBallotValue(b *Ballot) bool {
 		d.updateBallot(b)
 		updated = true
 	} else {
-		if d.cBallot != nil && strings.Compare(d.cBallot.Value, b.Value) != 0 {
+		if d.cBallot != nil && !compatibleBallots(d.cBallot, b) {
 			return false
 		}
 
@@ -1499,8 +1501,8 @@ func (d *Decree) updateBallot(b *Ballot) {
 		log.Fatal("cannot update current ballot with smaller one")
 	}
 
-	// TODO(bobonovski) copy pointer or create new one?
-	d.currentBallot = b
+	// deep copy the ballot
+	d.currentBallot = pb.Clone(b).(*Ballot)
 
 	if d.hBallot != nil && !compatibleBallots(d.currentBallot, d.hBallot) {
 		d.hBallot.Reset()
@@ -1700,9 +1702,6 @@ func (d *Decree) validateQuorum(quorum *Quorum, depth int) error {
 	if quorum.Threshold <= 0.0 && quorum.Threshold > 1.0 {
 		return fmt.Errorf("quorum threshold out of range in depth %d", depth)
 	}
-
-	// qsize := float64(len(quorum.Validators) + len(quorum.NestQuorums))
-	// threshold := int(math.Ceil(qsize * (1.0 - quorum.Threshold)))
 
 	// check whether there exists duplicate validator in quorum
 	vset := mapset.NewSet()
