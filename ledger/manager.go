@@ -495,6 +495,7 @@ func (lm *Manager) advanceLedger(seq uint64, prevHeaderHash string, txHash strin
 	lm.currLedgerHeaderHash = h
 
 	lm.ledgerHeaderCount += 1
+	lm.lastCloseTime = time.Now().Unix()
 
 	return nil
 }
