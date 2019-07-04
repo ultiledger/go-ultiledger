@@ -10,10 +10,6 @@ service Node {
   rpc Query(QueryRequest) returns (QueryResponse) {}
 }
 
-message HelloRequest {}
-
-message HelloResponse {}
-
 enum TxStatusCode {
   NOTEXIST = 0;  // transaction not exist
   REJECTED = 1;  // rejected because of some immediate error checking
@@ -22,10 +18,15 @@ enum TxStatusCode {
   FAILED = 4;    // failed because of some error
 }
 
+// Transaction status
 message TxStatus {
   TxStatusCode StatusCode = 1;
   string ErrorMessage = 2;
 }
+
+message HelloRequest {}
+
+message HelloResponse {}
 
 message SubmitTxRequest {
   // transaction data in pb format

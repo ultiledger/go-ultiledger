@@ -388,7 +388,7 @@ func (tm *Manager) GetTxStatus(txKey string) (*rpcpb.TxStatus, error) {
 	return status, nil
 }
 
-// Update the status of tx
+// Update the status of tx.
 func (tm *Manager) UpdateTxStatus(txKey string, status *rpcpb.TxStatus) error {
 	tm.txStatus.Add(txKey, status)
 
@@ -406,7 +406,7 @@ func (tm *Manager) UpdateTxStatus(txKey string, status *rpcpb.TxStatus) error {
 	return nil
 }
 
-// Broadcast transaction through rpc broadcast
+// Broadcast transaction through rpc broadcast.
 func (tm *Manager) broadcastTx(tx *ultpb.Tx) error {
 	clients := tm.pm.GetLiveClients()
 	metadata := tm.pm.GetMetadata()
