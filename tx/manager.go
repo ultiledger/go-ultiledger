@@ -99,7 +99,7 @@ func NewManager(ctx *ManagerContext) *Manager {
 	}
 	tm := &Manager{
 		database:    ctx.Database,
-		bucket:      "TX",
+		bucket:      "TXSTATUS",
 		seed:        ctx.Seed,
 		baseReserve: ctx.BaseReserve,
 		am:          ctx.AM,
