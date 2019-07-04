@@ -400,10 +400,20 @@ func (lm *Manager) RecvExtVal(index uint64, value string, txset *ultpb.TxSet) er
 
 // CloseLedger closes current ledger with new consensus value.
 func (lm *Manager) closeLedger(index uint64, value string, txset *ultpb.TxSet) error {
-	// apply transactions
-	err := lm.tm.ApplyTxList(txset.TxList)
-	if err != nil {
-		return fmt.Errorf("apply tx list failed: %v", err)
+	if lm.ledgerState != LedgerStateSynced {
+		return errors.New("ledger is not synced")
+	}
+
+	// check whether the sequence number is valid
+	if lm.currLedgerHeader != nil && lm.currLedgerHeader.SeqNum+1 != index {
+		return fmt.Errorf("ledger seqnum mismatch: expect %d, got %d", lm.currLedgerHeader.SeqNum+1, index)
+	}
+
+	// check whether the supplied prev ledger header hash is identical
+	// to the current ledger header hash. It should never happen that
+	// these two values are not identical which means some fork happened
+	if lm.currLedgerHeader != nil && lm.currLedgerHeaderHash != txset.PrevLedgerHash {
+		log.Fatalw("ledger tx header hash mismatch", "curr", lm.currLedgerHeaderHash, "prev", txset.PrevLedgerHash)
 	}
 
 	txsetHash, err := ultpb.GetTxSetKey(txset)
@@ -411,7 +421,6 @@ func (lm *Manager) closeLedger(index uint64, value string, txset *ultpb.TxSet) e
 		return fmt.Errorf("get txset hash failed: %v", err)
 	}
 
-	// update the close time of consensus value
 	b, err := b58.Decode(value)
 	if err != nil {
 		return fmt.Errorf("hex decode consensus value failed: %v", err)
@@ -420,6 +429,18 @@ func (lm *Manager) closeLedger(index uint64, value string, txset *ultpb.TxSet) e
 	if err != nil {
 		return fmt.Errorf("decode consensus value failed: %v", err)
 	}
+
+	if cv.TxSetHash != txsetHash {
+		return fmt.Errorf("txset hash mismatch: cv txset hash %s, computed txset hash %s", cv.TxSetHash, txsetHash)
+	}
+
+	// run transactions for identifying any protential errors
+	err = lm.tm.ApplyTxList(txset.TxList)
+	if err != nil {
+		return fmt.Errorf("apply tx list failed: %v", err)
+	}
+
+	// update the close time of consensus value
 	cv.CloseTime = time.Now().Unix()
 	b, err = ultpb.Encode(cv)
 	if err != nil {
@@ -438,22 +459,6 @@ func (lm *Manager) closeLedger(index uint64, value string, txset *ultpb.TxSet) e
 // Append the committed transaction list to current ledger, the operation
 // is only valid when the ledger manager in synced state.
 func (lm *Manager) advanceLedger(seq uint64, prevHeaderHash string, txHash string, cv string) error {
-	if lm.ledgerState != LedgerStateSynced {
-		return errors.New("ledger is not synced")
-	}
-
-	// Check whether the sequence number is valid
-	if lm.currLedgerHeader != nil && lm.currLedgerHeader.SeqNum+1 != seq {
-		return fmt.Errorf("ledger seqnum mismatch: expect %d, got %d", lm.currLedgerHeader.SeqNum+1, seq)
-	}
-
-	// Check whether the supplied prev ledger header hash is identical
-	// to the current ledger header hash. It should never happen that
-	// these two values are not identical which means some fork happened.
-	if lm.currLedgerHeader != nil && lm.currLedgerHeaderHash != prevHeaderHash {
-		log.Fatalw("ledger tx header hash mismatch", "curr", lm.currLedgerHeaderHash, "prev", prevHeaderHash)
-	}
-
 	header := &ultpb.LedgerHeader{
 		SeqNum:         seq,
 		PrevLedgerHash: prevHeaderHash,
