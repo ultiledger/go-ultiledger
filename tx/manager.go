@@ -82,10 +82,6 @@ type Manager struct {
 	rwm      sync.RWMutex
 	accTxMap map[string]*TxHistory
 
-	// tx to accountID map for convenient handling
-	// tx that need to be deleted
-	txAccMap map[string]string
-
 	// channel for broadcasting tx
 	txChan chan *ultpb.Tx
 	// channel for stopping goroutines
@@ -180,7 +176,6 @@ func (tm *Manager) AddTx(txKey string, tx *ultpb.Tx) error {
 
 	tm.rwm.Lock()
 	tm.accTxMap[tx.AccountID].AddTx(txKey, tx)
-	tm.txAccMap[txKey] = tx.AccountID
 	tm.rwm.Unlock()
 
 	tm.txSet.Add(txKey)

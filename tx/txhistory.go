@@ -40,7 +40,7 @@ func (th *TxHistory) AddTx(txKey string, tx *ultpb.Tx) error {
 	return nil
 }
 
-// Delete transactions and update fields
+// Delete transactions and update fields.
 func (th *TxHistory) DeleteTxList(txKeys []string) {
 	for _, txKey := range txKeys {
 		if _, ok := th.txMap[txKey]; !ok {
@@ -62,7 +62,7 @@ func (th *TxHistory) DeleteTxList(txKeys []string) {
 	th.TotalFees = totalFees
 }
 
-// Get the flattened tx list
+// Get the flattened tx list.
 func (th *TxHistory) GetTxList() []*ultpb.Tx {
 	var txList []*ultpb.Tx
 
@@ -73,7 +73,7 @@ func (th *TxHistory) GetTxList() []*ultpb.Tx {
 	return txList
 }
 
-// Get the size of internal tx map
+// Get the size of internal tx map.
 func (th *TxHistory) Size() int {
 	return len(th.txMap)
 }
