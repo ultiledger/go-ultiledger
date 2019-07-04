@@ -193,7 +193,7 @@ func (e *Engine) Start() {
 		for {
 			select {
 			case stmt := <-e.statementChan:
-				log.Infow("broadcast statement", "decreeIdx", stmt.Index)
+				log.Debugw("broadcast statement", "decreeIdx", stmt.Index)
 				err := e.broadcastStatement(stmt)
 				if err != nil {
 					log.Errorf("broadcast statement failed: %v", err)

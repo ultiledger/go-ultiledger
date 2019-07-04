@@ -355,7 +355,7 @@ func (lm *Manager) GetTxSet(txsetHash string) (*ultpb.TxSet, error) {
 // Receive externalized consensus value and do appropriate operations
 // depend on current state of the ledger.
 func (lm *Manager) RecvExtVal(index uint64, value string, txset *ultpb.TxSet) error {
-	log.Infow("received ext value", "seq", index, "value", value, "prevhash", txset.PrevLedgerHash, "txcount", len(txset.TxList))
+	log.Infow("recv ext value", "seq", index, "value", value, "prevhash", txset.PrevLedgerHash, "txcount", len(txset.TxList))
 
 	switch lm.ledgerState {
 	case LedgerStateNotSynced:
