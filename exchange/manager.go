@@ -298,8 +298,8 @@ func (am *Manager) SaveOffer(putter db.Putter, offer *ultpb.Offer) error {
 		return fmt.Errorf("encode offer failed: %v", err)
 	}
 
-	// update offer in db
-	err = putter.Put(am.bucket, []byte(offer.OfferID), offerb)
+	key := []byte(offer.SellAsset.AssetName + "_" + offer.BuyAsset.AssetName + "_" + offer.OfferID)
+	err = putter.Put(am.bucket, key, offerb)
 	if err != nil {
 		return fmt.Errorf("save offer in db failed: %v", err)
 	}
