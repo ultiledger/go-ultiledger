@@ -34,7 +34,7 @@ message Tx {
   // extra note about the transaction
   string Note = 3;
   // unique transaction sequence number
-  uint64 SequenceNumber = 4;
+  uint64 SeqNum = 4;
   // list of operations
   repeated Op OpList = 5;
 }

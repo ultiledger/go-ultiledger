@@ -75,7 +75,7 @@ func NewNode(conf *Config) *Node {
 
 	// peer and account managers are independent
 	pm := peer.NewManager(conf.Peers, addr, nodeID, conf.MaxPeers)
-	am := account.NewManager(database)
+	am := account.NewManager(database, ledger.GenesisBaseReserve)
 
 	// tx manager depends on peer and account manager
 	txCtx := &tx.ManagerContext{

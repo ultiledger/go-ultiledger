@@ -12,7 +12,7 @@ message Account {
   // public key of the signer of this account
   string Signer = 3;
   // latest transaction sequence number
-  uint64 SequenceNumber = 4;
+  uint64 SeqNum = 4;
   // number of entries belong to this account
   int32 EntryCount = 5;
   // ULTkeys of transactions belongs to this account

@@ -10,7 +10,7 @@ func (ts TxSlice) Len() int {
 }
 
 func (ts TxSlice) Less(i, j int) bool {
-	return ts[i].SequenceNumber < ts[j].SequenceNumber
+	return ts[i].SeqNum < ts[j].SeqNum
 }
 
 func (ts TxSlice) Swap(i, j int) {

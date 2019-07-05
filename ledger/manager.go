@@ -435,7 +435,7 @@ func (lm *Manager) closeLedger(index uint64, value string, txset *ultpb.TxSet) e
 	}
 
 	// run transactions for identifying any protential errors
-	err = lm.tm.ApplyTxList(txset.TxList)
+	err = lm.tm.ApplyTxList(txset.TxList, lm.NextLedgerHeaderSeq())
 	if err != nil {
 		return fmt.Errorf("apply tx list failed: %v", err)
 	}

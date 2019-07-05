@@ -156,7 +156,7 @@ func (tm *Manager) AddTx(txKey string, tx *ultpb.Tx) error {
 
 	// compute the total fees and max sequence number
 	totalFees := tx.Fee
-	maxSeq := tx.SequenceNumber
+	maxSeq := tx.SeqNum
 	if h, ok := tm.accTxMap[tx.AccountID]; ok {
 		totalFees += h.TotalFees
 		maxSeq = util.MaxUint64(maxSeq, h.MaxSeqNum)
@@ -165,8 +165,8 @@ func (tm *Manager) AddTx(txKey string, tx *ultpb.Tx) error {
 	}
 
 	// check whether tx sequence number is larger than existing one
-	if maxSeq > tx.SequenceNumber {
-		return fmt.Errorf("account %s seqnum mismatch: max %d, input %d", tx.AccountID, maxSeq, tx.SequenceNumber)
+	if maxSeq > tx.SeqNum {
+		return fmt.Errorf("account %s seqnum mismatch: max %d, input %d", tx.AccountID, maxSeq, tx.SeqNum)
 	}
 
 	// check whether the accounts has sufficient balance
@@ -197,7 +197,7 @@ func (tm *Manager) AddTx(txKey string, tx *ultpb.Tx) error {
 }
 
 // Apply the tx list by charging fees and applying all the ops.
-func (tm *Manager) ApplyTxList(txList []*ultpb.Tx) error {
+func (tm *Manager) ApplyTxList(txList []*ultpb.Tx, seqNum uint64) error {
 	// sort tx by sequence number
 	sort.Sort(TxSlice(txList))
 
@@ -220,7 +220,7 @@ func (tm *Manager) ApplyTxList(txList []*ultpb.Tx) error {
 			txk, _ := ultpb.GetTxKey(txs[i])
 
 			// check validity of sequence number
-			if acc.SequenceNumber > txs[i].SequenceNumber {
+			if acc.SeqNum > txs[i].SeqNum {
 				status := &rpcpb.TxStatus{
 					StatusCode:   rpcpb.TxStatusCode_FAILED,
 					ErrorMessage: ErrInvalidSeqNum.Error(),
@@ -246,7 +246,7 @@ func (tm *Manager) ApplyTxList(txList []*ultpb.Tx) error {
 			}
 
 			acc.Balance -= txs[i].Fee
-			acc.SequenceNumber = txs[i].SequenceNumber
+			acc.SeqNum = txs[i].SeqNum
 			restTxList = append(restTxList, txs[i])
 		}
 
@@ -263,7 +263,7 @@ func (tm *Manager) ApplyTxList(txList []*ultpb.Tx) error {
 	for _, tx := range restTxList {
 		txk, _ := ultpb.GetTxKey(tx)
 
-		ops, err := tm.getTxOpList(tx.AccountID, tx.OpList)
+		ops, err := tm.getTxOpList(tx.OpList, tx.AccountID, seqNum)
 		if err != nil {
 			status := &rpcpb.TxStatus{
 				StatusCode:   rpcpb.TxStatusCode_FAILED,
@@ -310,7 +310,7 @@ func (tm *Manager) ApplyTxList(txList []*ultpb.Tx) error {
 }
 
 // Construct tx op list from generic op list.
-func (tm *Manager) getTxOpList(accountID string, opList []*ultpb.Op) ([]op.Op, error) {
+func (tm *Manager) getTxOpList(opList []*ultpb.Op, accountID string, seqNum uint64) ([]op.Op, error) {
 	var ops []op.Op
 	for _, o := range opList {
 		switch o.OpType {
@@ -320,6 +320,8 @@ func (tm *Manager) getTxOpList(accountID string, opList []*ultpb.Op) ([]op.Op, e
 				SrcAccountID: accountID,
 				DstAccountID: ca.AccountID,
 				Balance:      ca.Balance,
+				BaseReserve:  tm.baseReserve,
+				SeqNum:       seqNum,
 			})
 		case ultpb.OpType_PAYMENT:
 			payment := o.GetPayment()

@@ -29,10 +29,10 @@ func NewTxHistory() *TxHistory {
 // adding any transaction, it should be checked against
 // signature correctness, sufficient balance of account, etc.
 func (th *TxHistory) AddTx(txKey string, tx *ultpb.Tx) error {
-	if tx.SequenceNumber < th.MaxSeqNum {
-		return fmt.Errorf("tx seqnum mismatch: max %d, input %d", th.MaxSeqNum, tx.SequenceNumber)
+	if tx.SeqNum < th.MaxSeqNum {
+		return fmt.Errorf("tx seqnum mismatch: max %d, input %d", th.MaxSeqNum, tx.SeqNum)
 	}
-	th.MaxSeqNum = tx.SequenceNumber
+	th.MaxSeqNum = tx.SeqNum
 	th.TotalFees += tx.Fee
 
 	th.txMap[txKey] = tx
@@ -53,8 +53,8 @@ func (th *TxHistory) DeleteTxList(txKeys []string) {
 	maxseq := uint64(0)
 	totalFees := int64(0)
 	for _, tx := range th.txMap {
-		if tx.SequenceNumber > maxseq {
-			maxseq = tx.SequenceNumber
+		if tx.SeqNum > maxseq {
+			maxseq = tx.SeqNum
 		}
 		totalFees += tx.Fee
 	}
