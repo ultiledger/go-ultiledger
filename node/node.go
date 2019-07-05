@@ -11,6 +11,7 @@ import (
 	"github.com/ultiledger/go-ultiledger/consensus"
 	"github.com/ultiledger/go-ultiledger/db"
 	"github.com/ultiledger/go-ultiledger/db/boltdb"
+	"github.com/ultiledger/go-ultiledger/exchange"
 	"github.com/ultiledger/go-ultiledger/future"
 	"github.com/ultiledger/go-ultiledger/ledger"
 	"github.com/ultiledger/go-ultiledger/log"
@@ -76,12 +77,14 @@ func NewNode(conf *Config) *Node {
 	// peer and account managers are independent
 	pm := peer.NewManager(conf.Peers, addr, nodeID, conf.MaxPeers)
 	am := account.NewManager(database, ledger.GenesisBaseReserve)
+	em := exchange.NewManager(database, am)
 
-	// tx manager depends on peer and account manager
+	// tx manager depends on peer, account and exchange manager
 	txCtx := &tx.ManagerContext{
 		Database:    database,
 		PM:          pm,
 		AM:          am,
+		EM:          em,
 		BaseReserve: ledger.GenesisBaseReserve,
 		Seed:        seed,
 	}

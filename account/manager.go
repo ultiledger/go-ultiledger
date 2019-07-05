@@ -136,10 +136,14 @@ func (am *Manager) GetBalance(acc *ultpb.Account) int64 {
 	return balance
 }
 
-// Add balance to account and check balance overflow.
-func (am *Manager) AddBalance(acc *ultpb.Account, balance int64) error {
-	if acc.Balance > math.MaxInt64-balance {
+// Update account balance.
+func (am *Manager) UpdateBalance(acc *ultpb.Account, balance int64) error {
+	if balance > 0 && acc.Balance > math.MaxInt64-balance {
 		return ErrBalanceOverflow
+	}
+
+	if balance < 0 && acc.Balance < balance {
+		return ErrBalanceUnderflow
 	}
 
 	acc.Balance += balance
@@ -147,19 +151,8 @@ func (am *Manager) AddBalance(acc *ultpb.Account, balance int64) error {
 	return nil
 }
 
-// Subtract balance from account and check balance underflow.
-func (am *Manager) SubBalance(acc *ultpb.Account, balance int64) error {
-	if acc.Balance < balance {
-		return ErrBalanceUnderflow
-	}
-
-	acc.Balance -= balance
-
-	return nil
-}
-
-// Increase entry count and check sufficiency of balance.
-func (am *Manager) AddEntryCount(acc *ultpb.Account, count int32) error {
+// Update entry count.
+func (am *Manager) UpdateEntryCount(acc *ultpb.Account, count int32) error {
 	if count == 0 {
 		return nil
 	}
@@ -167,25 +160,6 @@ func (am *Manager) AddEntryCount(acc *ultpb.Account, count int32) error {
 
 	balance := int64(totalEntry)*am.baseReserve + acc.Liability.Selling
 
-	if balance > acc.Balance {
-		return ErrBalanceUnderfund
-	}
-
-	acc.EntryCount = totalEntry
-
-	return nil
-}
-
-// Decrease entry count.
-func (am *Manager) SubEntryCount(acc *ultpb.Account, count int32) error {
-	if count == 0 {
-		return nil
-	}
-	totalEntry := acc.EntryCount - count
-
-	balance := int64(totalEntry)*am.baseReserve + acc.Liability.Selling
-
-	// this should not happen since we are substracting entry count
 	if balance > acc.Balance {
 		return ErrBalanceUnderfund
 	}
@@ -321,70 +295,16 @@ func (am *Manager) GetTrustBalance(trust *ultpb.Trust) int64 {
 	return trust.Balance - trust.Liability.Selling
 }
 
-// Add balance to trust and check out of limit.
-func (am *Manager) AddTrustBalance(trust *ultpb.Trust, balance int64) error {
-	if trust.Balance+balance > trust.Limit {
+// Update trust balance.
+func (am *Manager) UpdateTrustBalance(trust *ultpb.Trust, balance int64) error {
+	if balance > 0 && trust.Balance+balance > trust.Limit {
 		return ErrTrustOverLimit
 	}
-
-	trust.Balance += balance
-
-	return nil
-}
-
-// Substract balance from trust and check balance underfund.
-func (am *Manager) SubTrustBalance(trust *ultpb.Trust, balance int64) error {
-	if trust.Balance < balance {
+	if balance < 0 && trust.Balance < balance {
 		return ErrTrustUnderflow
 	}
 
-	trust.Balance -= balance
-
-	return nil
-}
-
-// Get offer from database.
-func (am *Manager) GetOffer(getter db.Getter, offerID string) (*ultpb.Offer, error) {
-	// get offer in db
-	b, err := getter.Get(am.bucket, []byte(offerID))
-	if err != nil {
-		return nil, fmt.Errorf("get offer from db failed: %v", err)
-	}
-
-	offer, err := ultpb.DecodeOffer(b)
-	if err != nil {
-		return nil, fmt.Errorf("decode offer failed: %v", err)
-	}
-
-	if offer.OfferID != offerID {
-		return nil, errors.New("offerID is incompatible")
-	}
-
-	return offer, nil
-}
-
-// Update offer in database.
-func (am *Manager) SaveOffer(putter db.Putter, offer *ultpb.Offer) error {
-	offerb, err := ultpb.Encode(offer)
-	if err != nil {
-		return fmt.Errorf("encode offer failed: %v", err)
-	}
-
-	// update offer in db
-	err = putter.Put(am.bucket, []byte(offer.OfferID), offerb)
-	if err != nil {
-		return fmt.Errorf("save offer in db failed: %v", err)
-	}
-
-	return nil
-}
-
-// Delete offer in database.
-func (am *Manager) DeleteOffer(deleter db.Deleter, offerID string) error {
-	err := deleter.Delete(am.bucket, []byte(offerID))
-	if err != nil {
-		return fmt.Errorf("deleter offer in db failed: %v", err)
-	}
+	trust.Balance += balance
 
 	return nil
 }

@@ -8,13 +8,15 @@ import (
 
 	"github.com/ultiledger/go-ultiledger/account"
 	"github.com/ultiledger/go-ultiledger/db"
+	"github.com/ultiledger/go-ultiledger/exchange"
 	"github.com/ultiledger/go-ultiledger/ultpb"
 	"github.com/ultiledger/go-ultiledger/util"
 )
 
-// Operation for managing offers
+// Operation for managing offers.
 type Offer struct {
 	AM        *account.Manager
+	EM        *exchange.Manager
 	AccountID string
 	SellAsset *ultpb.Asset
 	BuyAsset  *ultpb.Asset
@@ -42,14 +44,14 @@ func (of *Offer) Apply(dt db.Tx) error {
 	newOffer := true
 
 	if of.OfferID != "" {
-		offer, err := of.AM.GetOffer(dt, of.OfferID)
+		offer, err := of.EM.GetOffer(dt, of.SellAsset.AssetName, of.BuyAsset.AssetName, of.OfferID)
 		if err != nil {
 			return fmt.Errorf("get offer failed: %v", err)
 		}
 
 		// TODO(bobonovski) release liability
 
-		err = of.AM.DeleteOffer(dt, offer.OfferID)
+		err = of.EM.DeleteOffer(dt, of.SellAsset.AssetName, of.BuyAsset.AssetName, offer.OfferID)
 		if err != nil {
 			return fmt.Errorf("delete offer failed: %v", err)
 		}
@@ -58,7 +60,7 @@ func (of *Offer) Apply(dt db.Tx) error {
 
 		// delete the offer
 		if of.Amount == 0 {
-			err = of.AM.SubEntryCount(acc, int32(1))
+			err = of.AM.UpdateEntryCount(acc, int32(-1))
 			if err != nil {
 				return fmt.Errorf("decrease account entry account failed: %v", err)
 			}
@@ -83,7 +85,7 @@ func (of *Offer) Apply(dt db.Tx) error {
 
 	// temporarily increase entry count
 	if newOffer {
-		err = of.AM.AddEntryCount(acc, int32(1))
+		err = of.AM.UpdateEntryCount(acc, int32(1))
 		if err != nil {
 			return fmt.Errorf("increase account entry account failed: %v", err)
 		}
@@ -119,7 +121,7 @@ func (of *Offer) Apply(dt db.Tx) error {
 
 	// decrease entry count
 	if newOffer {
-		err = of.AM.SubEntryCount(acc, int32(1))
+		err = of.AM.UpdateEntryCount(acc, int32(-1))
 		if err != nil {
 			return fmt.Errorf("increase account entry account failed: %v", err)
 		}

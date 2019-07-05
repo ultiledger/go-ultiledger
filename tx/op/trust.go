@@ -51,7 +51,7 @@ func (t *Trust) Apply(dt db.Tx) error {
 			return fmt.Errorf("issuer %s account not exists", t.Asset.Issuer)
 		}
 		// Increase entry count of source account.
-		err = t.AM.AddEntryCount(srcAcc, 1)
+		err = t.AM.UpdateEntryCount(srcAcc, int32(1))
 		if err != nil {
 			return fmt.Errorf("add src account %s entry failed: %v", t.SrcAccountID, err)
 		}
@@ -71,7 +71,7 @@ func (t *Trust) Apply(dt db.Tx) error {
 			if err != nil {
 				return err
 			}
-			err = t.AM.SubEntryCount(srcAcc, 1)
+			err = t.AM.UpdateEntryCount(srcAcc, int32(-1))
 			if err != nil {
 				return fmt.Errorf("subtract src account %s entry failed: %v", t.SrcAccountID, err)
 			}

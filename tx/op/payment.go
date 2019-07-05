@@ -118,7 +118,7 @@ func (pp *PathPayment) Apply(dt db.Tx) error {
 	}
 
 	if asset.AssetType == ultpb.AssetType_NATIVE {
-		if err := pp.AM.AddBalance(dstAccount, amount); err != nil {
+		if err := pp.AM.UpdateBalance(dstAccount, amount); err != nil {
 			return fmt.Errorf("add balance failed: %v", err)
 		}
 		if err := pp.AM.SaveAccount(dt, dstAccount); err != nil {
@@ -139,7 +139,7 @@ func (pp *PathPayment) Apply(dt db.Tx) error {
 			return ErrPaymentNotAuthorized
 		}
 
-		if err := pp.AM.AddTrustBalance(trust, pp.DstAmount); err != nil {
+		if err := pp.AM.UpdateTrustBalance(trust, pp.DstAmount); err != nil {
 			return fmt.Errorf("add trust balance failed: %v", err)
 		}
 
@@ -185,7 +185,7 @@ func (pp *PathPayment) Apply(dt db.Tx) error {
 		if err != nil {
 			return fmt.Errorf("load source account failed: %v", err)
 		}
-		if err := pp.AM.SubBalance(srcAccount, amount); err != nil {
+		if err := pp.AM.UpdateBalance(srcAccount, -amount); err != nil {
 			return err
 		}
 		if err := pp.AM.SaveAccount(dt, srcAccount); err != nil {
@@ -203,7 +203,7 @@ func (pp *PathPayment) Apply(dt db.Tx) error {
 		if trust.Authorized == 0 {
 			return ErrPaymentNotAuthorized
 		}
-		if err := pp.AM.SubTrustBalance(trust, amount); err != nil {
+		if err := pp.AM.UpdateTrustBalance(trust, -amount); err != nil {
 			return fmt.Errorf("add trust balance failed: %v", err)
 		}
 		if err := pp.AM.SaveTrust(dt, trust); err != nil {
