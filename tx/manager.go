@@ -27,6 +27,7 @@ var (
 	ErrInsufficientForFee = errors.New("insufficient balance for fee")
 	ErrInsufficientForTx  = errors.New("insufficient balance for tx")
 	ErrInvalidSeqNum      = errors.New("invalid sequence number")
+	ErrInvalidOpType      = errors.New("invalid op type")
 )
 
 // ManagerContext represents contextual information TxManager needs.
@@ -259,31 +260,18 @@ func (tm *Manager) ApplyTxList(txList []*ultpb.Tx) error {
 	// TODO(bobonovski) sort the rest of the txs in more random way
 	sort.Sort(TxSlice(restTxList))
 
-	var ops []op.Op
 	for _, tx := range restTxList {
 		txk, _ := ultpb.GetTxKey(tx)
 
-		for _, o := range tx.OpList {
-			switch o.OpType {
-			case ultpb.OpType_CREATE_ACCOUNT:
-				ca := o.GetCreateAccount()
-				ops = append(ops, &op.CreateAccount{
-					SrcAccountID: tx.AccountID,
-					DstAccountID: ca.AccountID,
-					Balance:      ca.Balance,
-				})
-			case ultpb.OpType_PAYMENT:
-				payment := o.GetPayment()
-				ops = append(ops, &op.Payment{
-					AM:           tm.am,
-					EM:           tm.em,
-					SrcAccountID: tx.AccountID,
-					DstAccountID: payment.AccountID,
-					Asset:        payment.Asset,
-					Amount:       payment.Amount,
-				})
-			default:
-				log.Fatalf("received invalid op type: %v", o.OpType)
+		ops, err := tm.getTxOpList(tx.AccountID, tx.OpList)
+		if err != nil {
+			status := &rpcpb.TxStatus{
+				StatusCode:   rpcpb.TxStatusCode_FAILED,
+				ErrorMessage: err.Error(),
+			}
+			err := tm.UpdateTxStatus(txk, status)
+			if err != nil {
+				return fmt.Errorf("update tx %s status failed: %v", txk, err)
 			}
 		}
 
@@ -319,6 +307,35 @@ func (tm *Manager) ApplyTxList(txList []*ultpb.Tx) error {
 	}
 
 	return nil
+}
+
+// Construct tx op list from generic op list.
+func (tm *Manager) getTxOpList(accountID string, opList []*ultpb.Op) ([]op.Op, error) {
+	var ops []op.Op
+	for _, o := range opList {
+		switch o.OpType {
+		case ultpb.OpType_CREATE_ACCOUNT:
+			ca := o.GetCreateAccount()
+			ops = append(ops, &op.CreateAccount{
+				SrcAccountID: accountID,
+				DstAccountID: ca.AccountID,
+				Balance:      ca.Balance,
+			})
+		case ultpb.OpType_PAYMENT:
+			payment := o.GetPayment()
+			ops = append(ops, &op.Payment{
+				AM:           tm.am,
+				EM:           tm.em,
+				SrcAccountID: accountID,
+				DstAccountID: payment.AccountID,
+				Asset:        payment.Asset,
+				Amount:       payment.Amount,
+			})
+		default:
+			return nil, fmt.Errorf("received invalid op type: %v", o.OpType)
+		}
+	}
+	return ops, nil
 }
 
 // Get concatenated tx list of each account.
