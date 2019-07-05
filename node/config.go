@@ -1,18 +1,18 @@
 package node
 
 import (
-	"crypto/sha256"
 	"errors"
 	"fmt"
 
 	"github.com/spf13/viper"
 
+	"github.com/ultiledger/go-ultiledger/crypto"
 	"github.com/ultiledger/go-ultiledger/ultpb"
 )
 
 type Config struct {
 	// network ID hash
-	NetworkID [32]byte
+	NetworkID []byte
 	// listen port of server
 	Port string
 	// addresses of initial peers
@@ -68,9 +68,9 @@ func NewConfig(v *viper.Viper) (*Config, error) {
 	if err != nil {
 		return nil, fmt.Errorf("parse quorum failed: %v", err)
 	}
-
+	netID := crypto.SHA256HashBytes([]byte(v.GetString("network_id")))
 	u := Config{
-		NetworkID:       sha256.Sum256([]byte(v.GetString("network_id"))),
+		NetworkID:       netID[:],
 		Port:            v.GetString("port"),
 		Peers:           v.GetStringSlice("peers"),
 		NodeID:          v.GetString("node_id"),

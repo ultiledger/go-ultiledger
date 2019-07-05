@@ -180,6 +180,10 @@ func (n *Node) Start(newnode bool) {
 		if err != nil {
 			log.Fatalf("create genesis ledger failed: %v", err)
 		}
+		err = n.am.CreateMasterAccount(n.config.NetworkID, ledger.GenesisTotalTokens, uint64(1))
+		if err != nil {
+			log.Fatalf("create master account failed: %v", err)
+		}
 		err = n.engine.Propose()
 		if err != nil {
 			log.Fatalf("propose new value failed: %v", err)
