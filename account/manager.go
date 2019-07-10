@@ -74,7 +74,10 @@ func (am *Manager) CreateAccount(putter db.Putter, accountID string, balance int
 		Balance:   balance,
 		Signer:    signer,
 		SeqNum:    seqNum,
-		Liability: &ultpb.Liability{},
+		Liability: &ultpb.Liability{
+			Selling: int64(0),
+			Buying:  int64(0),
+		},
 	}
 
 	accb, err := ultpb.Encode(acc)
@@ -177,9 +180,13 @@ func (am *Manager) CreateTrust(putter db.Putter, accountID string, asset *ultpb.
 	}
 
 	trust := &ultpb.Trust{
-		AccountID:  accountID,
-		Asset:      asset,
-		Balance:    0,
+		AccountID: accountID,
+		Asset:     asset,
+		Balance:   0,
+		Liability: &ultpb.Liability{
+			Buying:  int64(0),
+			Selling: int64(0),
+		},
 		Limit:      limit,
 		Authorized: 1,
 	}

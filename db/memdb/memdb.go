@@ -64,7 +64,7 @@ func (m *memdb) Get(bucket string, key []byte) ([]byte, error) {
 	return nil, nil
 }
 
-// Get retrieves the values of the keys with prefix from database.
+// GetAll retrieves the values of the keys with prefix from database.
 func (m *memdb) GetAll(bucket string, keyPrefix []byte) ([][]byte, error) {
 	m.Lock()
 	defer m.Unlock()

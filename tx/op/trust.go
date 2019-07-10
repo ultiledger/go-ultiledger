@@ -65,7 +65,7 @@ func (t *Trust) Apply(dt db.Tx) error {
 			return fmt.Errorf("create trust failed: %v", err)
 		}
 	} else { // Modify an existing trust.
-		if trust.Limit == 0 {
+		if t.Limit == 0 {
 			// Delete the trust and update the entry count of source account.
 			err = t.AM.DeleteTrust(dt, t.SrcAccountID, t.Asset)
 			if err != nil {
