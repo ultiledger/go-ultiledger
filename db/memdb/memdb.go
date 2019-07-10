@@ -61,7 +61,7 @@ func (m *memdb) Get(bucket string, key []byte) ([]byte, error) {
 	if val, ok := m.db[string(key)]; ok {
 		return val, nil
 	}
-	return nil, fmt.Errorf("Value not found.")
+	return nil, nil
 }
 
 // Get retrieves the values of the keys with prefix from database.
@@ -93,27 +93,27 @@ func (m *memdb) Close() error {
 
 // Placeholders for meeting the requirements of the db interface.
 func (m *memdb) Begin() (db.Tx, error) {
-	mtx := &memdbTx{}
+	mtx := &memdbTx{mdb: m}
 	return mtx, nil
 }
 
 // memdbTx mocks at the transactions of real db.
-type memdbTx struct{}
+type memdbTx struct{ mdb *memdb }
 
 func (m *memdbTx) Get(bucket string, key []byte) ([]byte, error) {
-	return nil, nil
+	return m.mdb.Get(bucket, key)
 }
 
 func (m *memdbTx) GetAll(bucket string, keyPrefix []byte) ([][]byte, error) {
-	return nil, nil
+	return m.mdb.GetAll(bucket, keyPrefix)
 }
 
 func (m *memdbTx) Put(bucket string, key, value []byte) error {
-	return nil
+	return m.mdb.Put(bucket, key, value)
 }
 
 func (m *memdbTx) Delete(bucket string, key []byte) error {
-	return nil
+	return m.mdb.Delete(bucket, key)
 }
 
 func (m *memdbTx) Rollback() error {
