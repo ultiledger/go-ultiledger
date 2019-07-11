@@ -17,6 +17,7 @@ var (
 	ErrBalanceUnderfund = errors.New("account balance underfund")
 	ErrTrustOverLimit   = errors.New("trust balance over limit")
 	ErrTrustUnderflow   = errors.New("trust balance underflow")
+	ErrInvalidUpdate    = errors.New("account update invalid")
 )
 
 // Manager manages accounts and trusts.
@@ -151,6 +152,25 @@ func (am *Manager) UpdateBalance(acc *ultpb.Account, balance int64) error {
 
 	acc.Balance += balance
 
+	return nil
+}
+
+// Update account liability.
+func (am *Manager) UpdateLiability(acc *ultpb.Account, amount int64, buy bool) error {
+	if amount == 0 {
+		return nil
+	}
+	if buy {
+		if amount > math.MaxInt64-acc.Liability.Buying || amount < -acc.Liability.Buying {
+			return ErrInvalidUpdate
+		}
+		acc.Liability.Buying += amount
+	} else {
+		if amount > math.MaxInt64-acc.Liability.Selling || amount < -acc.Liability.Selling {
+			return ErrInvalidUpdate
+		}
+		acc.Liability.Selling += amount
+	}
 	return nil
 }
 
@@ -315,3 +335,24 @@ func (am *Manager) UpdateTrustBalance(trust *ultpb.Trust, balance int64) error {
 
 	return nil
 }
+
+// Update trust liability.
+func (am *Manager) UpdateTrustLiability(trust *ultpb.Trust, amount int64, buy bool) error {
+	if amount == 0 {
+		return nil
+	}
+	if buy {
+		if amount > math.MaxInt64-trust.Liability.Buying || amount < -trust.Liability.Buying {
+			return ErrInvalidUpdate
+		}
+		trust.Liability.Buying += amount
+	} else {
+		if amount > math.MaxInt64-trust.Liability.Selling || amount < -trust.Liability.Selling {
+			return ErrInvalidUpdate
+		}
+		trust.Liability.Selling += amount
+	}
+	return nil
+}
+
+// Update entry count.
