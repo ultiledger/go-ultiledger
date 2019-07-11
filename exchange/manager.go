@@ -272,6 +272,9 @@ func (m *Manager) GetOffer(getter db.Getter, sellAsset string, buyAsset string, 
 	if err != nil {
 		return nil, fmt.Errorf("get offer from db failed: %v", err)
 	}
+	if b == nil {
+		return nil, nil
+	}
 
 	offer, err := ultpb.DecodeOffer(b)
 	if err != nil {
