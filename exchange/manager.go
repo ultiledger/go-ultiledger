@@ -37,9 +37,9 @@ func NewManager(database db.Database, am *account.Manager) *Manager {
 // the order until the order is totally filled or there are
 // not enough offers to use for filling the order.
 func (m *Manager) FillOrder(dt db.Tx, o *Order) error {
-	// The order is selling AssetX for AssetY, so we need to
-	// load offers that sell AssetY for AssetX.
-	offers, err := m.loadOffers(dt, o.AssetY.AssetName, o.AssetX.AssetName)
+	// The order is selling SellAsset for BuyAsset, so we need to
+	// load offers that sell BuyAsset for SellAsset.
+	offers, err := m.loadOffers(dt, o.BuyAsset.AssetName, o.SellAsset.AssetName)
 	if err != nil {
 		return fmt.Errorf("load offers failed: %v", err)
 	}
@@ -63,8 +63,8 @@ func (m *Manager) FillOrder(dt db.Tx, o *Order) error {
 	return nil
 }
 
-// Fill the order with loaded offer. The order is selling AssetX
-// for AssetY and the offer is selling AssetY for AssetX.
+// Fill the order with loaded offer. The order is selling SellAsset
+// for BuyAsset and the offer is selling BuyAsset for SellAsset.
 func (m *Manager) fill(dt db.Tx, o *Order, offer *ultpb.Offer) error {
 	// Load seller account of the offer.
 	acc, err := m.AM.GetAccount(dt, offer.AccountID)
@@ -86,22 +86,22 @@ func (m *Manager) fill(dt db.Tx, o *Order, offer *ultpb.Offer) error {
 		}
 	}
 
-	// Maximum AssetY the offer can sell and maximum AssetX
+	// Maximum BuyAsset the offer can sell and maximum SellAsset
 	// the offer can buy.
-	maxAssetY := m.getMaxToSell(acc, assetYTrust)
-	maxAssetX := m.getMaxToBuy(acc, assetXTrust)
+	maxBuyAsset := m.getMaxToSell(acc, assetYTrust)
+	maxSellAsset := m.getMaxToBuy(acc, assetXTrust)
 
 	// Exchange the asset with consistent rules.
-	err = m.exchange(o, maxAssetY, maxAssetX, offer.Price, false)
+	err = m.exchange(o, maxBuyAsset, maxSellAsset, offer.Price, false)
 	if err != nil {
 		return fmt.Errorf("exchange assets failed: %v", err)
 	}
 
 	// Update the account balance or trust balance based on
 	// information in order after exchange.
-	if o.AssetYBought != 0 {
+	if o.BuyAssetBought != 0 {
 		if assetYTrust != nil {
-			err = m.AM.UpdateTrustBalance(assetYTrust, o.AssetYBought)
+			err = m.AM.UpdateTrustBalance(assetYTrust, o.BuyAssetBought)
 			if err != nil {
 				return fmt.Errorf("add trust balance failed: %v", err)
 			}
@@ -110,7 +110,7 @@ func (m *Manager) fill(dt db.Tx, o *Order, offer *ultpb.Offer) error {
 				return fmt.Errorf("save trust failed: %v", err)
 			}
 		} else {
-			err = m.AM.UpdateBalance(acc, o.AssetYBought)
+			err = m.AM.UpdateBalance(acc, o.BuyAssetBought)
 			if err != nil {
 				return fmt.Errorf("add account balance failed: %v", err)
 			}
@@ -120,9 +120,9 @@ func (m *Manager) fill(dt db.Tx, o *Order, offer *ultpb.Offer) error {
 			}
 		}
 	}
-	if o.AssetXSold != 0 {
+	if o.SellAssetSold != 0 {
 		if assetXTrust != nil {
-			err = m.AM.UpdateTrustBalance(assetXTrust, -o.AssetXSold)
+			err = m.AM.UpdateTrustBalance(assetXTrust, -o.SellAssetSold)
 			if err != nil {
 				return fmt.Errorf("substract trust balance failed: %v", err)
 			}
@@ -131,7 +131,7 @@ func (m *Manager) fill(dt db.Tx, o *Order, offer *ultpb.Offer) error {
 				return fmt.Errorf("save trust failed: %v", err)
 			}
 		} else {
-			err = m.AM.UpdateBalance(acc, -o.AssetXSold)
+			err = m.AM.UpdateBalance(acc, -o.SellAssetSold)
 			if err != nil {
 				return fmt.Errorf("substract account balance failed: %v", err)
 			}
@@ -146,33 +146,33 @@ func (m *Manager) fill(dt db.Tx, o *Order, offer *ultpb.Offer) error {
 }
 
 // Exchange the assets for filling the order with selling limits
-// of AssetY and buying limits of AssetX of the offer.
-func (m *Manager) exchange(order *Order, maxAssetY int64, maxAssetX int64, offerPrice *ultpb.Price, checkError bool) error {
+// of BuyAsset and buying limits of SellAsset of the offer.
+func (m *Manager) exchange(order *Order, maxBuyAsset int64, maxSellAsset int64, offerPrice *ultpb.Price, checkError bool) error {
 	// Note that the input price is the price of selling
-	// AssetY for AssetX. We need to recover the order
+	// BuyAsset for SellAsset. We need to recover the order
 	// price by exchanging the denominator and numberator.
 	orderPrice := &ultpb.Price{
 		Numerator:   offerPrice.Denominator,
 		Denominator: offerPrice.Numerator,
 	}
 
-	// Scaled order value in terms of AssetY.
-	orderValue := m.getOfferValue(order.MaxAssetX, order.MaxAssetY, orderPrice)
-	// Scaled offer value in terms of AssetY.
-	offerValue := m.getOfferValue(maxAssetY, maxAssetX, offerPrice)
+	// Scaled order value in terms of BuyAsset.
+	orderValue := m.getOfferValue(order.MaxSellAsset, order.MaxBuyAsset, orderPrice)
+	// Scaled offer value in terms of BuyAsset.
+	offerValue := m.getOfferValue(maxBuyAsset, maxSellAsset, offerPrice)
 
 	valueCmp := orderValue.Cmp(offerValue)
 
 	var assetXSold, assetYBought int64
 
 	// If valueCmp < 0, we should use orderValue to decide the
-	// effective amount of AssetX and AssetY to exchange or we
+	// effective amount of SellAsset and BuyAsset to exchange or we
 	// should use offerValue.
 	if valueCmp < 0 {
-		if offerPrice.Numerator > offerPrice.Denominator { // AssetY is more valuable.
+		if offerPrice.Numerator > offerPrice.Denominator { // BuyAsset is more valuable.
 			assetYBought = DivideBigInt(orderValue, offerPrice.Numerator, RoundDown)
 			assetXSold = DivideBigInt(MultiplyInt64(assetYBought, offerPrice.Numerator), offerPrice.Denominator, RoundUp)
-		} else { // AssetX is more valuable.
+		} else { // SellAsset is more valuable.
 			assetXSold = DivideBigInt(orderValue, offerPrice.Denominator, RoundDown)
 			assetYBought = DivideBigInt(MultiplyInt64(assetXSold, offerPrice.Denominator), offerPrice.Numerator, RoundDown)
 		}
@@ -188,8 +188,8 @@ func (m *Manager) exchange(order *Order, maxAssetY int64, maxAssetX int64, offer
 
 	// TODO(bobonovski) Check possible numerical errors during exchange
 
-	order.AssetXSold = assetXSold
-	order.AssetYBought = assetYBought
+	order.SellAssetSold = assetXSold
+	order.BuyAssetBought = assetYBought
 	// If valudCmp < 0, the current offer can fill the order
 	if valueCmp < 0 {
 		order.Full = true
