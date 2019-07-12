@@ -42,7 +42,7 @@ func (of *Offer) Apply(dt db.Tx) error {
 		return fmt.Errorf("load selling and buying trust failed: %v", err)
 	}
 
-	newOffer := true
+	var newOffer bool
 
 	if of.OfferID != "" { // existing offer
 		offer, err := of.EM.GetOffer(dt, of.SellAsset.AssetName, of.BuyAsset.AssetName, of.OfferID)
@@ -83,6 +83,7 @@ func (of *Offer) Apply(dt db.Tx) error {
 		if of.Amount == 0 {
 			return nil
 		}
+		newOffer = true
 		// create a offer id for the new offer
 		offerID, err := crypto.GetOfferID()
 		if err != nil {
@@ -102,7 +103,7 @@ func (of *Offer) Apply(dt db.Tx) error {
 		Passive:   of.Passive,
 	}
 
-	sellLimit, buyLimit, err := of.getOfferLimits(dt, acc, buyTrust, sellTrust, sellOffer, newOffer)
+	sellLimit, buyLimit, err := of.getOfferLimits(dt, acc, sellTrust, buyTrust, sellOffer, newOffer)
 	if err != nil {
 		return fmt.Errorf("get offer limits failed: %v", err)
 	}
@@ -110,15 +111,104 @@ func (of *Offer) Apply(dt db.Tx) error {
 	if buyLimit == 0 {
 		return errors.New("offer buying limit is zero")
 	}
-	// For test
-	fmt.Println(sellLimit, buyLimit)
+
+	// fill the offer in exchange
+	order := &exchange.Order{
+		SellAsset:    of.SellAsset,
+		MaxSellAsset: sellLimit,
+		BuyAsset:     of.BuyAsset,
+		MaxBuyAsset:  buyLimit,
+		FilterPrice:  true,
+	}
+	err = of.EM.FillOrder(dt, order)
+	if err != nil {
+		return fmt.Errorf("fill order failed: %v", err)
+	}
+
+	if order.BuyAssetBought > 0 {
+		err = of.updateBalances(dt, acc, sellTrust, buyTrust, order.SellAssetSold, order.BuyAssetBought)
+		if err != nil {
+			return fmt.Errorf("update account and trust balances failed: %v", err)
+		}
+	}
+
+	if order.Full {
+		sellOffer.Amount = 0
+	} else {
+		// TODO(bobonovski) adjust the offer amount
+	}
+
+	if sellOffer.Amount > 0 {
+		if newOffer {
+			// create a offer id for the new offer
+			offerID, err := crypto.GetOfferID()
+			if err != nil {
+				return fmt.Errorf("create offer id failed: %v", err)
+			}
+			sellOffer.OfferID = offerID
+		}
+		err = of.EM.SaveOffer(dt, sellOffer)
+		if err != nil {
+			return fmt.Errorf("save offer failed: %v", err)
+		}
+	}
+
+	return nil
+}
+
+// Update the balances of buy and sell assets.
+func (of *Offer) updateBalances(dt db.Tx, acc *ultpb.Account,
+	sellTrust, buyTrust *ultpb.Trust, sellAssetSold, buyAssetBought int64) error {
+	var err error
+
+	// update balance for buy asset
+	if of.BuyAsset.AssetType == ultpb.AssetType_NATIVE {
+		err = of.AM.UpdateBalance(acc, buyAssetBought)
+		if err != nil {
+			return fmt.Errorf("update account balance failed: %v", err)
+		}
+		err = of.AM.SaveAccount(dt, acc)
+		if err != nil {
+			return fmt.Errorf("save account failed: %v", err)
+		}
+	} else {
+		err = of.AM.UpdateTrustBalance(buyTrust, buyAssetBought)
+		if err != nil {
+			return fmt.Errorf("update trust balance failed: %v", err)
+		}
+		err = of.AM.SaveTrust(dt, buyTrust)
+		if err != nil {
+			return fmt.Errorf("save trust failed: %v", err)
+		}
+	}
+
+	// update balance for sell asset
+	if of.SellAsset.AssetType == ultpb.AssetType_NATIVE {
+		err = of.AM.UpdateBalance(acc, -sellAssetSold)
+		if err != nil {
+			return fmt.Errorf("update account balance failed: %v", err)
+		}
+		err = of.AM.SaveAccount(dt, acc)
+		if err != nil {
+			return fmt.Errorf("save account failed: %v", err)
+		}
+	} else {
+		err = of.AM.UpdateTrustBalance(sellTrust, -sellAssetSold)
+		if err != nil {
+			return fmt.Errorf("update trust balance failed: %v", err)
+		}
+		err = of.AM.SaveTrust(dt, sellTrust)
+		if err != nil {
+			return fmt.Errorf("save trust failed: %v", err)
+		}
+	}
 
 	return nil
 }
 
 // Get the buying and selling limits of the offer.
 func (of *Offer) getOfferLimits(dt db.Tx, acc *ultpb.Account,
-	buyTrust *ultpb.Trust, sellTrust *ultpb.Trust, offer *ultpb.Offer, newOffer bool) (int64, int64, error) {
+	sellTrust, buyTrust *ultpb.Trust, offer *ultpb.Offer, newOffer bool) (int64, int64, error) {
 	// temporarily increase entry count
 	var err error
 	if newOffer {

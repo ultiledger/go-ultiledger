@@ -162,17 +162,17 @@ func (pp *PathPayment) Apply(dt db.Tx) error {
 		}
 		// Exchange assets.
 		order := &exchange.Order{
-			AssetX:    path[i],
-			MaxAssetX: math.MaxInt64,
-			AssetY:    asset,
-			MaxAssetY: amount,
+			SellAsset:    path[i],
+			MaxSellAsset: math.MaxInt64,
+			BuyAsset:     asset,
+			MaxBuyAsset:  amount,
 		}
 		err = pp.EM.FillOrder(dt, order)
 		if err != nil {
 			return fmt.Errorf("exchange assets failed: %v", err)
 		}
 		asset = path[i]
-		amount = order.AssetXSold
+		amount = order.SellAssetSold
 	}
 
 	if amount > pp.SrcAmount {
