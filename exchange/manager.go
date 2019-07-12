@@ -15,6 +15,7 @@ import (
 type Manager struct {
 	database db.Database
 	bucket   string
+	nodeID   string
 
 	AM     *account.Manager
 	offers []*ultpb.Offer
@@ -51,10 +52,17 @@ func (m *Manager) FillOrder(dt db.Tx, o *Order) error {
 		Denominator: o.Price.Numerator,
 	}
 	for _, offer := range offers {
-		if ComparePrice(threshold, offer.Price) < 0 {
+		if o.FilterPrice {
+			if ComparePrice(threshold, offer.Price) < 0 {
+				break
+			}
+		}
+		// cannot fill self offer
+		if offer.AccountID == m.nodeID {
 			break
 		}
 		m.fill(dt, o, offer)
+		o.FilledOffers = append(o.FilledOffers, offer)
 		if o.Full == true {
 			break
 		}
@@ -72,15 +80,15 @@ func (m *Manager) fill(dt db.Tx, o *Order, offer *ultpb.Offer) error {
 		return fmt.Errorf("load seller account of offer failed: %v", err)
 	}
 
-	var assetXTrust, assetYTrust *ultpb.Trust
+	var sellAssetTrust, buyAssetTrust *ultpb.Trust
 	if offer.SellAsset.AssetType != ultpb.AssetType_NATIVE {
-		assetYTrust, err = m.AM.GetTrust(dt, offer.AccountID, offer.SellAsset)
+		buyAssetTrust, err = m.AM.GetTrust(dt, offer.AccountID, offer.SellAsset)
 		if err != nil {
 			return fmt.Errorf("load sell asset trust for reciprocal offer failed: %v", err)
 		}
 	}
 	if offer.BuyAsset.AssetType != ultpb.AssetType_NATIVE {
-		assetXTrust, err = m.AM.GetTrust(dt, offer.AccountID, offer.BuyAsset)
+		sellAssetTrust, err = m.AM.GetTrust(dt, offer.AccountID, offer.BuyAsset)
 		if err != nil {
 			return fmt.Errorf("load buy asset trust for reciprocal offer failed: %v", err)
 		}
@@ -88,8 +96,8 @@ func (m *Manager) fill(dt db.Tx, o *Order, offer *ultpb.Offer) error {
 
 	// Maximum BuyAsset the offer can sell and maximum SellAsset
 	// the offer can buy.
-	maxBuyAsset := m.getMaxToSell(acc, assetYTrust)
-	maxSellAsset := m.getMaxToBuy(acc, assetXTrust)
+	maxBuyAsset := m.getMaxToSell(acc, buyAssetTrust)
+	maxSellAsset := m.getMaxToBuy(acc, sellAssetTrust)
 
 	// Exchange the asset with consistent rules.
 	err = m.exchange(o, maxBuyAsset, maxSellAsset, offer.Price, false)
@@ -100,12 +108,12 @@ func (m *Manager) fill(dt db.Tx, o *Order, offer *ultpb.Offer) error {
 	// Update the account balance or trust balance based on
 	// information in order after exchange.
 	if o.BuyAssetBought != 0 {
-		if assetYTrust != nil {
-			err = m.AM.UpdateTrustBalance(assetYTrust, o.BuyAssetBought)
+		if buyAssetTrust != nil {
+			err = m.AM.UpdateTrustBalance(buyAssetTrust, o.BuyAssetBought)
 			if err != nil {
 				return fmt.Errorf("add trust balance failed: %v", err)
 			}
-			err = m.AM.SaveTrust(dt, assetYTrust)
+			err = m.AM.SaveTrust(dt, buyAssetTrust)
 			if err != nil {
 				return fmt.Errorf("save trust failed: %v", err)
 			}
@@ -121,12 +129,12 @@ func (m *Manager) fill(dt db.Tx, o *Order, offer *ultpb.Offer) error {
 		}
 	}
 	if o.SellAssetSold != 0 {
-		if assetXTrust != nil {
-			err = m.AM.UpdateTrustBalance(assetXTrust, -o.SellAssetSold)
+		if sellAssetTrust != nil {
+			err = m.AM.UpdateTrustBalance(sellAssetTrust, -o.SellAssetSold)
 			if err != nil {
 				return fmt.Errorf("substract trust balance failed: %v", err)
 			}
-			err = m.AM.SaveTrust(dt, assetYTrust)
+			err = m.AM.SaveTrust(dt, buyAssetTrust)
 			if err != nil {
 				return fmt.Errorf("save trust failed: %v", err)
 			}
@@ -163,33 +171,33 @@ func (m *Manager) exchange(order *Order, maxBuyAsset int64, maxSellAsset int64, 
 
 	valueCmp := orderValue.Cmp(offerValue)
 
-	var assetXSold, assetYBought int64
+	var sellAssetSold, buyAssetBought int64
 
 	// If valueCmp < 0, we should use orderValue to decide the
 	// effective amount of SellAsset and BuyAsset to exchange or we
 	// should use offerValue.
 	if valueCmp < 0 {
 		if offerPrice.Numerator > offerPrice.Denominator { // BuyAsset is more valuable.
-			assetYBought = DivideBigInt(orderValue, offerPrice.Numerator, RoundDown)
-			assetXSold = DivideBigInt(MultiplyInt64(assetYBought, offerPrice.Numerator), offerPrice.Denominator, RoundUp)
+			buyAssetBought = DivideBigInt(orderValue, offerPrice.Numerator, RoundDown)
+			sellAssetSold = DivideBigInt(MultiplyInt64(buyAssetBought, offerPrice.Numerator), offerPrice.Denominator, RoundUp)
 		} else { // SellAsset is more valuable.
-			assetXSold = DivideBigInt(orderValue, offerPrice.Denominator, RoundDown)
-			assetYBought = DivideBigInt(MultiplyInt64(assetXSold, offerPrice.Denominator), offerPrice.Numerator, RoundDown)
+			sellAssetSold = DivideBigInt(orderValue, offerPrice.Denominator, RoundDown)
+			buyAssetBought = DivideBigInt(MultiplyInt64(sellAssetSold, offerPrice.Denominator), offerPrice.Numerator, RoundDown)
 		}
 	} else {
 		if offerPrice.Numerator > offerPrice.Denominator {
-			assetYBought = DivideBigInt(offerValue, offerPrice.Numerator, RoundDown)
-			assetXSold = DivideBigInt(MultiplyInt64(assetYBought, offerPrice.Numerator), offerPrice.Denominator, RoundDown)
+			buyAssetBought = DivideBigInt(offerValue, offerPrice.Numerator, RoundDown)
+			sellAssetSold = DivideBigInt(MultiplyInt64(buyAssetBought, offerPrice.Numerator), offerPrice.Denominator, RoundDown)
 		} else {
-			assetXSold = DivideBigInt(offerValue, offerPrice.Denominator, RoundDown)
-			assetYBought = DivideBigInt(MultiplyInt64(assetXSold, offerPrice.Denominator), offerPrice.Numerator, RoundUp)
+			sellAssetSold = DivideBigInt(offerValue, offerPrice.Denominator, RoundDown)
+			buyAssetBought = DivideBigInt(MultiplyInt64(sellAssetSold, offerPrice.Denominator), offerPrice.Numerator, RoundUp)
 		}
 	}
 
 	// TODO(bobonovski) Check possible numerical errors during exchange
 
-	order.SellAssetSold = assetXSold
-	order.BuyAssetBought = assetYBought
+	order.SellAssetSold = sellAssetSold
+	order.BuyAssetBought = buyAssetBought
 	// If valudCmp < 0, the current offer can fill the order
 	if valueCmp < 0 {
 		order.Full = true

@@ -23,6 +23,10 @@ type Order struct {
 	SellAssetSold int64
 	// amount of BuyAsset we have bought after filling order
 	BuyAssetBought int64
+	// filled offers
+	FilledOffers []*ultpb.Offer
 	// whether the order is fully filled
 	Full bool
+	// whether filter the offer with price constraint
+	FilterPrice bool
 }
