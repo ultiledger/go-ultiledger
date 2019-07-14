@@ -13,11 +13,13 @@ import (
 // Hub manages the gRPC connections to ult servers and
 // works as a load balancer to the backend ult servers.
 type GrpcClient struct {
+	networkID     string
+	accountID     string
 	coreEndpoints string
 	client        rpcpb.NodeClient
 }
 
-func New(coreEndpoints string) (*GrpcClient, error) {
+func New(networkID, accoountID, coreEndpoints string) (*GrpcClient, error) {
 	// connect to core servers
 	r := NewResolver()
 	b := g.RoundRobin(r)
@@ -26,7 +28,13 @@ func New(coreEndpoints string) (*GrpcClient, error) {
 		return nil, fmt.Errorf("connect to core servers failed: %v", err)
 	}
 	client := rpcpb.NewNodeClient(conn)
-	return &GrpcClient{coreEndpoints: coreEndpoints, client: client}, nil
+	gc := &GrpcClient{
+		networkID:     networkID,
+		accountID:     accountID,
+		coreEndpoints: coreEndpoints,
+		client:        client,
+	}
+	return &gc, nil
 }
 
 // SummitTx summits the tx to ult servers and return appropriate
