@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 
+	b58 "github.com/mr-tron/base58/base58"
 	"github.com/spf13/viper"
 
 	"github.com/ultiledger/go-ultiledger/crypto"
@@ -11,8 +12,8 @@ import (
 )
 
 type Config struct {
-	// network ID hash
-	NetworkID []byte
+	// network ID hash in base58 encoded format
+	NetworkID string
 	// listen port of server
 	Port string
 	// addresses of initial peers
@@ -69,8 +70,9 @@ func NewConfig(v *viper.Viper) (*Config, error) {
 		return nil, fmt.Errorf("parse quorum failed: %v", err)
 	}
 	netID := crypto.SHA256HashBytes([]byte(v.GetString("network_id")))
+	netIDStr := b58.Encode(netID[:])
 	u := Config{
-		NetworkID:       netID[:],
+		NetworkID:       netIDStr,
 		Port:            v.GetString("port"),
 		Peers:           v.GetStringSlice("peers"),
 		NodeID:          v.GetString("node_id"),

@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	b58 "github.com/mr-tron/base58/base58"
 	"google.golang.org/grpc"
 
 	"github.com/ultiledger/go-ultiledger/account"
@@ -70,6 +71,7 @@ func NewNode(conf *Config) *Node {
 	addr := strings.Split(netAddr.String(), ":")[0] + ":" + conf.Port
 	nodeID := conf.NodeID
 	seed := conf.Seed
+	networkID := conf.NetworkID
 
 	// create database store
 	database := boltdb.New(conf.DBPath)
@@ -125,6 +127,7 @@ func NewNode(conf *Config) *Node {
 
 	// construct node server context and create node server
 	serverCtx := &rpc.ServerContext{
+		NetworkID:      networkID,
 		Addr:           addr,
 		NodeID:         nodeID,
 		Seed:           seed,
@@ -183,7 +186,11 @@ func (n *Node) Start(newnode bool) {
 		if err != nil {
 			log.Fatalf("create genesis ledger failed: %v", err)
 		}
-		err = n.am.CreateMasterAccount(n.config.NetworkID, ledger.GenesisTotalTokens, uint64(1))
+		netID, err := b58.Decode(n.config.NetworkID)
+		if err != nil {
+			log.Fatalf("decode network id failed: %v", err)
+		}
+		err = n.am.CreateMasterAccount(netID, ledger.GenesisTotalTokens, uint64(1))
 		if err != nil {
 			log.Fatalf("create master account failed: %v", err)
 		}

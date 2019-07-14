@@ -24,9 +24,10 @@ import (
 // controls all the internal components to generate corresponding
 // responses and errors.
 type NodeServer struct {
-	addr   string // Network address of this node
-	nodeID string // ID of this node (public key)
-	seed   string // Private key of this node
+	networkID string // Hash of the networkID
+	addr      string // Network address of this node
+	nodeID    string // ID of this node (public key)
+	seed      string // Private key of this node
 
 	// network address to nodeID map
 	nodeKey map[string]*crypto.ULTKey
@@ -48,8 +49,9 @@ type NodeServer struct {
 	txsFuture chan<- *future.TxStatus
 }
 
-// ServerContext represents contextual information for running server
+// ServerContext represents contextual information for running server.
 type ServerContext struct {
+	NetworkID      string                 // Hash of the network ID
 	Addr           string                 // local network address
 	NodeID         string                 // local node ID
 	Seed           string                 // local node seed
@@ -65,6 +67,9 @@ type ServerContext struct {
 func ValidateServerContext(sc *ServerContext) error {
 	if sc == nil {
 		return errors.New("server context is nil")
+	}
+	if sc.NetworkID == "" {
+		return errors.New("empty network ID")
 	}
 	if sc.Addr == "" {
 		return errors.New("empty local network address")
@@ -99,12 +104,13 @@ func ValidateServerContext(sc *ServerContext) error {
 	return nil
 }
 
-// NewNodeServer creates a NodeServer instance with server context
+// NewNodeServer creates a NodeServer instance with server context.
 func NewNodeServer(ctx *ServerContext) *NodeServer {
 	if err := ValidateServerContext(ctx); err != nil {
 		log.Fatalf("validate server context failed: %v", err)
 	}
 	server := &NodeServer{
+		networkID:    ctx.NetworkID,
 		addr:         ctx.Addr,
 		nodeID:       ctx.NodeID,
 		seed:         ctx.Seed,
@@ -120,7 +126,7 @@ func NewNodeServer(ctx *ServerContext) *NodeServer {
 }
 
 // Validate checks the ip and nodeID info from metadata and
-// checks the correctness of digital signature of the data
+// checks the correctness of digital signature of the data.
 func (s *NodeServer) validate(ctx context.Context, data []byte, signature string) error {
 	// retrieve nodeID and ip addr
 	md, ok := metadata.FromIncomingContext(ctx)
