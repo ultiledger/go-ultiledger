@@ -44,3 +44,21 @@ func (a *AccountID) Mutate(tx *ultpb.Tx) error {
 
 	return nil
 }
+
+// Fee computes the total fee for the transaction.
+type Fee struct {
+	BaseFee int64
+}
+
+func (f *Fee) Mutate(tx *ultpb.Tx) error {
+	if tx == nil {
+		return ErrNilTx
+	}
+	if f.BaseFee < 0 {
+		return errors.New("base fee is negative")
+	}
+
+	tx.Fee = f.BaseFee * int64(len(tx.OpList))
+
+	return nil
+}
