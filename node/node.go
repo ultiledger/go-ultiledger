@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/health"
+	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 
 	"github.com/ultiledger/go-ultiledger/account"
 	"github.com/ultiledger/go-ultiledger/consensus"
@@ -278,6 +280,11 @@ func (n *Node) serveNode() {
 
 	s := grpc.NewServer()
 	rpcpb.RegisterNodeServer(s, n.server)
+
+	// create health check server
+	h := health.NewServer()
+	h.SetServingStatus("", healthpb.HealthCheckResponse_SERVING)
+	healthpb.RegisterHealthServer(s, h)
 
 	log.Infof("start to serve gRPC server on %s", n.config.Port)
 	go s.Serve(listener)
