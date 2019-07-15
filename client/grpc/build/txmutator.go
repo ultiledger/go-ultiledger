@@ -244,3 +244,73 @@ func (p *Payment) Mutate(tx *ultpb.Tx) error {
 
 	return nil
 }
+
+// Trust adds a Trust operator to the OpList of tx.
+type Trust struct {
+	Asset *Asset
+	Limit int64
+}
+
+func (t *Trust) validate() error {
+	if t.Limit < 0 {
+		return errors.New("negative trust limit")
+	}
+
+	if t.Asset == nil {
+		return errors.New("asset is nil")
+	}
+
+	if len(t.Asset.AssetName) > 4 {
+		return errors.New("asset name is too long")
+	}
+
+	if !crypto.IsValidAccountKey(t.Asset.Issuer) {
+		return errors.New("invalid asset issuer account key")
+	}
+
+	switch t.Asset.AssetType {
+	case NATIVE:
+		fallthrough
+	case CUSTOM:
+		break
+	default:
+		return errors.New("invalid asset type")
+	}
+
+	return nil
+}
+
+func (t *Trust) Mutate(tx *ultpb.Tx) error {
+	if tx == nil {
+		return ErrNilTx
+	}
+
+	if err := t.validate(); err != nil {
+		return err
+	}
+
+	asset := &ultpb.Asset{
+		AssetName: t.Asset.AssetName,
+		Issuer:    t.Asset.Issuer,
+	}
+	switch t.Asset.AssetType {
+	case NATIVE:
+		asset.AssetType = ultpb.AssetType_NATIVE
+	case CUSTOM:
+		asset.AssetType = ultpb.AssetType_CUSTOM
+	default:
+		log.Fatal("unsupported asset type")
+	}
+
+	tx.OpList = append(tx.OpList, &ultpb.Op{
+		OpType: ultpb.OpType_TRUST,
+		Op: &ultpb.Op_Trust{
+			&ultpb.TrustOp{
+				Asset: asset,
+				Limit: t.Limit,
+			},
+		},
+	})
+
+	return nil
+}
