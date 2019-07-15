@@ -11,6 +11,7 @@ enum OpType {
   CREATE_ACCOUNT = 0;
   PAYMENT = 1;
   PATH_PAYMENT = 2;
+  TRUST = 3;
 }
 
 // Operation
@@ -22,6 +23,7 @@ message Op {
     CreateAccountOp CreateAccount = 2;
     PaymentOp Payment = 3;
     PathPaymentOp PathPayment = 4;
+    TrustOp Trust = 5;
   }
 }
 
