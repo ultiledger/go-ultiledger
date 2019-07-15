@@ -10,7 +10,7 @@ import (
 
 func TestTx(t *testing.T) {
 	// create random account
-	src, _, err := crypto.GetAccountKeypair()
+	src, seed, err := crypto.GetAccountKeypair()
 	assert.Nil(t, err)
 
 	dst, _, err := crypto.GetAccountKeypair()
@@ -47,4 +47,11 @@ func TestTx(t *testing.T) {
 	assert.Nil(t, err)
 
 	assert.Equal(t, tx.Tx.Fee, int64(3)*BaseFee)
+
+	// testing signing the tx
+	payload, signature, err := tx.Sign(seed)
+	assert.Nil(t, err)
+
+	result := crypto.Verify(src, signature, payload)
+	assert.True(t, result)
 }
