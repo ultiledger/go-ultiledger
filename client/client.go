@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	g "google.golang.org/grpc"
+	"google.golang.org/grpc"
 
 	"github.com/ultiledger/go-ultiledger/rpc/rpcpb"
 )
@@ -39,8 +39,8 @@ type GrpcClient struct {
 func New(networkID, accountID, coreEndpoints string) (*GrpcClient, error) {
 	// connect to core servers
 	r := NewResolver()
-	b := g.RoundRobin(r)
-	conn, err := g.Dial(coreEndpoints, g.WithInsecure(), g.WithBalancer(b), g.WithBlock(), g.WithTimeout(time.Second))
+	b := grpc.RoundRobin(r)
+	conn, err := grpc.Dial(coreEndpoints, grpc.WithInsecure(), grpc.WithBalancer(b), grpc.WithBlock(), grpc.WithTimeout(time.Second))
 	if err != nil {
 		return nil, fmt.Errorf("connect to core servers failed: %v", err)
 	}
