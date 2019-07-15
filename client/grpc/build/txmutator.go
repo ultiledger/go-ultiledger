@@ -82,7 +82,7 @@ func (n *Note) Mutate(tx *ultpb.Tx) error {
 	}
 
 	if err := n.validate(); err != nil {
-		return nil
+		return err
 	}
 
 	tx.Note = n.Note
@@ -117,7 +117,7 @@ func (f *Fee) Mutate(tx *ultpb.Tx) error {
 	}
 
 	if err := f.validate(); err != nil {
-		return nil
+		return err
 	}
 
 	tx.Fee = f.BaseFee * int64(len(tx.OpList))
