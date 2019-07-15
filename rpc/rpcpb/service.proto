@@ -3,9 +3,11 @@ syntax = "proto3";
 package rpcpb;
 
 service Node {
-  rpc Hello(HelloRequest) returns (HelloResponse) {}
+  rpc GetAccount(GetAccountRequest) returns (GetAccountResponse) {}
   rpc SubmitTx(SubmitTxRequest) returns (SubmitTxResponse) {}
   rpc QueryTx(QueryTxRequest) returns (QueryTxResponse) {}
+  // the following methods are used for communicating between nodes
+  rpc Hello(HelloRequest) returns (HelloResponse) {}
   rpc Notify(NotifyRequest) returns (NotifyResponse) {}
   rpc Query(QueryRequest) returns (QueryResponse) {}
 }
@@ -47,6 +49,15 @@ message QueryTxRequest {
 
 message QueryTxResponse {
   TxStatus TxStatus = 1;
+}
+
+message GetAccountRequest {
+  string AccountID = 1;
+}
+
+message GetAccountResponse {
+  // account data in pb format
+  bytes Data = 1;
 }
 
 enum NotifyMsgType {

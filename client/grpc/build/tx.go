@@ -85,3 +85,23 @@ func (t *Tx) Sign(seed string) ([]byte, string, error) {
 
 	return payload, signature, nil
 }
+
+// Get the tx key.
+func (t *Tx) GetTxKey() (string, error) {
+	if t.Tx == nil {
+		return "", ErrNilTx
+	}
+
+	b, err := ultpb.Encode(t.Tx)
+	if err != nil {
+		return "", fmt.Errorf("encode tx failed: %v", err)
+	}
+
+	accKey := &crypto.ULTKey{
+		Code: crypto.KeyTypeTx,
+		Hash: crypto.SHA256HashBytes(b),
+	}
+	keyStr := crypto.EncodeKey(accKey)
+
+	return keyStr, nil
+}

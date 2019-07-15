@@ -94,3 +94,10 @@ type TxStatus struct {
 	TxKey    string
 	TxStatus *rpcpb.TxStatus
 }
+
+// Future for node server to query account.
+type Account struct {
+	deferError
+	AccountID string
+	Account   *ultpb.Account
+}

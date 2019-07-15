@@ -47,6 +47,8 @@ type NodeServer struct {
 	txsetFuture chan<- *future.TxSet
 	// future for query tx status
 	txsFuture chan<- *future.TxStatus
+	// future for query account
+	accountFuture chan<- *future.Account
 }
 
 // ServerContext represents contextual information for running server.
@@ -62,6 +64,7 @@ type ServerContext struct {
 	QuorumFuture   chan *future.Quorum    // channel for sending quorum query to consensus engine
 	TxSetFuture    chan *future.TxSet     // channel for sending txset query to consensus engine
 	TxStatusFuture chan *future.TxStatus  // channel for sending txstatus query to consensus engine
+	AccountFuture  chan *future.Account   // channel for sending account query to node
 }
 
 func ValidateServerContext(sc *ServerContext) error {
@@ -101,6 +104,9 @@ func ValidateServerContext(sc *ServerContext) error {
 	if sc.TxStatusFuture == nil {
 		return errors.New("txstatus future channel is nil")
 	}
+	if sc.AccountFuture == nil {
+		return errors.New("account future channel is nil")
+	}
 	return nil
 }
 
@@ -110,17 +116,18 @@ func NewNodeServer(ctx *ServerContext) *NodeServer {
 		log.Fatalf("validate server context failed: %v", err)
 	}
 	server := &NodeServer{
-		networkID:    ctx.NetworkID,
-		addr:         ctx.Addr,
-		nodeID:       ctx.NodeID,
-		seed:         ctx.Seed,
-		peerFuture:   ctx.PeerFuture,
-		txFuture:     ctx.TxFuture,
-		stmtFuture:   ctx.StmtFuture,
-		ledgerFuture: ctx.LedgerFuture,
-		quorumFuture: ctx.QuorumFuture,
-		txsetFuture:  ctx.TxSetFuture,
-		txsFuture:    ctx.TxStatusFuture,
+		networkID:     ctx.NetworkID,
+		addr:          ctx.Addr,
+		nodeID:        ctx.NodeID,
+		seed:          ctx.Seed,
+		peerFuture:    ctx.PeerFuture,
+		txFuture:      ctx.TxFuture,
+		stmtFuture:    ctx.StmtFuture,
+		ledgerFuture:  ctx.LedgerFuture,
+		quorumFuture:  ctx.QuorumFuture,
+		txsetFuture:   ctx.TxSetFuture,
+		txsFuture:     ctx.TxStatusFuture,
+		accountFuture: ctx.AccountFuture,
 	}
 	return server
 }
@@ -233,9 +240,14 @@ func (s *NodeServer) SubmitTx(ctx context.Context, req *rpcpb.SubmitTxRequest) (
 	return resp, nil
 }
 
-// QueryTx querys the status of the transaction.
+// QueryTx queries the status of the transaction.
 func (s *NodeServer) QueryTx(ctx context.Context, req *rpcpb.QueryTxRequest) (*rpcpb.QueryTxResponse, error) {
 	resp := &rpcpb.QueryTxResponse{}
+
+	// check the validity of the tx key
+	if !crypto.IsValidTxKey(req.TxKey) {
+		return resp, status.Errorf(codes.InvalidArgument, "invalid tx key")
+	}
 
 	f := &future.TxStatus{TxKey: req.TxKey}
 	f.Init()
@@ -243,7 +255,34 @@ func (s *NodeServer) QueryTx(ctx context.Context, req *rpcpb.QueryTxRequest) (*r
 	if err := f.Error(); err != nil {
 		return resp, status.Errorf(codes.Internal, "query tx status failed: %v", err)
 	}
+
 	resp.TxStatus = f.TxStatus
+
+	return resp, nil
+}
+
+// GetAccount queries the account information.
+func (s *NodeServer) GetAccount(ctx context.Context, req *rpcpb.GetAccountRequest) (*rpcpb.GetAccountResponse, error) {
+	resp := &rpcpb.GetAccountResponse{}
+
+	// check the validity of the account key
+	if !crypto.IsValidAccountKey(req.AccountID) {
+		return resp, status.Errorf(codes.InvalidArgument, "invalid account id")
+	}
+
+	f := &future.Account{AccountID: req.AccountID}
+	f.Init()
+	s.accountFuture <- f
+	if err := f.Error(); err != nil {
+		return resp, status.Errorf(codes.Internal, "get account failed: %v", err)
+	}
+
+	b, err := ultpb.Encode(f.Account)
+	if err != nil {
+		return resp, status.Error(codes.Internal, "encode account failed")
+	}
+	resp.Data = b
+
 	return resp, nil
 }
 

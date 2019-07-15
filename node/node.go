@@ -47,13 +47,14 @@ type Node struct {
 	stopChan chan struct{}
 
 	// futures for task with error responses
-	txFuture     chan *future.Tx
-	peerFuture   chan *future.Peer
-	stmtFuture   chan *future.Statement
-	ledgerFuture chan *future.Ledger
-	quorumFuture chan *future.Quorum
-	txsetFuture  chan *future.TxSet
-	txsFuture    chan *future.TxStatus
+	txFuture      chan *future.Tx
+	peerFuture    chan *future.Peer
+	stmtFuture    chan *future.Statement
+	ledgerFuture  chan *future.Ledger
+	quorumFuture  chan *future.Quorum
+	txsetFuture   chan *future.TxSet
+	txsFuture     chan *future.TxStatus
+	accountFuture chan *future.Account
 }
 
 // NewNode creates a Node which controls all the sub tasks
@@ -124,6 +125,7 @@ func NewNode(conf *Config) *Node {
 	ledgerFuture := make(chan *future.Ledger)
 	quorumFuture := make(chan *future.Quorum)
 	txsetFuture := make(chan *future.TxSet)
+	accountFuture := make(chan *future.Account)
 
 	// construct node server context and create node server
 	serverCtx := &rpc.ServerContext{
@@ -138,6 +140,7 @@ func NewNode(conf *Config) *Node {
 		LedgerFuture:   ledgerFuture,
 		QuorumFuture:   quorumFuture,
 		TxSetFuture:    txsetFuture,
+		AccountFuture:  accountFuture,
 	}
 	nodeServer := rpc.NewNodeServer(serverCtx)
 
@@ -217,17 +220,11 @@ func (n *Node) Stop() {
 	n.tm.Stop()
 }
 
-// Event loop for processing server received messages
+// Event loop for processing messages from peers and internal queries.
 func (n *Node) eventLoop() {
 	// listening for node server events
 	for {
 		select {
-		case txf := <-n.txFuture:
-			err := n.tm.AddTx(txf.TxKey, txf.Tx)
-			if err != nil {
-				log.Errorf("add tx failed: %v", err)
-			}
-			txf.Respond(err)
 		case pf := <-n.peerFuture:
 			err := n.pm.AddPeerAddr(pf.Addr)
 			if err != nil {
@@ -261,13 +258,6 @@ func (n *Node) eventLoop() {
 			}
 			txf.TxSet = txset
 			txf.Respond(err)
-		case txs := <-n.txsFuture:
-			txstatus, err := n.tm.GetTxStatus(txs.TxKey)
-			if err != nil {
-				log.Errorw("query tx status failed: %v", err, "tx", txs.TxKey)
-			}
-			txs.TxStatus = txstatus
-			txs.Respond(err)
 		case <-n.stopChan:
 			log.Info("shutdown event loop")
 			return
@@ -275,7 +265,7 @@ func (n *Node) eventLoop() {
 	}
 }
 
-// serve starts a listener on the port and starts to accept request
+// ServeNode starts a listener on the port and starts to accept external requests.
 func (n *Node) serveNode() {
 	// register rpc service and start the ULTNode server
 	listener, err := net.Listen("tcp", n.config.Port)
@@ -291,6 +281,26 @@ func (n *Node) serveNode() {
 
 	for {
 		select {
+		case txf := <-n.txFuture:
+			err := n.tm.AddTx(txf.TxKey, txf.Tx)
+			if err != nil {
+				log.Errorf("add tx failed: %v", err)
+			}
+			txf.Respond(err)
+		case txs := <-n.txsFuture:
+			txstatus, err := n.tm.GetTxStatus(txs.TxKey)
+			if err != nil {
+				log.Errorw("query tx status failed: %v", err, "tx", txs.TxKey)
+			}
+			txs.TxStatus = txstatus
+			txs.Respond(err)
+		case acc := <-n.accountFuture:
+			account, err := n.am.GetAccount(n.database, acc.AccountID)
+			if err != nil {
+				log.Errorw("get account failed: %v", err, "accountID", acc.AccountID)
+			}
+			acc.Account = account
+			acc.Respond(err)
 		case <-n.stopChan:
 			log.Infof("gracefully shutdown gRPC server")
 			s.GracefulStop()

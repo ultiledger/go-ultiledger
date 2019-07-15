@@ -94,3 +94,15 @@ func IsValidAccountKey(key string) bool {
 	}
 	return true
 }
+
+// Check the validity of supplied tx key string.
+func IsValidTxKey(key string) bool {
+	ultKey, err := DecodeKey(key)
+	if err != nil {
+		return false
+	}
+	if ultKey.Code != KeyTypeTx {
+		return false
+	}
+	return true
+}
