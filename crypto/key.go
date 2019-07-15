@@ -10,7 +10,7 @@ import (
 
 type KeyType uint8
 
-// enumeration of key type
+// Enumeration of key type.
 const (
 	_ KeyType = iota // skip zero
 	KeyTypeAccountID
@@ -33,7 +33,7 @@ type ULTKey struct {
 	Hash [32]byte
 }
 
-// decode base58 encoded key string to ULTKey
+// Decode base58 encoded key string to ULTKey.
 func DecodeKey(key string) (*ULTKey, error) {
 	if key == "" {
 		return nil, ErrInvalidKey
@@ -68,16 +68,28 @@ func DecodeKey(key string) (*ULTKey, error) {
 	return nil, ErrInvalidKey
 }
 
-// encode UTLKey to base58 encoded key string
+// Encode UTLKey to base58 encoded key string.
 func EncodeKey(ultKey *ULTKey) string {
 	var buf bytes.Buffer
 	binary.Write(&buf, binary.BigEndian, ultKey)
 	return b58.Encode(buf.Bytes())
 }
 
-// check the validity of supplied key string
+// Check the validity of supplied key string.
 func IsValidKey(key string) bool {
 	if _, err := DecodeKey(key); err != nil {
+		return false
+	}
+	return true
+}
+
+// Check the validity of supplied acount key string.
+func IsValidAccountKey(key string) bool {
+	ultKey, err := DecodeKey(key)
+	if err != nil {
+		return false
+	}
+	if ultKey.Code != KeyTypeAccountID {
 		return false
 	}
 	return true
