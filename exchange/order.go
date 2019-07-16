@@ -9,6 +9,8 @@ import (
 // we should search the existing offers that sell AssetY
 // for AssetX to fill the order.
 type Order struct {
+	// account that created the order
+	AccountID string
 	// asset to sell
 	SellAsset *ultpb.Asset
 	// max amount of SellAsset we can sell

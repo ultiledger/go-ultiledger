@@ -59,7 +59,7 @@ func (m *Manager) FillOrder(dt db.Tx, o *Order) error {
 			}
 		}
 		// cannot fill self offer
-		if offer.AccountID == m.nodeID {
+		if offer.AccountID == o.AccountID {
 			break
 		}
 		m.Fill(dt, o, offer)

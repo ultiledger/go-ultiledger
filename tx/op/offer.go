@@ -115,6 +115,7 @@ func (of *Offer) Apply(dt db.Tx) error {
 
 	// fill the order in exchange
 	order := &exchange.Order{
+		AccountID:    of.AccountID,
 		SellAsset:    of.SellAsset,
 		MaxSellAsset: sellLimit,
 		BuyAsset:     of.BuyAsset,
