@@ -3,6 +3,7 @@ package op
 import (
 	"errors"
 	"fmt"
+	"math"
 
 	pb "github.com/golang/protobuf/proto"
 
@@ -112,7 +113,7 @@ func (of *Offer) Apply(dt db.Tx) error {
 		return errors.New("offer buying limit is zero")
 	}
 
-	// fill the offer in exchange
+	// fill the order in exchange
 	order := &exchange.Order{
 		SellAsset:    of.SellAsset,
 		MaxSellAsset: sellLimit,
@@ -135,7 +136,21 @@ func (of *Offer) Apply(dt db.Tx) error {
 	if order.Full {
 		sellOffer.Amount = 0
 	} else {
-		// TODO(bobonovski) adjust the offer amount
+		// adjust the offer amount
+		sellOffer.Amount = sellLimit - order.SellAssetSold
+		sl := util.MinInt64(sellOffer.Amount, of.EM.GetMaxToSell(acc, sellTrust))
+		bl := of.EM.GetMaxToBuy(acc, buyTrust)
+		ord := &exchange.Order{
+			SellAsset:    sellOffer.SellAsset,
+			MaxSellAsset: sl,
+			BuyAsset:     sellOffer.BuyAsset,
+			MaxBuyAsset:  bl,
+		}
+		err = of.EM.Exchange(ord, math.MaxInt64, math.MaxInt64, sellOffer.Price, false)
+		if err != nil {
+			return fmt.Errorf("exchange assets failed: %v", err)
+		}
+		sellOffer.Amount = ord.SellAssetSold
 	}
 
 	if sellOffer.Amount > 0 {
@@ -266,17 +281,13 @@ func (of *Offer) getOfferLimits(dt db.Tx, acc *ultpb.Account,
 		}
 	}
 
-	if buyLimit == 0 {
-		return -1, -1, fmt.Errorf("account out of buying limit")
-	}
-
 	// get the sell limit for the offer
 	sellLimit = util.MinInt64(sellLimit, offer.Amount)
 
 	return sellLimit, buyLimit, nil
 }
 
-// Load selling and buying trust
+// Load selling and buying trust.
 func (of *Offer) loadTrust(dt db.Tx) (*ultpb.Trust, *ultpb.Trust, error) {
 	var sellTrust, buyTrust *ultpb.Trust
 	var err error

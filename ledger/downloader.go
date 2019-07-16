@@ -153,7 +153,7 @@ func (d *Downloader) download(tr *DownloadRange) error {
 	return nil
 }
 
-// Prepare ledger download task for concurrent processing
+// Prepare ledger download task for concurrent processing.
 func (d *Downloader) prepareTask(done <-chan bool, tr *DownloadRange) <-chan uint64 {
 	taskChan := make(chan uint64)
 
@@ -166,7 +166,7 @@ func (d *Downloader) prepareTask(done <-chan bool, tr *DownloadRange) <-chan uin
 	return taskChan
 }
 
-// Run ledger download task by query peers one by one
+// Run ledger download task by query peers one by one.
 func (d *Downloader) runTask(done <-chan bool, taskChan <-chan uint64) <-chan *CloseInfo {
 	infoChan := make(chan *CloseInfo)
 

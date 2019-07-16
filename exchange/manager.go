@@ -62,7 +62,7 @@ func (m *Manager) FillOrder(dt db.Tx, o *Order) error {
 		if offer.AccountID == m.nodeID {
 			break
 		}
-		m.fill(dt, o, offer)
+		m.Fill(dt, o, offer)
 		o.FilledOffers = append(o.FilledOffers, offer)
 		if o.Full == true {
 			break
@@ -74,7 +74,7 @@ func (m *Manager) FillOrder(dt db.Tx, o *Order) error {
 
 // Fill the order with loaded offer. The order is selling SellAsset
 // for BuyAsset and the offer is selling BuyAsset for SellAsset.
-func (m *Manager) fill(dt db.Tx, o *Order, offer *ultpb.Offer) error {
+func (m *Manager) Fill(dt db.Tx, o *Order, offer *ultpb.Offer) error {
 	// Load seller account of the offer.
 	acc, err := m.AM.GetAccount(dt, offer.AccountID)
 	if err != nil {
@@ -97,11 +97,11 @@ func (m *Manager) fill(dt db.Tx, o *Order, offer *ultpb.Offer) error {
 
 	// Maximum BuyAsset the offer can sell and maximum SellAsset
 	// the offer can buy.
-	maxBuyAsset := m.getMaxToSell(acc, buyAssetTrust)
-	maxSellAsset := m.getMaxToBuy(acc, sellAssetTrust)
+	maxBuyAsset := m.GetMaxToSell(acc, buyAssetTrust)
+	maxSellAsset := m.GetMaxToBuy(acc, sellAssetTrust)
 
 	// Exchange the asset with consistent rules.
-	err = m.exchange(o, maxBuyAsset, maxSellAsset, offer.Price, false)
+	err = m.Exchange(o, maxBuyAsset, maxSellAsset, offer.Price, false)
 	if err != nil {
 		return fmt.Errorf("exchange assets failed: %v", err)
 	}
@@ -156,7 +156,7 @@ func (m *Manager) fill(dt db.Tx, o *Order, offer *ultpb.Offer) error {
 
 // Exchange the assets for filling the order with selling limits
 // of BuyAsset and buying limits of SellAsset of the offer.
-func (m *Manager) exchange(order *Order, maxBuyAsset int64, maxSellAsset int64, offerPrice *ultpb.Price, checkError bool) error {
+func (m *Manager) Exchange(order *Order, maxBuyAsset int64, maxSellAsset int64, offerPrice *ultpb.Price, checkError bool) error {
 	// Note that the input price is the price of selling
 	// BuyAsset for SellAsset. We need to recover the order
 	// price by exchanging the denominator and numberator.
@@ -222,7 +222,7 @@ func (m *Manager) getOfferValue(maxToSell int64, maxToBuy int64, price *ultpb.Pr
 }
 
 // Get the maximum amount of asset the account or trust can sell.
-func (m *Manager) getMaxToSell(acc *ultpb.Account, sellTrust *ultpb.Trust) int64 {
+func (m *Manager) GetMaxToSell(acc *ultpb.Account, sellTrust *ultpb.Trust) int64 {
 	var balance int64
 
 	if sellTrust != nil && sellTrust.Authorized > 0 {
@@ -236,7 +236,7 @@ func (m *Manager) getMaxToSell(acc *ultpb.Account, sellTrust *ultpb.Trust) int64
 }
 
 // Get the maximum amount of asset the account or trust can buy.
-func (m *Manager) getMaxToBuy(acc *ultpb.Account, buyTrust *ultpb.Trust) int64 {
+func (m *Manager) GetMaxToBuy(acc *ultpb.Account, buyTrust *ultpb.Trust) int64 {
 	var balance int64
 
 	if buyTrust != nil {
