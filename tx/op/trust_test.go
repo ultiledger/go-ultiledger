@@ -52,7 +52,7 @@ func TestTrustOp(t *testing.T) {
 
 	// check created trust
 	trust, err := am.GetTrust(memorytx, srcAccount, asset)
-	assert.Equal(t, err, nil)
+	assert.Nil(t, err)
 	assert.NotNil(t, trust)
 
 	// lower the trust limit
