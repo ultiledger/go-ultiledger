@@ -16,41 +16,40 @@ import (
 
 // Manager manages known remote peers.
 type Manager struct {
-	// Network address of the node
+	// Network address of the node.
 	addr string
 
-	// NodeID of the node
+	// NodeID of the node.
 	nodeID string
 
-	// Metadata for gRPC context
+	// Metadata for gRPC context.
 	metadata metadata.MD
 
-	// max number of peers to connect
+	// Max number of peers to connect.
 	maxPeers int
 
-	// initial peer addresses
+	// Initial peer addresses.
 	initPeers []string
 
-	// unhealthy peer addresses
+	// Unhealthy peer addresses.
 	unhealthyPeers []string
 
-	// connected peers
+	// Connected peers.
 	peerLock  sync.RWMutex
 	livePeers map[string]*Peer
 
 	nodeIDs mapset.Set
 
-	// peers waiting to be connected, each peer has three
-	// chances to be connected
-	pendingPeers map[string]int
+	// Peers waiting to be connected.
+	pendingPeers map[string]struct{}
 
-	// channel for stopping pending peers connection
+	// Channel for stopping pending peers connection.
 	stopChan chan struct{}
 
-	// channel for adding peer addr
+	// Channel for adding peer addr.
 	peerAddrChan chan string
 
-	// channel for managing live peers
+	// Channel for managing live peers.
 	addChan    chan *Peer
 	deleteChan chan *Peer
 }
@@ -62,7 +61,7 @@ func NewManager(ps []string, addr string, nodeID string, maxPeers int) *Manager 
 		metadata:     metadata.Pairs(addr, nodeID),
 		maxPeers:     maxPeers,
 		initPeers:    ps,
-		pendingPeers: make(map[string]int),
+		pendingPeers: make(map[string]struct{}),
 		livePeers:    make(map[string]*Peer),
 		nodeIDs:      mapset.NewSet(),
 		stopChan:     make(chan struct{}),
@@ -74,12 +73,12 @@ func NewManager(ps []string, addr string, nodeID string, maxPeers int) *Manager 
 
 func (pm *Manager) Start() {
 	go func() {
-		// connect to inital peers
+		// Connect to inital peers.
 		for _, addr := range pm.initPeers {
 			p, err := pm.connectPeer(addr)
 			if err != nil {
 				log.Errorf("connect to peer %s failed: %v", addr, err)
-				pm.pendingPeers[addr] = 3
+				pm.pendingPeers[addr] = struct{}{}
 				continue
 			}
 			pm.livePeers[addr] = p
@@ -94,13 +93,15 @@ func (pm *Manager) Start() {
 				pm.livePeers[p.Addr] = p
 				pm.nodeIDs.Add(p.NodeID)
 				pm.peerLock.Unlock()
-			case p := <-pm.deleteChan: // only delete connected peers
+			case p := <-pm.deleteChan: // Only delete connected peers.
 				pm.peerLock.Lock()
 				if _, ok := pm.livePeers[p.Addr]; ok {
 					delete(pm.livePeers, p.Addr)
 					pm.nodeIDs.Remove(p.NodeID)
 				}
 				pm.peerLock.Unlock()
+			case <-pm.stopChan:
+				break
 			}
 		}
 	}()
@@ -162,7 +163,7 @@ func (pm *Manager) connectPeer(addr string) (*Peer, error) {
 
 // Connect to new peers periodically.
 func (pm *Manager) connect() {
-	ticker := time.NewTicker(1 * time.Second)
+	ticker := time.NewTicker(3 * time.Second)
 	for {
 		select {
 		case <-ticker.C:
@@ -172,23 +173,17 @@ func (pm *Manager) connect() {
 			if len(pm.livePeers) > pm.maxPeers {
 				continue
 			}
-			for addr, count := range pm.pendingPeers {
-				if count == 0 {
-					delete(pm.pendingPeers, addr)
-					continue
-				}
+			for addr, _ := range pm.pendingPeers {
 				p, err := pm.connectPeer(addr)
 				if err != nil {
 					log.Errorf("connect to peer %s failed: %v", addr, err)
-					count -= 1
-					pm.pendingPeers[addr] = count
 					continue
 				}
-				// healthcheck the peer and save the nodeID
+				// Healthcheck the peer and save the node id.
 				remoteAddr, nodeID, err := rpc.Hello(p.client, p.metadata)
 				if err != nil {
 					log.Errorf("say hello to peer %s failed: %v", addr, err)
-					// save unhealthy peers for later reconnect
+					// Save unhealthy peers for later reconnect.
 					pm.unhealthyPeers = append(pm.unhealthyPeers, addr)
 					p.Close()
 					continue
@@ -215,7 +210,7 @@ func (pm *Manager) connect() {
 			if _, ok := pm.livePeers[addr]; ok {
 				continue
 			}
-			pm.pendingPeers[addr] = 3
+			pm.pendingPeers[addr] = struct{}{}
 		case <-pm.stopChan:
 			return
 		}
