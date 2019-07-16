@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"sort"
 
 	"github.com/ultiledger/go-ultiledger/account"
 	"github.com/ultiledger/go-ultiledger/db"
@@ -268,7 +269,8 @@ func (m *Manager) loadOffers(getter db.Getter, sellAsset string, buyAsset string
 		offers = append(offers, offer)
 	}
 
-	//TODO(bobonovski) Sort offers by price in increasing order
+	// Sort offers in ascending order by price.
+	sort.Sort(OfferSlice(offers))
 
 	return offers, nil
 }
