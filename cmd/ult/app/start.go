@@ -40,6 +40,9 @@ is not specified or it will bootstrap a completely new node.`,
 		if err := v.ReadInConfig(); err != nil {
 			log.Fatal(err)
 		}
+		if viper.GetBool("debug") {
+			log.OpenDebug()
+		}
 		// init node config from viper
 		c, err := node.NewConfig(v)
 		if err != nil {
@@ -54,9 +57,11 @@ is not specified or it will bootstrap a completely new node.`,
 var cfgFile string
 
 func init() {
-	startCmd.Flags().StringVarP(&cfgFile, "config", "c", "", "Help message for toggle")
+	startCmd.Flags().StringVarP(&cfgFile, "config", "c", "", "configuration for node")
 	startCmd.MarkFlagRequired("config")
 	startCmd.Flags().BoolP("newnode", "n", false, "bootstrap a new node")
+	startCmd.Flags().BoolP("debug", "d", false, "toggle the debug mode")
 	viper.BindPFlag("newnode", startCmd.Flags().Lookup("newnode"))
+	viper.BindPFlag("debug", startCmd.Flags().Lookup("debug"))
 	rootCmd.AddCommand(startCmd)
 }

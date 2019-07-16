@@ -12,29 +12,34 @@ import (
 )
 
 type Config struct {
-	// network ID hash in base58 encoded format
+	// Role of the node.
+	Role string
+	// Network ID hash in base58 encoded format.
 	NetworkID string
-	// listen port of server
+	// Listen port of server.
 	Port string
-	// addresses of initial peers
+	// Addresses of initial peers.
 	Peers []string
-	// maximum number of peers to connect
+	// Maximum number of peers to connect.
 	MaxPeers int
-	// node ID (public key derived from seed)
+	// Node ID (public key derived from seed).
 	NodeID string
-	// seed of this node
+	// Seed of this node.
 	Seed string
-	// database backend
+	// Database backend.
 	DBBackend string
-	// database file path
+	// Database file path.
 	DBPath string
-	// initial quorum
+	// Initial quorum.
 	Quorum *ultpb.Quorum
-	// interval for consensus proposition
+	// Interval for consensus proposition.
 	ProposeInterval int
 }
 
 func NewConfig(v *viper.Viper) (*Config, error) {
+	if v.GetString("role") == "" {
+		return nil, errors.New("role is missing")
+	}
 	if v.GetString("network_id") == "" {
 		return nil, errors.New("network ID is missing")
 	}
@@ -63,15 +68,18 @@ func NewConfig(v *viper.Viper) (*Config, error) {
 		return nil, errors.New("propose interval is not positive")
 	}
 
-	// construct quorum
+	// Parse quorum infor and construct an internal quorum.
 	quorumMap := v.GetStringMap("quorum")
 	quorum, err := parseQuorum(quorumMap)
 	if err != nil {
 		return nil, fmt.Errorf("parse quorum failed: %v", err)
 	}
+
+	// Compute the hash of network id.
 	netID := crypto.SHA256HashBytes([]byte(v.GetString("network_id")))
 	netIDStr := b58.Encode(netID[:])
-	u := Config{
+
+	config := Config{
 		NetworkID:       netIDStr,
 		Port:            v.GetString("port"),
 		Peers:           v.GetStringSlice("peers"),
@@ -83,16 +91,20 @@ func NewConfig(v *viper.Viper) (*Config, error) {
 		ProposeInterval: v.GetInt("propose_interval"),
 	}
 
-	return &u, nil
+	return &config, nil
 }
 
-func parseQuorum(q map[string]interface{}) (*ultpb.Quorum, error) {
-	threshold, ok := q["threshold"]
+func parseQuorum(qmap map[string]interface{}) (*ultpb.Quorum, error) {
+	th, ok := qmap["threshold"]
 	if !ok {
 		return nil, fmt.Errorf("quorum threshold is missing")
 	}
+	threshold := th.(float64)
+	if threshold <= 0.0 && threshold > 1.0 {
+		return nil, fmt.Errorf("quorum threshold is invalid")
+	}
 
-	validators, ok := q["validators"]
+	validators, ok := qmap["validators"]
 	if !ok {
 		return nil, fmt.Errorf("quorum validators are missing")
 	}
@@ -104,11 +116,11 @@ func parseQuorum(q map[string]interface{}) (*ultpb.Quorum, error) {
 
 	var nestQuorums []*ultpb.Quorum
 
-	nestqs, ok := q["nest_quorums"]
+	nestqs, ok := qmap["nest_quorums"]
 	if ok {
 		qs := nestqs.([]interface{})
 
-		var q *ultpb.Quorum
+		var quorum *ultpb.Quorum
 		var err error
 
 		for _, nq := range qs {
@@ -118,17 +130,17 @@ func parseQuorum(q map[string]interface{}) (*ultpb.Quorum, error) {
 				nestq[k.(string)] = v
 			}
 
-			q, err = parseQuorum(nestq)
+			quorum, err = parseQuorum(nestq)
 			if err != nil {
 				return nil, fmt.Errorf("parse nest quorum failed: %v", err)
 			}
 
-			nestQuorums = append(nestQuorums, q)
+			nestQuorums = append(nestQuorums, quorum)
 		}
 	}
 
 	quorum := &ultpb.Quorum{
-		Threshold:   threshold.(float64),
+		Threshold:   threshold,
 		Validators:  vs,
 		NestQuorums: nestQuorums,
 	}
