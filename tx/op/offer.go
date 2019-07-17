@@ -15,7 +15,7 @@ import (
 	"github.com/ultiledger/go-ultiledger/util"
 )
 
-// Operation for managing offers.
+// Operator for managing offers.
 type Offer struct {
 	AM        *account.Manager
 	EM        *exchange.Manager
@@ -85,12 +85,6 @@ func (of *Offer) Apply(dt db.Tx) error {
 			return nil
 		}
 		newOffer = true
-		// create a offer id for the new offer
-		offerID, err := crypto.GetOfferID()
-		if err != nil {
-			return fmt.Errorf("create offer id failed: %v", err)
-		}
-		of.OfferID = offerID
 	}
 
 	// create a new offer with the same offer id
