@@ -25,9 +25,6 @@ type Manager struct {
 	database db.Database
 	bucket   string
 
-	// master account
-	master *ultpb.Account
-
 	baseReserve int64
 }
 

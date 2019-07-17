@@ -26,7 +26,7 @@ func ValidateAsset(asset *ultpb.Asset) error {
 	if asset.AssetType == ultpb.AssetType_NATIVE {
 		return nil
 	}
-	if len(asset.AssetName) <= 0 || len(asset.AssetName) >= 4 {
+	if len(asset.AssetName) <= 0 || len(asset.AssetName) > 4 {
 		return errors.New("invalid asset name")
 	}
 	return nil

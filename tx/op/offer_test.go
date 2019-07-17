@@ -7,16 +7,15 @@ import (
 
 	"github.com/ultiledger/go-ultiledger/account"
 	"github.com/ultiledger/go-ultiledger/db/memdb"
+	"github.com/ultiledger/go-ultiledger/exchange"
+	"github.com/ultiledger/go-ultiledger/log"
 	"github.com/ultiledger/go-ultiledger/ultpb"
 )
 
-const (
-	issuer = "Issuer"
-)
-
-func TestTrustOp(t *testing.T) {
+func TestOfferOp(t *testing.T) {
 	memorydb := memdb.New()
 	am := account.NewManager(memorydb, 100)
+	em := exchange.NewManager(memorydb, am)
 
 	// create source account
 	err := am.CreateAccount(memorydb, srcAccount, 1000000, signer, 2)
@@ -55,17 +54,26 @@ func TestTrustOp(t *testing.T) {
 	assert.Nil(t, err)
 	assert.NotNil(t, trust)
 
-	// lower the trust limit
-	trustOp.Limit = 5000
-	err = trustOp.Apply(memorytx)
+	// create an offer
+	buyAsset := &ultpb.Asset{AssetType: ultpb.AssetType_CUSTOM, AssetName: "COIN", Issuer: issuer}
+	sellAsset := &ultpb.Asset{AssetType: ultpb.AssetType_NATIVE, AssetName: "ULU", Issuer: issuer}
+	offerOp := Offer{
+		AM:        am,
+		EM:        em,
+		AccountID: srcAccount,
+		BuyAsset:  buyAsset,
+		SellAsset: sellAsset,
+		Amount:    1000,
+		Price:     &ultpb.Price{Numerator: 2, Denominator: 3},
+	}
+	err = offerOp.Apply(memorytx)
 	assert.Nil(t, err)
 
-	// delete the trust
-	trustOp.Limit = 0
-	err = trustOp.Apply(memorytx)
+	// check the new offer
+	offers, err := em.GetAccountOffers(memorytx, srcAccount)
 	assert.Nil(t, err)
+	assert.Equal(t, 1, len(offers))
 
-	trust, err = am.GetTrust(memorytx, srcAccount, asset)
-	assert.Nil(t, err)
-	assert.Nil(t, trust)
+	assert.Equal(t, srcAccount, offers[0].AccountID)
+	assert.Equal(t, int64(1000), offers[0].Amount)
 }

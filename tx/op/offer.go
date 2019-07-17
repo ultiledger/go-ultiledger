@@ -46,7 +46,7 @@ func (of *Offer) Apply(dt db.Tx) error {
 	var newOffer bool
 
 	if of.OfferID != "" { // existing offer
-		offer, err := of.EM.GetOffer(dt, of.SellAsset.AssetName, of.BuyAsset.AssetName, of.OfferID)
+		offer, err := of.EM.GetOffer(dt, of.AccountID, of.SellAsset.AssetName, of.BuyAsset.AssetName, of.OfferID)
 		if err != nil {
 			return fmt.Errorf("get offer failed: %v", err)
 		}
@@ -64,7 +64,7 @@ func (of *Offer) Apply(dt db.Tx) error {
 
 		// delete the offer
 		if of.Amount == 0 {
-			err = of.EM.DeleteOffer(dt, of.SellAsset.AssetName, of.BuyAsset.AssetName, offer.OfferID)
+			err = of.EM.DeleteOffer(dt, of.AccountID, of.SellAsset.AssetName, of.BuyAsset.AssetName, offer.OfferID)
 			if err != nil {
 				return fmt.Errorf("delete offer failed: %v", err)
 			}
@@ -114,6 +114,7 @@ func (of *Offer) Apply(dt db.Tx) error {
 		MaxSellAsset: sellLimit,
 		BuyAsset:     of.BuyAsset,
 		MaxBuyAsset:  buyLimit,
+		Price:        of.Price,
 		FilterPrice:  true,
 	}
 	err = of.EM.FillOrder(dt, order)

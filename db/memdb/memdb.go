@@ -32,7 +32,9 @@ func (m *memdb) Put(bucket string, key, value []byte) error {
 		return fmt.Errorf("Memdb is closed.")
 	}
 
-	m.db[string(key)] = value
+	k := bucket + "#" + string(key)
+
+	m.db[k] = value
 	return nil
 }
 
@@ -45,7 +47,9 @@ func (m *memdb) Delete(bucket string, key []byte) error {
 		return fmt.Errorf("Memdb is closed.")
 	}
 
-	delete(m.db, string(key))
+	k := bucket + "#" + string(key)
+
+	delete(m.db, k)
 	return nil
 }
 
@@ -58,7 +62,9 @@ func (m *memdb) Get(bucket string, key []byte) ([]byte, error) {
 		return nil, fmt.Errorf("Memdb is closed.")
 	}
 
-	if val, ok := m.db[string(key)]; ok {
+	k := bucket + "#" + string(key)
+
+	if val, ok := m.db[k]; ok {
 		return val, nil
 	}
 	return nil, nil
@@ -73,9 +79,11 @@ func (m *memdb) GetAll(bucket string, keyPrefix []byte) ([][]byte, error) {
 		return nil, fmt.Errorf("Memdb is closed.")
 	}
 
+	prefix := bucket + "#" + string(keyPrefix)
+
 	var vals [][]byte
 	for k, v := range m.db {
-		if strings.HasPrefix(k, string(keyPrefix)) {
+		if strings.HasPrefix(k, prefix) {
 			vals = append(vals, v)
 		}
 	}

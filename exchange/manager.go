@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/big"
 	"sort"
+	"strings"
 
 	"github.com/ultiledger/go-ultiledger/account"
 	"github.com/ultiledger/go-ultiledger/db"
@@ -14,9 +15,10 @@ import (
 
 // Manager manages offers and fills asset exchange orders.
 type Manager struct {
-	database db.Database
-	bucket   string
-	nodeID   string
+	database    db.Database
+	bucket      string
+	offerBucket string
+	nodeID      string
 
 	AM     *account.Manager
 	offers []*ultpb.Offer
@@ -24,13 +26,18 @@ type Manager struct {
 
 func NewManager(database db.Database, am *account.Manager) *Manager {
 	em := &Manager{
-		database: database,
-		AM:       am,
-		bucket:   "EXCHANGE",
+		database:    database,
+		AM:          am,
+		bucket:      "EXCHANGE",
+		offerBucket: "OFFER",
 	}
 	err := em.database.NewBucket(em.bucket)
 	if err != nil {
 		log.Fatalf("create exchange bucket failed: %v", err)
+	}
+	err = em.database.NewBucket(em.offerBucket)
+	if err != nil {
+		log.Fatalf("create exchange offer bucket failed: %v", err)
 	}
 	return em
 }
@@ -276,9 +283,9 @@ func (m *Manager) loadOffers(getter db.Getter, sellAsset string, buyAsset string
 }
 
 // Get offer from database.
-func (m *Manager) GetOffer(getter db.Getter, sellAsset string, buyAsset string, offerID string) (*ultpb.Offer, error) {
-	key := []byte(sellAsset + "_" + buyAsset + "_" + offerID)
-	b, err := getter.Get(m.bucket, key)
+func (m *Manager) GetOffer(getter db.Getter, accountID, sellAsset, buyAsset, offerID string) (*ultpb.Offer, error) {
+	key := m.GetOfferKey(accountID, offerID)
+	b, err := getter.Get(m.offerBucket, key)
 	if err != nil {
 		return nil, fmt.Errorf("get offer from db failed: %v", err)
 	}
@@ -295,13 +302,34 @@ func (m *Manager) GetOffer(getter db.Getter, sellAsset string, buyAsset string, 
 		return nil, errors.New("offerID is incompatible")
 	}
 	if offer.SellAsset.AssetName != sellAsset {
-		return nil, errors.New("sell asset mismatch")
+		return nil, errors.New("sell asset incompatible")
 	}
 	if offer.BuyAsset.AssetName != buyAsset {
-		return nil, errors.New("buy asset mismatch")
+		return nil, errors.New("buy asset incompatible")
 	}
 
 	return offer, nil
+}
+
+// Get all the offers belong to an account.
+func (m *Manager) GetAccountOffers(getter db.Getter, accountID string) ([]*ultpb.Offer, error) {
+	prefix := []byte(accountID)
+	bs, err := getter.GetAll(m.offerBucket, prefix)
+	if err != nil {
+		return nil, fmt.Errorf("load offer list failed: %v", err)
+	}
+
+	var offers []*ultpb.Offer
+	for i, _ := range bs {
+		offer, err := ultpb.DecodeOffer(bs[i])
+		if err != nil {
+			return nil, fmt.Errorf("decode offer failed: %v", err)
+		}
+		offers = append(offers, offer)
+	}
+
+	return offers, nil
+
 }
 
 // Update offer in database.
@@ -311,8 +339,14 @@ func (am *Manager) SaveOffer(putter db.Putter, offer *ultpb.Offer) error {
 		return fmt.Errorf("encode offer failed: %v", err)
 	}
 
-	key := []byte(offer.SellAsset.AssetName + "_" + offer.BuyAsset.AssetName + "_" + offer.OfferID)
+	key := am.GetOfferKey(offer.SellAsset.AssetName, offer.BuyAsset.AssetName, offer.OfferID)
 	err = putter.Put(am.bucket, key, offerb)
+	if err != nil {
+		return fmt.Errorf("save offer in db failed: %v", err)
+	}
+
+	key = am.GetOfferKey(offer.AccountID, offer.OfferID)
+	err = putter.Put(am.offerBucket, key, offerb)
 	if err != nil {
 		return fmt.Errorf("save offer in db failed: %v", err)
 	}
@@ -321,12 +355,28 @@ func (am *Manager) SaveOffer(putter db.Putter, offer *ultpb.Offer) error {
 }
 
 // Delete offer in database.
-func (am *Manager) DeleteOffer(deleter db.Deleter, sellAsset string, buyAsset string, offerID string) error {
-	key := []byte(sellAsset + "_" + buyAsset + "_" + offerID)
+func (am *Manager) DeleteOffer(deleter db.Deleter, accountID, sellAsset, buyAsset, offerID string) error {
+	key := am.GetOfferKey(sellAsset, buyAsset, offerID)
 	err := deleter.Delete(am.bucket, key)
 	if err != nil {
 		return fmt.Errorf("deleter offer in db failed: %v", err)
 	}
 
+	key = am.GetOfferKey(accountID, offerID)
+	err = deleter.Delete(am.offerBucket, key)
+	if err != nil {
+		return fmt.Errorf("deleter offer in offer db failed: %v", err)
+	}
+
 	return nil
+}
+
+// Helper function to generate the offer key.
+func (am *Manager) GetOfferKey(names ...string) []byte {
+	var buf []string
+	for _, s := range names {
+		buf = append(buf, s)
+	}
+	ks := strings.Join(buf, "_")
+	return []byte(ks)
 }
