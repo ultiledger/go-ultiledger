@@ -45,7 +45,7 @@ func (of *Offer) Apply(dt db.Tx) error {
 
 	var newOffer bool
 
-	if of.OfferID != "" { // existing offer
+	if of.OfferID != "" { // Changing an existing offer.
 		offer, err := of.EM.GetOffer(dt, of.AccountID, of.SellAsset.AssetName, of.BuyAsset.AssetName, of.OfferID)
 		if err != nil {
 			return fmt.Errorf("get offer failed: %v", err)
@@ -54,7 +54,7 @@ func (of *Offer) Apply(dt db.Tx) error {
 			return errors.New("offer not exists")
 		}
 
-		// relese the liability of the offer
+		// Relese the liability of the offer.
 		err = of.updateLiability(dt, false)
 		if err != nil {
 			return fmt.Errorf("release offer liability failed: %v", err)
@@ -62,9 +62,9 @@ func (of *Offer) Apply(dt db.Tx) error {
 
 		newOffer = false
 
-		// delete the offer
+		// Delete the offer if the amount is zero.
 		if of.Amount == 0 {
-			err = of.EM.DeleteOffer(dt, of.AccountID, of.SellAsset.AssetName, of.BuyAsset.AssetName, offer.OfferID)
+			err = of.EM.DeleteOffer(dt, offer)
 			if err != nil {
 				return fmt.Errorf("delete offer failed: %v", err)
 			}
@@ -87,7 +87,7 @@ func (of *Offer) Apply(dt db.Tx) error {
 		newOffer = true
 	}
 
-	// create a new offer with the same offer id
+	// Create a new offer.
 	sellOffer := &ultpb.Offer{
 		AccountID: of.AccountID,
 		SellAsset: of.SellAsset,
@@ -107,7 +107,7 @@ func (of *Offer) Apply(dt db.Tx) error {
 		return errors.New("offer buying limit is zero")
 	}
 
-	// fill the order in exchange
+	// Fill the order in exchange.
 	order := &exchange.Order{
 		AccountID:    of.AccountID,
 		SellAsset:    of.SellAsset,
@@ -132,7 +132,7 @@ func (of *Offer) Apply(dt db.Tx) error {
 	if order.Full {
 		sellOffer.Amount = 0
 	} else {
-		// adjust the offer amount
+		// Adjust the offer amount based filled order.
 		sellOffer.Amount = sellLimit - order.SellAssetSold
 		sl := util.MinInt64(sellOffer.Amount, of.EM.GetMaxToSell(acc, sellTrust))
 		bl := of.EM.GetMaxToBuy(acc, buyTrust)
@@ -151,7 +151,7 @@ func (of *Offer) Apply(dt db.Tx) error {
 
 	if sellOffer.Amount > 0 {
 		if newOffer {
-			// create a offer id for the new offer
+			// Create a offer id for the new offer.
 			offerID, err := crypto.GetOfferID()
 			if err != nil {
 				return fmt.Errorf("create offer id failed: %v", err)
@@ -161,6 +161,12 @@ func (of *Offer) Apply(dt db.Tx) error {
 		err = of.EM.SaveOffer(dt, sellOffer)
 		if err != nil {
 			return fmt.Errorf("save offer failed: %v", err)
+		}
+
+		// Acquire the liability of the offer.
+		err = of.updateLiability(dt, true)
+		if err != nil {
+			return fmt.Errorf("release offer liability failed: %v", err)
 		}
 	}
 
@@ -172,7 +178,7 @@ func (of *Offer) updateBalances(dt db.Tx, acc *ultpb.Account,
 	sellTrust, buyTrust *ultpb.Trust, sellAssetSold, buyAssetBought int64) error {
 	var err error
 
-	// update balance for buy asset
+	// Update the balance for buy asset.
 	if of.BuyAsset.AssetType == ultpb.AssetType_NATIVE {
 		err = of.AM.UpdateBalance(acc, buyAssetBought)
 		if err != nil {
@@ -193,7 +199,7 @@ func (of *Offer) updateBalances(dt db.Tx, acc *ultpb.Account,
 		}
 	}
 
-	// update balance for sell asset
+	// Update the balance for sell asset.
 	if of.SellAsset.AssetType == ultpb.AssetType_NATIVE {
 		err = of.AM.UpdateBalance(acc, -sellAssetSold)
 		if err != nil {
@@ -220,7 +226,7 @@ func (of *Offer) updateBalances(dt db.Tx, acc *ultpb.Account,
 // Get the buying and selling limits of the offer.
 func (of *Offer) getOfferLimits(dt db.Tx, acc *ultpb.Account,
 	sellTrust, buyTrust *ultpb.Trust, offer *ultpb.Offer, newOffer bool) (int64, int64, error) {
-	// temporarily increase entry count
+	// Temporarily increase entry count.
 	var err error
 	if newOffer {
 		err = of.AM.UpdateEntryCount(acc, int32(1))
@@ -233,7 +239,7 @@ func (of *Offer) getOfferLimits(dt db.Tx, acc *ultpb.Account,
 		}
 	}
 
-	// get the limit of BuyAsset we can buy
+	// Get the limit of BuyAsset we can buy.
 	var buyLimit int64
 	if of.BuyAsset.AssetType == ultpb.AssetType_NATIVE {
 		buyLimit = of.AM.GetRestLimit(acc)
@@ -249,7 +255,7 @@ func (of *Offer) getOfferLimits(dt db.Tx, acc *ultpb.Account,
 		return -1, -1, fmt.Errorf("out of buying limit")
 	}
 
-	// get the limit of SellAsset we can sell
+	// Get the limit of SellAsset we can sell.
 	var sellLimit int64
 	if of.SellAsset.AssetType == ultpb.AssetType_NATIVE {
 		sellLimit = of.AM.GetBalance(acc)
@@ -265,7 +271,7 @@ func (of *Offer) getOfferLimits(dt db.Tx, acc *ultpb.Account,
 		return -1, -1, fmt.Errorf("account underfund")
 	}
 
-	// decrease entry count
+	// Decrease entry count.
 	if newOffer {
 		err = of.AM.UpdateEntryCount(acc, int32(-1))
 		if err != nil {
@@ -277,7 +283,7 @@ func (of *Offer) getOfferLimits(dt db.Tx, acc *ultpb.Account,
 		}
 	}
 
-	// get the sell limit for the offer
+	// Get the sell limit for the offer.
 	sellLimit = util.MinInt64(sellLimit, offer.Amount)
 
 	return sellLimit, buyLimit, nil
@@ -288,7 +294,7 @@ func (of *Offer) loadTrust(dt db.Tx) (*ultpb.Trust, *ultpb.Trust, error) {
 	var sellTrust, buyTrust *ultpb.Trust
 	var err error
 
-	// load selling trust
+	// Load selling trust.
 	if of.SellAsset.AssetType != ultpb.AssetType_NATIVE {
 		sellTrust, err = of.AM.GetTrust(dt, of.AccountID, of.SellAsset)
 		if err != nil {
@@ -309,7 +315,7 @@ func (of *Offer) loadTrust(dt db.Tx) (*ultpb.Trust, *ultpb.Trust, error) {
 		}
 	}
 
-	// load buying trust
+	// Load buying trust.
 	if of.BuyAsset.AssetType != ultpb.AssetType_NATIVE {
 		buyTrust, err = of.AM.GetTrust(dt, of.AccountID, of.BuyAsset)
 		if err != nil {
@@ -366,91 +372,5 @@ func (of *Offer) getSellingLiability() (int64, error) {
 // Update the liability of the account or the trust associated
 // with the offer.
 func (of *Offer) updateLiability(dt db.Tx, acquire bool) error {
-	// compute buying liability
-	bl, err := of.getBuyingLiability()
-	if err != nil {
-		return fmt.Errorf("get buying liability failed: %v", err)
-	}
-	if !acquire {
-		bl = -bl
-	}
-
-	if of.BuyAsset.AssetType == ultpb.AssetType_NATIVE {
-		acc, err := of.AM.GetAccount(dt, of.AccountID)
-		if err != nil {
-			return fmt.Errorf("get account failed: %v", err)
-		}
-
-		// update account buying liability
-		err = of.AM.UpdateLiability(acc, bl, true)
-		if err != nil {
-			return fmt.Errorf("update account buying liability failed: %v", err)
-		}
-
-		err = of.AM.SaveAccount(dt, acc)
-		if err != nil {
-			return fmt.Errorf("save account failed: %v", err)
-		}
-	} else {
-		trust, err := of.AM.GetTrust(dt, of.AccountID, of.BuyAsset)
-		if err != nil {
-			return fmt.Errorf("get trust failed: %v", err)
-		}
-
-		// update trust buying liability
-		err = of.AM.UpdateTrustLiability(trust, bl, true)
-		if err != nil {
-			return fmt.Errorf("update trust buying liability failed: %v", err)
-		}
-
-		err = of.AM.SaveTrust(dt, trust)
-		if err != nil {
-			return fmt.Errorf("save account failed: %v", err)
-		}
-	}
-
-	// compute selling liability
-	sl, err := of.getSellingLiability()
-	if err != nil {
-		return fmt.Errorf("get selling liability failed: %v", err)
-	}
-	if acquire {
-		sl = -sl
-	}
-
-	if of.SellAsset.AssetType == ultpb.AssetType_NATIVE {
-		acc, err := of.AM.GetAccount(dt, of.AccountID)
-		if err != nil {
-			return fmt.Errorf("get account failed: %v", err)
-		}
-
-		// update account buying liability
-		err = of.AM.UpdateLiability(acc, sl, false)
-		if err != nil {
-			return fmt.Errorf("update account buying liability failed: %v", err)
-		}
-
-		err = of.AM.SaveAccount(dt, acc)
-		if err != nil {
-			return fmt.Errorf("save account failed: %v", err)
-		}
-	} else {
-		trust, err := of.AM.GetTrust(dt, of.AccountID, of.BuyAsset)
-		if err != nil {
-			return fmt.Errorf("get trust failed: %v", err)
-		}
-
-		// update trust buying liability
-		err = of.AM.UpdateTrustLiability(trust, sl, true)
-		if err != nil {
-			return fmt.Errorf("update trust buying liability failed: %v", err)
-		}
-
-		err = of.AM.SaveTrust(dt, trust)
-		if err != nil {
-			return fmt.Errorf("save account failed: %v", err)
-		}
-	}
-
 	return nil
 }

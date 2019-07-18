@@ -3,6 +3,7 @@ package exchange
 import (
 	"errors"
 	"fmt"
+	"math"
 	"math/big"
 	"sort"
 	"strings"
@@ -65,13 +66,16 @@ func (m *Manager) FillOrder(dt db.Tx, o *Order) error {
 				break
 			}
 		}
-		// cannot fill self offer
+		// Cannot fill self offer.
 		if offer.AccountID == o.AccountID {
 			break
 		}
+
 		m.Fill(dt, o, offer)
-		o.FilledOffers = append(o.FilledOffers, offer)
-		if o.Full == true {
+
+		if !o.Full {
+			o.FilledOffers = append(o.FilledOffers, offer)
+		} else {
 			break
 		}
 	}
@@ -158,19 +162,42 @@ func (m *Manager) Fill(dt db.Tx, o *Order, offer *ultpb.Offer) error {
 		}
 	}
 
+	// Update the current offer.
+	if o.Full {
+		offer.Amount -= o.BuyAssetBought
+	} else {
+		offer.Amount = 0
+	}
+
+	if offer.Amount == 0 {
+		err = m.DeleteOffer(dt, offer)
+		if err != nil {
+			return fmt.Errorf("delete offer failed: $v", err)
+		}
+
+		err = m.AM.UpdateEntryCount(acc, int32(-1))
+		if err != nil {
+			return fmt.Errorf("update entry count failed: %v", err)
+		}
+
+		err = m.AM.SaveAccount(dt, acc)
+		if err != nil {
+			return fmt.Errorf("save account failed: %v", err)
+		}
+	} else {
+		err = m.SaveOffer(dt, offer)
+		if err != nil {
+			return fmt.Errorf("save offer failed: %v", err)
+		}
+	}
+
 	return nil
 }
 
 // Exchange the assets for filling the order with selling limits
 // of BuyAsset and buying limits of SellAsset of the offer.
 func (m *Manager) Exchange(order *Order, maxBuyAsset int64, maxSellAsset int64, offerPrice *ultpb.Price, checkError bool) error {
-	// Note that the input price is the price of selling
-	// BuyAsset for SellAsset. We need to recover the order
-	// price by exchanging the denominator and numberator.
-	orderPrice := &ultpb.Price{
-		Numerator:   offerPrice.Denominator,
-		Denominator: offerPrice.Numerator,
-	}
+	orderPrice := order.Price
 
 	// Scaled order value in terms of BuyAsset.
 	orderValue := m.getOfferValue(order.MaxSellAsset, order.MaxBuyAsset, orderPrice)
@@ -204,10 +231,14 @@ func (m *Manager) Exchange(order *Order, maxBuyAsset int64, maxSellAsset int64, 
 
 	// TODO(bobonovski) Check possible numerical errors during exchange
 
-	order.SellAssetSold = sellAssetSold
-	order.BuyAssetBought = buyAssetBought
-	// If valudCmp < 0, the current offer can fill the order
-	if valueCmp < 0 {
+	// Update order parameters.
+	order.SellAssetSold += sellAssetSold
+	order.MaxSellAsset -= sellAssetSold
+	order.BuyAssetBought += buyAssetBought
+	order.MaxBuyAsset -= buyAssetBought
+
+	// Check whether the order is full after crossing the current offer.
+	if valueCmp < 0 || order.MaxSellAsset == 0 || order.MaxBuyAsset == 0 {
 		order.Full = true
 	} else {
 		order.Full = false
@@ -333,20 +364,20 @@ func (m *Manager) GetAccountOffers(getter db.Getter, accountID string) ([]*ultpb
 }
 
 // Update offer in database.
-func (am *Manager) SaveOffer(putter db.Putter, offer *ultpb.Offer) error {
+func (m *Manager) SaveOffer(putter db.Putter, offer *ultpb.Offer) error {
 	offerb, err := ultpb.Encode(offer)
 	if err != nil {
 		return fmt.Errorf("encode offer failed: %v", err)
 	}
 
-	key := am.GetOfferKey(offer.SellAsset.AssetName, offer.BuyAsset.AssetName, offer.OfferID)
-	err = putter.Put(am.bucket, key, offerb)
+	key := m.GetOfferKey(offer.SellAsset.AssetName, offer.BuyAsset.AssetName, offer.OfferID)
+	err = putter.Put(m.bucket, key, offerb)
 	if err != nil {
 		return fmt.Errorf("save offer in db failed: %v", err)
 	}
 
-	key = am.GetOfferKey(offer.AccountID, offer.OfferID)
-	err = putter.Put(am.offerBucket, key, offerb)
+	key = m.GetOfferKey(offer.AccountID, offer.OfferID)
+	err = putter.Put(m.offerBucket, key, offerb)
 	if err != nil {
 		return fmt.Errorf("save offer in db failed: %v", err)
 	}
@@ -355,15 +386,19 @@ func (am *Manager) SaveOffer(putter db.Putter, offer *ultpb.Offer) error {
 }
 
 // Delete offer in database.
-func (am *Manager) DeleteOffer(deleter db.Deleter, accountID, sellAsset, buyAsset, offerID string) error {
-	key := am.GetOfferKey(sellAsset, buyAsset, offerID)
-	err := deleter.Delete(am.bucket, key)
+func (m *Manager) DeleteOffer(deleter db.Deleter, offer *ultpb.Offer) error {
+	if offer == nil {
+		return nil
+	}
+
+	key := m.GetOfferKey(offer.SellAsset.AssetName, offer.BuyAsset.AssetName, offer.OfferID)
+	err := deleter.Delete(m.bucket, key)
 	if err != nil {
 		return fmt.Errorf("deleter offer in db failed: %v", err)
 	}
 
-	key = am.GetOfferKey(accountID, offerID)
-	err = deleter.Delete(am.offerBucket, key)
+	key = m.GetOfferKey(offer.AccountID, offer.OfferID)
+	err = deleter.Delete(m.offerBucket, key)
 	if err != nil {
 		return fmt.Errorf("deleter offer in offer db failed: %v", err)
 	}
@@ -372,11 +407,119 @@ func (am *Manager) DeleteOffer(deleter db.Deleter, accountID, sellAsset, buyAsse
 }
 
 // Helper function to generate the offer key.
-func (am *Manager) GetOfferKey(names ...string) []byte {
+func (m *Manager) GetOfferKey(names ...string) []byte {
 	var buf []string
 	for _, s := range names {
 		buf = append(buf, s)
 	}
 	ks := strings.Join(buf, "_")
 	return []byte(ks)
+}
+
+func (m *Manager) GetLiability(offer *ultpb.Offer, buying bool) (int64, error) {
+	ord := &Order{
+		MaxSellAsset: offer.Amount,
+		MaxBuyAsset:  math.MaxInt64,
+		Price:        offer.Price,
+	}
+	rp := &ultpb.Price{Denominator: offer.Price.Numerator, Numerator: offer.Price.Denominator}
+	err := m.Exchange(ord, math.MaxInt64, math.MaxInt64, rp, false)
+	if err != nil {
+		return -1, fmt.Errorf("exchange assets failed: %v", err)
+	}
+	if buying {
+		return ord.BuyAssetBought, nil
+	}
+	return ord.SellAssetSold, nil
+}
+
+// Update the account and trust liabilities associated with an offer.
+func (m *Manager) UpdateLiability(dt db.Tx, offer *ultpb.Offer, acquire bool) error {
+	// Compute buying liability.
+	bl, err := m.GetLiability(offer, true)
+	if err != nil {
+		return fmt.Errorf("get buying liability failed: %v", err)
+	}
+	if !acquire {
+		bl = -bl
+	}
+
+	if offer.BuyAsset.AssetType == ultpb.AssetType_NATIVE {
+		acc, err := m.AM.GetAccount(dt, offer.AccountID)
+		if err != nil {
+			return fmt.Errorf("get account failed: %v", err)
+		}
+
+		// Update account buying liability.
+		err = m.AM.UpdateLiability(acc, bl, true)
+		if err != nil {
+			return fmt.Errorf("update account buying liability failed: %v", err)
+		}
+
+		err = m.AM.SaveAccount(dt, acc)
+		if err != nil {
+			return fmt.Errorf("save account failed: %v", err)
+		}
+	} else {
+		trust, err := m.AM.GetTrust(dt, offer.AccountID, offer.BuyAsset)
+		if err != nil {
+			return fmt.Errorf("get trust failed: %v", err)
+		}
+
+		// Update trust buying liability.
+		err = m.AM.UpdateTrustLiability(trust, bl, true)
+		if err != nil {
+			return fmt.Errorf("update trust buying liability failed: %v", err)
+		}
+
+		err = m.AM.SaveTrust(dt, trust)
+		if err != nil {
+			return fmt.Errorf("save account failed: %v", err)
+		}
+	}
+
+	// Compute selling liability.
+	sl, err := m.GetLiability(offer, false)
+	if err != nil {
+		return fmt.Errorf("get selling liability failed: %v", err)
+	}
+	if acquire {
+		sl = -sl
+	}
+
+	if offer.SellAsset.AssetType == ultpb.AssetType_NATIVE {
+		acc, err := m.AM.GetAccount(dt, offer.AccountID)
+		if err != nil {
+			return fmt.Errorf("get account failed: %v", err)
+		}
+
+		// Update account selling liability.
+		err = m.AM.UpdateLiability(acc, sl, false)
+		if err != nil {
+			return fmt.Errorf("update account buying liability failed: %v", err)
+		}
+
+		err = m.AM.SaveAccount(dt, acc)
+		if err != nil {
+			return fmt.Errorf("save account failed: %v", err)
+		}
+	} else {
+		trust, err := m.AM.GetTrust(dt, offer.AccountID, offer.BuyAsset)
+		if err != nil {
+			return fmt.Errorf("get trust failed: %v", err)
+		}
+
+		// Update trust selling liability.
+		err = m.AM.UpdateTrustLiability(trust, sl, false)
+		if err != nil {
+			return fmt.Errorf("update trust buying liability failed: %v", err)
+		}
+
+		err = m.AM.SaveTrust(dt, trust)
+		if err != nil {
+			return fmt.Errorf("save account failed: %v", err)
+		}
+	}
+
+	return nil
 }
