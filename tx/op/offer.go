@@ -55,7 +55,7 @@ func (of *Offer) Apply(dt db.Tx) error {
 		}
 
 		// Relese the liability of the offer.
-		err = of.updateLiability(dt, false)
+		err = of.EM.UpdateLiability(dt, offer, false)
 		if err != nil {
 			return fmt.Errorf("release offer liability failed: %v", err)
 		}
@@ -164,7 +164,7 @@ func (of *Offer) Apply(dt db.Tx) error {
 		}
 
 		// Acquire the liability of the offer.
-		err = of.updateLiability(dt, true)
+		err = of.EM.UpdateLiability(dt, sellOffer, true)
 		if err != nil {
 			return fmt.Errorf("release offer liability failed: %v", err)
 		}
@@ -247,7 +247,7 @@ func (of *Offer) getOfferLimits(dt db.Tx, acc *ultpb.Account,
 		buyLimit = of.AM.GetTrustRestLimit(buyTrust)
 	}
 
-	bl, err := of.getBuyingLiability()
+	bl, err := of.EM.GetLiability(offer, true)
 	if err != nil {
 		return -1, -1, fmt.Errorf("get buying liability failed: %v", err)
 	}
@@ -263,7 +263,7 @@ func (of *Offer) getOfferLimits(dt db.Tx, acc *ultpb.Account,
 		sellLimit = of.AM.GetTrustBalance(sellTrust)
 	}
 
-	sl, err := of.getSellingLiability()
+	sl, err := of.EM.GetLiability(offer, false)
 	if err != nil {
 		return -1, -1, fmt.Errorf("get selling liability failed: %v", err)
 	}
@@ -356,21 +356,5 @@ func (of *Offer) validate() error {
 		return errors.New("offerID and amount are incompatible")
 	}
 
-	return nil
-}
-
-// Get buying liability of provided offer.
-func (of *Offer) getBuyingLiability() (int64, error) {
-	return 0, nil
-}
-
-// Get selling liability of provided offer.
-func (of *Offer) getSellingLiability() (int64, error) {
-	return 0, nil
-}
-
-// Update the liability of the account or the trust associated
-// with the offer.
-func (of *Offer) updateLiability(dt db.Tx, acquire bool) error {
 	return nil
 }

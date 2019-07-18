@@ -106,6 +106,12 @@ func (m *Manager) Fill(dt db.Tx, o *Order, offer *ultpb.Offer) error {
 		}
 	}
 
+	// Release the liability of the offer.
+	err = m.UpdateLiability(dt, offer, false)
+	if err != nil {
+		return fmt.Errorf("release liability failed: %v", err)
+	}
+
 	// Maximum BuyAsset the offer can sell and maximum SellAsset
 	// the offer can buy.
 	maxBuyAsset := m.GetMaxToSell(acc, buyAssetTrust)
@@ -188,6 +194,10 @@ func (m *Manager) Fill(dt db.Tx, o *Order, offer *ultpb.Offer) error {
 		err = m.SaveOffer(dt, offer)
 		if err != nil {
 			return fmt.Errorf("save offer failed: %v", err)
+		}
+		err = m.UpdateLiability(dt, offer, true)
+		if err != nil {
+			return fmt.Errorf("acquire liability failed: %v", err)
 		}
 	}
 
@@ -416,6 +426,7 @@ func (m *Manager) GetOfferKey(names ...string) []byte {
 	return []byte(ks)
 }
 
+// Get the liability associated with an offer.
 func (m *Manager) GetLiability(offer *ultpb.Offer, buying bool) (int64, error) {
 	ord := &Order{
 		MaxSellAsset: offer.Amount,
