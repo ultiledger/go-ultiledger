@@ -132,7 +132,7 @@ func (of *Offer) Apply(dt db.Tx) error {
 	if order.Full {
 		sellOffer.Amount = 0
 	} else {
-		// Adjust the offer amount based filled order.
+		// Adjust the offer amount based on filled order.
 		sellOffer.Amount = sellLimit - order.SellAssetSold
 		sl := util.MinInt64(sellOffer.Amount, of.EM.GetMaxToSell(acc, sellTrust))
 		bl := of.EM.GetMaxToBuy(acc, buyTrust)
@@ -336,11 +336,11 @@ func (of *Offer) loadTrust(dt db.Tx) (*ultpb.Trust, *ultpb.Trust, error) {
 }
 
 func (of *Offer) validate() error {
-	if err := ValidateAsset(of.SellAsset); err != nil {
+	if err := validateAsset(of.SellAsset); err != nil {
 		return fmt.Errorf("asset for selling is invalid: %v", err)
 	}
 
-	if err := ValidateAsset(of.BuyAsset); err != nil {
+	if err := validateAsset(of.BuyAsset); err != nil {
 		return fmt.Errorf("asset for buying is invalid: %v", err)
 	}
 

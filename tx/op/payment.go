@@ -19,7 +19,7 @@ var (
 	ErrPaymentNotAuthorized = errors.New("payment is not authorized")
 )
 
-func ValidateAsset(asset *ultpb.Asset) error {
+func validateAsset(asset *ultpb.Asset) error {
 	if asset == nil {
 		return errors.New("asset is nil")
 	}
@@ -43,7 +43,7 @@ type Payment struct {
 }
 
 func (p *Payment) Apply(dt db.Tx) error {
-	if err := ValidateAsset(p.Asset); err != nil {
+	if err := validateAsset(p.Asset); err != nil {
 		return fmt.Errorf("validate payment asset failed: %v", err)
 	}
 	if p.Amount == 0 {
@@ -86,14 +86,14 @@ type PathPayment struct {
 }
 
 func (pp *PathPayment) Apply(dt db.Tx) error {
-	if err := ValidateAsset(pp.SrcAsset); err != nil {
+	if err := validateAsset(pp.SrcAsset); err != nil {
 		return fmt.Errorf("validate src payment asset failed: %v", err)
 	}
-	if err := ValidateAsset(pp.DstAsset); err != nil {
+	if err := validateAsset(pp.DstAsset); err != nil {
 		return fmt.Errorf("validate dst payment asset failed: %v", err)
 	}
 	for _, a := range pp.Path {
-		if err := ValidateAsset(a); err != nil {
+		if err := validateAsset(a); err != nil {
 			return fmt.Errorf("validate path payment asset failed: %v", err)
 		}
 	}
