@@ -134,12 +134,7 @@ func Verify(publicKey, signature string, data []byte) bool {
 	if err != nil {
 		return false
 	}
-	sn, err := b58.Decode(signature)
-	if err != nil {
-		return false
-	}
-	pub := ed25519.PublicKey(pk.Hash[:])
-	return ed25519.Verify(pub, data, sn)
+	return VerifyByKey(pk, signature, data)
 }
 
 // Verify the data signature using ULTKey.
