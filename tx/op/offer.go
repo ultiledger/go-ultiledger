@@ -353,7 +353,7 @@ func (of *Offer) validate() error {
 	}
 
 	if of.Amount == 0 && of.OfferID == "" {
-		return errors.New("offerID and amount are incompatible")
+		return errors.New("amount of new offer is zero")
 	}
 
 	return nil
