@@ -141,8 +141,10 @@ func (of *Offer) Apply(dt db.Tx) error {
 			MaxSellAsset: sl,
 			BuyAsset:     sellOffer.BuyAsset,
 			MaxBuyAsset:  bl,
+			Price:        sellOffer.Price,
 		}
-		err = of.EM.Exchange(ord, math.MaxInt64, math.MaxInt64, sellOffer.Price, false)
+		rp := &ultpb.Price{Numerator: ord.Price.Denominator, Denominator: ord.Price.Numerator}
+		err = of.EM.Exchange(ord, math.MaxInt64, math.MaxInt64, rp, false)
 		if err != nil {
 			return fmt.Errorf("exchange assets failed: %v", err)
 		}
@@ -166,7 +168,7 @@ func (of *Offer) Apply(dt db.Tx) error {
 		// Acquire the liability of the offer.
 		err = of.EM.UpdateLiability(dt, sellOffer, true)
 		if err != nil {
-			return fmt.Errorf("release offer liability failed: %v", err)
+			return fmt.Errorf("acquire offer liability failed: %v", err)
 		}
 	}
 

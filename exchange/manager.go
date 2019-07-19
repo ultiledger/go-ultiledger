@@ -12,6 +12,7 @@ import (
 	"github.com/ultiledger/go-ultiledger/db"
 	"github.com/ultiledger/go-ultiledger/log"
 	"github.com/ultiledger/go-ultiledger/ultpb"
+	"github.com/ultiledger/go-ultiledger/util"
 )
 
 // Manager manages offers and fills asset exchange orders.
@@ -206,26 +207,28 @@ func (m *Manager) Fill(dt db.Tx, o *Order, offer *ultpb.Offer) error {
 
 // Exchange the assets for filling the order with selling limits
 // of BuyAsset and buying limits of SellAsset of the offer.
-func (m *Manager) Exchange(order *Order, maxBuyAsset int64, maxSellAsset int64, offerPrice *ultpb.Price, checkError bool) error {
+func (m *Manager) Exchange(order *Order, maxOfferBuyAsset int64, maxOfferSellAsset int64, offerPrice *ultpb.Price, checkError bool) error {
 	orderPrice := order.Price
 
 	// Scaled order value in terms of BuyAsset.
 	orderValue := m.getOfferValue(order.MaxSellAsset, order.MaxBuyAsset, orderPrice)
 	// Scaled offer value in terms of BuyAsset.
-	offerValue := m.getOfferValue(maxBuyAsset, maxSellAsset, offerPrice)
+	offerValue := m.getOfferValue(maxOfferSellAsset, maxOfferBuyAsset, offerPrice)
 
 	valueCmp := orderValue.Cmp(offerValue)
 
+	// The amount of BuyAsset of order bought and the amount of
+	// SellAsset of order sold.
 	var sellAssetSold, buyAssetBought int64
 
 	// If valueCmp < 0, we should use orderValue to decide the
 	// effective amount of SellAsset and BuyAsset to exchange or we
 	// should use offerValue.
 	if valueCmp < 0 {
-		if offerPrice.Numerator > offerPrice.Denominator { // BuyAsset is more valuable.
+		if offerPrice.Numerator > offerPrice.Denominator { // SellAsset of offer is more valuable.
 			buyAssetBought = DivideBigInt(orderValue, offerPrice.Numerator, RoundDown)
 			sellAssetSold = DivideBigInt(MultiplyInt64(buyAssetBought, offerPrice.Numerator), offerPrice.Denominator, RoundUp)
-		} else { // SellAsset is more valuable.
+		} else { // BuyAsset of offer is more valuable.
 			sellAssetSold = DivideBigInt(orderValue, offerPrice.Denominator, RoundDown)
 			buyAssetBought = DivideBigInt(MultiplyInt64(sellAssetSold, offerPrice.Denominator), offerPrice.Numerator, RoundDown)
 		}
@@ -239,7 +242,13 @@ func (m *Manager) Exchange(order *Order, maxBuyAsset int64, maxSellAsset int64, 
 		}
 	}
 
-	// TODO(bobonovski) Check possible numerical errors during exchange
+	// Check possible numerical errors during exchange
+	if buyAssetBought < 0 || buyAssetBought > util.MinInt64(maxOfferSellAsset, order.MaxBuyAsset) {
+		log.Fatal("order buy asset out of bounds")
+	}
+	if sellAssetSold < 0 || sellAssetSold > util.MinInt64(maxOfferBuyAsset, order.MaxSellAsset) {
+		log.Fatal("order sell asset out of bounds")
+	}
 
 	// Update order parameters.
 	order.SellAssetSold += sellAssetSold
@@ -259,6 +268,7 @@ func (m *Manager) Exchange(order *Order, maxBuyAsset int64, maxSellAsset int64, 
 
 // Get the scaled value of the offer.
 func (m *Manager) getOfferValue(maxToSell int64, maxToBuy int64, price *ultpb.Price) *big.Int {
+	// Compare the value of maxToSell*price with maxToBuy.
 	sellValue := MultiplyInt64(maxToSell, price.Numerator)
 	buyValue := MultiplyInt64(maxToBuy, price.Denominator)
 
@@ -494,7 +504,7 @@ func (m *Manager) UpdateLiability(dt db.Tx, offer *ultpb.Offer, acquire bool) er
 	if err != nil {
 		return fmt.Errorf("get selling liability failed: %v", err)
 	}
-	if acquire {
+	if !acquire {
 		sl = -sl
 	}
 
@@ -507,7 +517,7 @@ func (m *Manager) UpdateLiability(dt db.Tx, offer *ultpb.Offer, acquire bool) er
 		// Update account selling liability.
 		err = m.AM.UpdateLiability(acc, sl, false)
 		if err != nil {
-			return fmt.Errorf("update account buying liability failed: %v", err)
+			return fmt.Errorf("update account selling liability failed: %v", err)
 		}
 
 		err = m.AM.SaveAccount(dt, acc)
