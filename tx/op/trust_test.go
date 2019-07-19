@@ -6,6 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/ultiledger/go-ultiledger/account"
+	"github.com/ultiledger/go-ultiledger/crypto"
 	"github.com/ultiledger/go-ultiledger/db/memdb"
 	"github.com/ultiledger/go-ultiledger/ultpb"
 )
@@ -18,17 +19,27 @@ func TestTrustOp(t *testing.T) {
 	memorydb := memdb.New()
 	am := account.NewManager(memorydb, 100)
 
-	// create source account
-	err := am.CreateAccount(memorydb, srcAccount, 1000000, signer, 2)
+	// Create a signer account.
+	signer, _, _ := crypto.GetAccountKeypair()
+
+	// Create a asset issuer.
+	issuer, _, _ := crypto.GetAccountKeypair()
+	err := am.CreateAccount(memorydb, issuer, 1000000, signer, 2)
 	assert.Nil(t, err)
 
-	// create issuer account
-	err = am.CreateAccount(memorydb, issuer, 1000000, signer, 3)
+	// Create a source account.
+	srcAccount, _, _ := crypto.GetAccountKeypair()
+	err = am.CreateAccount(memorydb, srcAccount, 1000000, signer, 3)
+	assert.Nil(t, err)
+
+	// Create a destination account.
+	dstAccount, _, _ := crypto.GetAccountKeypair()
+	err = am.CreateAccount(memorydb, dstAccount, 1000000, signer, 4)
 	assert.Nil(t, err)
 
 	memorytx, _ := memorydb.Begin()
 
-	// create trust op
+	// Create the trust operator.
 	asset := &ultpb.Asset{
 		AssetType: ultpb.AssetType_CUSTOM,
 		AssetName: "COIN",
@@ -41,26 +52,26 @@ func TestTrustOp(t *testing.T) {
 		Limit:        10000,
 	}
 
-	// test create new trust
+	// Apply the trust operator.
 	err = trustOp.Apply(memorytx)
 	assert.Nil(t, err)
 
-	// check src account entry count
+	// Check the entry count of source account.
 	srcAcc, err := am.GetAccount(memorytx, srcAccount)
 	assert.Nil(t, err)
 	assert.Equal(t, srcAcc.EntryCount, int32(1))
 
-	// check created trust
+	// Check the existance of the new trust.
 	trust, err := am.GetTrust(memorytx, srcAccount, asset)
 	assert.Nil(t, err)
 	assert.NotNil(t, trust)
 
-	// lower the trust limit
+	// Lower the trust limit.
 	trustOp.Limit = 5000
 	err = trustOp.Apply(memorytx)
 	assert.Nil(t, err)
 
-	// delete the trust
+	// Delete the trust.
 	trustOp.Limit = 0
 	err = trustOp.Apply(memorytx)
 	assert.Nil(t, err)
