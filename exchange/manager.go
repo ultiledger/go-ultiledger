@@ -242,12 +242,14 @@ func (m *Manager) Exchange(order *Order, maxOfferBuyAsset int64, maxOfferSellAss
 		}
 	}
 
-	// Check possible numerical errors during exchange
-	if buyAssetBought < 0 || buyAssetBought > util.MinInt64(maxOfferSellAsset, order.MaxBuyAsset) {
-		log.Fatal("order buy asset out of bounds")
-	}
-	if sellAssetSold < 0 || sellAssetSold > util.MinInt64(maxOfferBuyAsset, order.MaxSellAsset) {
-		log.Fatal("order sell asset out of bounds")
+	if checkError {
+		// Check possible numerical errors during exchange
+		if buyAssetBought < 0 || buyAssetBought > util.MinInt64(maxOfferSellAsset, order.MaxBuyAsset) {
+			log.Fatal("order buy asset out of bounds")
+		}
+		if sellAssetSold < 0 || sellAssetSold > util.MinInt64(maxOfferBuyAsset, order.MaxSellAsset) {
+			log.Fatal("order sell asset out of bounds")
+		}
 	}
 
 	// Update order parameters.
@@ -307,7 +309,7 @@ func (m *Manager) GetMaxToBuy(acc *ultpb.Account, buyTrust *ultpb.Trust) int64 {
 	return balance
 }
 
-// Load offers which sell lhsAsset and buy rhsAsset,
+// Load offers which sell sellAsset and buy buyAsset,
 // the result offers are also filtered by whether their
 // prices are cheaper than supplied price threshold.
 func (m *Manager) loadOffers(getter db.Getter, sellAsset string, buyAsset string) ([]*ultpb.Offer, error) {
