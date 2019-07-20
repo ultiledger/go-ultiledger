@@ -7,7 +7,7 @@ import (
 	"github.com/ultiledger/go-ultiledger/ultpb"
 )
 
-// Vote filter to choose nominate statements that have voted the input vote value
+// Vote filter to choose nominate statements that have voted the input vote value.
 func voteFilter(vote string) func(*Statement) bool {
 	return func(s *Statement) bool {
 		nom := s.GetNominate()
@@ -20,7 +20,7 @@ func voteFilter(vote string) func(*Statement) bool {
 	}
 }
 
-// Accept filter to choose statements that have accepted the input vote value
+// Accept filter to choose statements that have accepted the input vote value.
 func acceptFilter(vote string) func(*Statement) bool {
 	return func(s *Statement) bool {
 		nom := s.GetNominate()
@@ -33,7 +33,7 @@ func acceptFilter(vote string) func(*Statement) bool {
 	}
 }
 
-// Vote filter to choose ballot statements that has voted the the prepare ballot
+// Vote filter to choose ballot statements that has voted the the prepare ballot.
 func prepareVoteFilter(b *Ballot) func(*Statement) bool {
 	return func(stmt *Statement) bool {
 		if stmt == nil {
@@ -62,7 +62,7 @@ func prepareVoteFilter(b *Ballot) func(*Statement) bool {
 	}
 }
 
-// Accept filter to choose ballot statements that have accepted the prepare ballot
+// Accept filter to choose ballot statements that have accepted the prepare ballot.
 func prepareAcceptFilter(b *Ballot) func(*Statement) bool {
 	return func(stmt *Statement) bool {
 		if stmt == nil {
@@ -95,7 +95,7 @@ func prepareAcceptFilter(b *Ballot) func(*Statement) bool {
 	}
 }
 
-// Vote filter to choose ballot statements that have voted the commit ballot
+// Vote filter to choose ballot statements that have voted the commit ballot.
 func commitVoteFilter(b *Ballot, l uint32, r uint32) func(*Statement) bool {
 	return func(stmt *Statement) bool {
 		if stmt == nil {
@@ -127,7 +127,7 @@ func commitVoteFilter(b *Ballot, l uint32, r uint32) func(*Statement) bool {
 	}
 }
 
-// Accept filter to choose ballot statements that have voted the commit ballot
+// Accept filter to choose ballot statements that have accepted the commit ballot.
 func commitAcceptFilter(b *Ballot, l uint32, r uint32) func(*Statement) bool {
 	return func(stmt *Statement) bool {
 		if stmt == nil {

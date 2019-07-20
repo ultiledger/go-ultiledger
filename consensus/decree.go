@@ -1,7 +1,6 @@
 package consensus
 
 import (
-	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -30,7 +29,7 @@ const (
 	BallotPhaseExternalize
 )
 
-// Information about externalized value.
+// Information about the externalized value.
 type ExternalizeValue struct {
 	Index uint64 // index of decree
 	Value string // consensus value
@@ -76,8 +75,8 @@ func ValidateDecreeContext(dc *DecreeContext) error {
 	return nil
 }
 
-// Decree is an abstractive decision the consensus engine
-// should reach in each round.
+// Decree is an abstractive decision about the consensus value
+// that the consensus engine will reach in each round.
 type Decree struct {
 	index           uint64
 	nodeID          string
@@ -85,15 +84,14 @@ type Decree struct {
 	quorumHash      string
 	latestCloseTime uint64
 
-	// ledger manager
 	lm *ledger.Manager
-	// validator
+
 	validator *Validator
 
-	// previous consensus value
+	// Previous consensus value.
 	prevConsensusValue string
 
-	// for nomination protocol
+	// States for the nomination protocol.
 	votes             mapset.Set
 	accepts           mapset.Set
 	candidates        mapset.Set
@@ -104,7 +102,7 @@ type Decree struct {
 	latestNomination  *Nominate
 	latestComposite   string // latest composite candidate value
 
-	// for ballot protocol
+	// States for the ballot protocol.
 	currentPhase     BallotPhase
 	currentBallot    *Ballot
 	pBallot          *Ballot // p
@@ -116,13 +114,12 @@ type Decree struct {
 	nextValue        string // z
 	ballotMsgCount   int
 
-	// maximum number of recursions the step forward
-	// can do in ballot protocol
+	// Maximum depths of recursion the step function can perform.
 	maxRecursions int
 
-	// channel for sending statements
+	// Channel for broadcasting statements.
 	statementChan chan<- *Statement
-	// channel for sending externalized value
+	// Channel for notifying externalized value.
 	externalizeChan chan<- *ExternalizeValue
 }
 
@@ -165,9 +162,8 @@ func (d *Decree) Nominate(prevHash, currHash string) error {
 
 	d.updateRoundLeaders()
 
-	// trace whether we have updated any value
+	// Track whether we have updated any value.
 	updated := false
-
 	for _, leader := range d.nominationLeaders {
 		if leader == d.nodeID {
 			if !d.votes.Contains(currHash) {
@@ -196,12 +192,11 @@ func (d *Decree) Nominate(prevHash, currHash string) error {
 	return nil
 }
 
-// Recv receives validated statement and redistributes it to
-// corresponding route handler. If the statement is a nomination,
-// we give it to seperated nomination handler. Other statement types
+// Recv receives the validated statement and redistributes it to
+// the corresponding handler. If it is a nomination statement,
+// we send it to the nomination handler. Other types of statements
 // belong to ballot protocol, we directly pass the statement to the
-// handler which contains its own logic to distinguish fine grained
-// statement types.
+// handler can distinguish fine grained type of the statement.
 func (d *Decree) Recv(stmt *Statement) error {
 	if stmt == nil {
 		return errors.New("statement is nil")
@@ -252,8 +247,9 @@ func (d *Decree) getConsensusValue(stmt *Statement) (string, error) {
 	return newVote, nil
 }
 
-// Update the leaders of this nomination round.
+// Update the leaders of this round of nomination.
 func (d *Decree) updateRoundLeaders() {
+	// Clone the quorum as it will be transformed.
 	quorum := (pb.Clone(d.quorum)).(*Quorum)
 
 	normalizeQuorum(quorum, d.nodeID)
@@ -273,7 +269,8 @@ func (d *Decree) updateRoundLeaders() {
 			leaders = append(leaders, node)
 		}
 	}
-	// update current nomination leaders
+
+	// Update the leaders of current round.
 	d.nominationLeaders = leaders
 }
 
@@ -324,7 +321,7 @@ func (d *Decree) getNodeHash(nodeID string, isPriority bool) uint64 {
 	}
 	binary.PutUvarint(buf, uint64(d.nominationRound))
 	buf = append(buf, []byte(nodeID)...)
-	// compute the SHA256 hash and use the first 8 bytes as the result
+	// Compute the SHA256 hash and use the first 8 bytes as the result.
 	result := crypto.SHA256HashUint64(buf)
 	return result
 }
@@ -338,7 +335,7 @@ func (d *Decree) getConsensusValueHash(nodeID string) uint64 {
 	binary.PutUvarint(buf, hashK)
 	binary.PutUvarint(buf, uint64(d.nominationRound))
 	buf = append(buf, []byte(nodeID)...)
-	// compute the SHA256 hash and use the first 8 bytes as the result
+	// Compute the SHA256 hash and use the first 8 bytes as the result.
 	result := crypto.SHA256HashUint64(buf)
 	return result
 }
@@ -347,26 +344,27 @@ func (d *Decree) getConsensusValueHash(nodeID string) uint64 {
 // 1. Voted nodes of the statment form V-blocking for local node.
 // 2. All the nodes in the quorum have voted the statement.
 func (d *Decree) federatedAccept(voteFilter func(*Statement) bool, acceptFilter func(*Statement) bool, stmts map[string]*Statement) bool {
-	// filter nodes with voteFilter
+	// Filter the nodes with voteFilter.
 	nodes := mapset.NewSet()
 	for n, s := range stmts {
 		if voteFilter(s) {
 			nodes.Add(n)
 		}
 	}
-	// check V-blocking condition
+
+	// Check the v-blocking condition.
 	if isVblocking(d.quorum, nodes) {
 		return true
 	}
 
-	// filter nodes with acceptFilter
+	// Filter nodes with acceptFilter.
 	for n, s := range stmts {
 		if acceptFilter(s) {
 			nodes.Add(n)
 		}
 	}
 
-	// check quorum condition
+	// Check the quorum condition.
 	subnodes := mapset.NewSet()
 	for {
 		if nodes.Equal(subnodes) {
@@ -395,7 +393,7 @@ func (d *Decree) federatedAccept(voteFilter func(*Statement) bool, acceptFilter 
 // when the filter generates voted nodes for a statement and will work as
 // confirmation when the filter generates accepted nodes for a statement.
 func (d *Decree) federatedRatify(filter func(*Statement) bool, stmts map[string]*Statement) bool {
-	// filter nodes with voteFilter
+	// Filter nodes with voteFilter.
 	nodes := mapset.NewSet()
 	for n, s := range stmts {
 		if filter(s) {
@@ -403,7 +401,7 @@ func (d *Decree) federatedRatify(filter func(*Statement) bool, stmts map[string]
 		}
 	}
 
-	// check quorum condition
+	// Check the quorum condition.
 	subnodes := mapset.NewSet()
 	for {
 		if nodes.Equal(subnodes) {
@@ -426,10 +424,10 @@ func (d *Decree) federatedRatify(filter func(*Statement) bool, stmts map[string]
 	return false
 }
 
-// Extract the quorum from statement.
+// Extract the quorum from the statement.
 func (d *Decree) getStatementQuorum(stmt *Statement) *Quorum {
 	var quorum *Quorum
-	// extract quorum hash
+	// Extract the hash of the quorum.
 	var hash string
 	switch stmt.StatementType {
 	case ultpb.StatementType_NOMINATE:
@@ -450,9 +448,9 @@ func (d *Decree) getStatementQuorum(stmt *Statement) *Quorum {
 	if quorum == nil && hash != "" {
 		quorum, err := d.validator.GetQuorum(hash)
 		if err != nil || quorum == nil {
-			// this should not happen as we will only receive
+			// This should not happen as we will only receive
 			// validated statements with full information in
-			// consensus protocol
+			// consensus protocol.
 			log.Fatalf("failed to get quorum of hash: %s", hash)
 		}
 		return quorum
@@ -461,21 +459,21 @@ func (d *Decree) getStatementQuorum(stmt *Statement) *Quorum {
 	return quorum
 }
 
-/* Nomination Protocol */
-// Receive nomination from peers or local node.
+// ============  Nomination Protocol ============
+// Receive the nomination statement from peers or local node.
 func (d *Decree) recvNomination(stmt *Statement) error {
 	nom := stmt.GetNominate()
 
-	// check validity of votes and accepts
+	// Check the validity of votes and accepts.
 	if len(nom.VoteList)+len(nom.AcceptList) == 0 {
 		return errors.New("vote and accept list is empty")
 	}
 
 	log.Infow("recv nomination", "nodeID", stmt.NodeID, "votes", len(nom.VoteList), "accepts", len(nom.AcceptList))
 
-	// check whether the existing nomination of the remote node
+	// Check whether the existing nomination of the remote node
 	// is the proper subset of the new nomination and save the
-	// new nomination statement
+	// new nomination statement.
 	if s, ok := d.nominations[stmt.NodeID]; ok {
 		if isNewerNomination(s.GetNominate(), nom) {
 			d.nominations[stmt.NodeID] = stmt
@@ -493,13 +491,13 @@ func (d *Decree) recvNomination(stmt *Statement) error {
 		return fmt.Errorf("promote votes failed: %v", err)
 	}
 
-	// send new nomination if votes changed
+	// Send new nomination if votes changed.
 	if acceptUpdated {
 		log.Debug("nomination accepted votes changed")
 		d.sendNomination()
 	}
 
-	// start balloting if candidates changed
+	// Start the phase of ballot protocol if candidates have changed.
 	if candidateUpdated {
 		log.Debug("nomination candidate votes changed")
 		compValue, err := d.combineCandidates()
@@ -515,7 +513,7 @@ func (d *Decree) recvNomination(stmt *Statement) error {
 
 // Assemble a nomination and broadcast it to other peers.
 func (d *Decree) sendNomination() error {
-	// create an abstract nomination statement
+	// Create an abstract nomination statement.
 	nom := &Nominate{
 		QuorumHash: d.quorumHash,
 	}
@@ -537,7 +535,7 @@ func (d *Decree) sendNomination() error {
 		return fmt.Errorf("receive local nomination failed: %v", err)
 	}
 
-	// broadcast the nomination if it is a new one
+	// Broadcast the nomination if it is new.
 	if isNewerNomination(d.latestNomination, nom) {
 		d.latestNomination = nom
 		d.statementChan <- stmt
@@ -553,12 +551,12 @@ func (d *Decree) promoteVotes(newNom *Nominate) (bool, bool, error) {
 		if d.accepts.Contains(vote) {
 			continue
 		}
-		// use federated accept to promote values from votes to accepts
+		// Use federated accept to promote values from votes to accepts.
 		if !d.federatedAccept(voteFilter(vote), acceptFilter(vote), d.nominations) {
 			log.Errorw("nomination federated accept vote failed", "vote", vote)
 			continue
 		}
-		// validate the vote before updating votes and accepts
+		// Validate the vote before updating votes and accepts.
 		if err := d.validateConsensusValue(vote); err != nil {
 			log.Errorf("nomination validate vote failed: %v", err)
 			continue
@@ -573,8 +571,7 @@ func (d *Decree) promoteVotes(newNom *Nominate) (bool, bool, error) {
 		if d.candidates.Contains(accept) {
 			continue
 		}
-		// use federated ratify to promote values from accepts to
-		// condidates, i.e. confirmation
+		// Use federated ratify (confirmation) to promote values from accepts to condidates.
 		if !d.federatedRatify(acceptFilter(accept), d.nominations) {
 			log.Errorw("nomination federated ratify vote failed", "accept", accept)
 			continue
@@ -586,9 +583,9 @@ func (d *Decree) promoteVotes(newNom *Nominate) (bool, bool, error) {
 	return acceptUpdated, candidateUpdated, nil
 }
 
-// Combine the candidates set into a single candidate value.
+// Combine the values in the candidates set into a single candidate value.
 func (d *Decree) combineCandidates() (string, error) {
-	// query lastest closed ledger header
+	// Query the lastest closed ledger header.
 	headerHash := d.lm.CurrLedgerHeaderHash()
 
 	candidate := &ConsensusValue{}
@@ -602,21 +599,21 @@ func (d *Decree) combineCandidates() (string, error) {
 			return "", fmt.Errorf("decode candidate failed: %v", err)
 		}
 
-		// accumulate hash
 		hash = bytesOr(hash, crypto.SHA256Hash(canb))
 
 		cv, err := ultpb.DecodeConsensusValue(canb)
 		if err != nil {
 			return "", fmt.Errorf("decode consensus value failed: %v", err)
 		}
-		// choose the largest propose time for combined value
+
+		// Choose the largest propose time for the combined value.
 		if cv.ProposeTime > candidate.ProposeTime {
 			candidate.ProposeTime = cv.ProposeTime
 		}
 		vals = append(vals, cv)
 	}
 
-	// find the txset contains the largest number of tx
+	// Find the txset that contains the largest number of transactions.
 	var txset *TxSet
 	var txsetHash string
 	for _, cv := range vals {
@@ -634,7 +631,7 @@ func (d *Decree) combineCandidates() (string, error) {
 		}
 	}
 
-	// deep copy a new txset
+	// Deep copy a new txset.
 	newTxSet := (pb.Clone(txset)).(*TxSet)
 
 	// TODO(bobonovski) trim invalid tx
@@ -660,41 +657,10 @@ func (d *Decree) combineCandidates() (string, error) {
 	return candStr, nil
 }
 
-// Check whether the first input string is smaller than the second one
-// after byte-wise OR.
-func lessBytesOr(l string, r string, h string) bool {
-	lb, _ := b58.Decode(l)
-	rb, _ := b58.Decode(r)
-	hb, _ := b58.Decode(h)
-
-	lbuf := bytes.NewBuffer(nil)
-	rbuf := bytes.NewBuffer(nil)
-	for i, _ := range hb {
-		lbuf.WriteByte(lb[i] ^ hb[i])
-		rbuf.WriteByte(rb[i] ^ hb[i])
-	}
-
-	return lbuf.String() < rbuf.String()
-}
-
-// Compute the byte-wise OR bit operation between input string,
-// the decoded bytes from input string should have the same length
-func bytesOr(l string, r string) string {
-	lb, _ := b58.Decode(l)
-	rb, _ := b58.Decode(r)
-
-	buf := bytes.NewBuffer(nil)
-	for i, _ := range lb {
-		buf.WriteByte(lb[i] ^ rb[i])
-	}
-
-	return buf.String()
-}
-
-/* Ballot Protocol */
-// Receive ballot statement from peer or local node.
+// ============  Ballot Protocol ============
+// Receive the ballot statement from peer or local node.
 func (d *Decree) recvBallot(stmt *Statement) error {
-	// make sure we received statement with the same decree index
+	// Make sure we received statement with the same decree index.
 	if stmt.Index != d.index {
 		log.Errorf("recv incompatible ballot index: local %d, recv %d", d.index, stmt.Index)
 		return errors.New("ballot indices are incompatible")
@@ -702,21 +668,21 @@ func (d *Decree) recvBallot(stmt *Statement) error {
 
 	log.Infow("recv ballot", "nodeID", stmt.NodeID, "decreeIdx", stmt.Index)
 
-	// skip outdated statement without returning error
+	// Skip the statement if it is old.
 	if s, ok := d.ballots[stmt.NodeID]; ok {
 		if !isNewerBallot(s, stmt) {
 			return nil
 		}
 	}
 
-	// make sure the ballot is valid
+	// Check the validity of the ballot.
 	if err := d.validateBallot(stmt); err != nil {
 		return fmt.Errorf("ballot is invalid: %v", err)
 	}
 
 	if d.currentPhase != BallotPhaseExternalize {
 		d.ballots[stmt.NodeID] = stmt
-		// try to advance current ballot state
+		// Try to advance the current ballot state.
 		if err := d.step(stmt); err != nil {
 			return fmt.Errorf("step forward ballot state failed: %v", err)
 		}
@@ -735,15 +701,12 @@ func (d *Decree) recvBallot(stmt *Statement) error {
 func (d *Decree) sendBallot() error {
 	d.checkBallotInvariants()
 
-	// create statement
 	stmt := &Statement{
 		NodeID: d.nodeID,
 		Index:  d.index,
 	}
-
-	// assemble ballot statement based on current phase
 	switch d.currentPhase {
-	case BallotPhasePrepare: // Prepare statement
+	case BallotPhasePrepare:
 		prepare := &Prepare{
 			B:          d.currentBallot,
 			P:          d.pBallot,
@@ -758,7 +721,7 @@ func (d *Decree) sendBallot() error {
 		}
 		stmt.StatementType = ultpb.StatementType_PREPARE
 		stmt.Stmt = &ultpb.Statement_Prepare{Prepare: prepare}
-	case BallotPhaseConfirm: // Confirm statement
+	case BallotPhaseConfirm:
 		confirm := &Confirm{
 			B:          d.currentBallot,
 			PC:         d.pBallot.Counter,
@@ -768,7 +731,7 @@ func (d *Decree) sendBallot() error {
 		}
 		stmt.StatementType = ultpb.StatementType_CONFIRM
 		stmt.Stmt = &ultpb.Statement_Confirm{Confirm: confirm}
-	case BallotPhaseExternalize: // Externalize statement
+	case BallotPhaseExternalize:
 		ext := &Externalize{
 			B:          d.cBallot,
 			HC:         d.hBallot.Counter,
@@ -780,7 +743,7 @@ func (d *Decree) sendBallot() error {
 		log.Fatal(ErrUnknownStmtType)
 	}
 
-	// check whether the statement is already processed
+	// Check whether the statement has been processed.
 	s, ok := d.ballots[stmt.NodeID]
 	if !ok || !pb.Equal(s, stmt) {
 		if err := d.recvBallot(stmt); err != nil {
@@ -789,7 +752,7 @@ func (d *Decree) sendBallot() error {
 		}
 		if d.currentBallot != nil && (d.latestBallotStmt == nil || isNewerBallot(d.latestBallotStmt, stmt)) {
 			d.latestBallotStmt = stmt
-			// broadcast the ballot
+			// Broadcast the ballot.
 			d.statementChan <- stmt
 		}
 	}
@@ -806,11 +769,11 @@ func (d *Decree) step(stmt *Statement) error {
 
 	log.Debugf("ballot msg count increase to: %d", d.ballotMsgCount)
 
-	// update internal ballot states by following operations:
-	// 1. accept the prepared statement
-	// 2. confirm the prepared statement
-	// 3. accept the commit statement
-	// 4. confirm the commit statement
+	// Update the internal ballot state by the following operations:
+	// 1. Accept the prepared statement.
+	// 2. Confirm the prepared statement.
+	// 3. Accept the commit statement.
+	// 4. Confirm the commit statement.
 	updated := false
 	updated = d.acceptPrepared(stmt) || updated
 	updated = d.confirmPrepared(stmt) || updated
@@ -839,7 +802,7 @@ func (d *Decree) step(stmt *Statement) error {
 	return nil
 }
 
-// Forward ballot counter.
+// Update the state of the ballot.
 func (d *Decree) update() bool {
 	if d.currentPhase != BallotPhasePrepare && d.currentPhase != BallotPhaseConfirm {
 		return false
@@ -867,7 +830,7 @@ func (d *Decree) update() bool {
 	}
 	counters.Add(target)
 
-	// sort the counters in ascending order
+	// Sort the counters in ascending order.
 	var sortedCounters []uint32
 	for c := range counters.Iter() {
 		v := c.(uint32)
@@ -877,7 +840,7 @@ func (d *Decree) update() bool {
 		return sortedCounters[i] < sortedCounters[j]
 	})
 
-	// statement filter
+	// Statement filter.
 	stmtFilter := func(counter uint32) func(*Statement) bool {
 		return func(stmt *Statement) bool {
 			var cond bool
@@ -895,7 +858,7 @@ func (d *Decree) update() bool {
 		}
 	}
 
-	// find the smallest compatible counter
+	// Find the smallest compatible counter.
 	nodes := mapset.NewSet()
 	for _, c := range sortedCounters {
 		if c < target {
@@ -909,7 +872,7 @@ func (d *Decree) update() bool {
 			}
 		}
 
-		// check whether the nodes form v-blocking
+		// Check whether the nodes form v-blocking.
 		vb := isVblocking(d.quorum, nodes)
 		if vb {
 			continue
@@ -945,9 +908,9 @@ func (d *Decree) abandonBallot(c uint32) bool {
 	return updated
 }
 
-// Accept new ballot statement as prepared using federated voting.
+// Accept the new ballot statement as prepared using federated voting.
 func (d *Decree) acceptPrepared(stmt *Statement) bool {
-	// it is only necessary to call this method when
+	// It is only necessary to call this method when
 	// current phase is in prepare or confirm.
 	if d.currentPhase != BallotPhasePrepare && d.currentPhase != BallotPhaseConfirm {
 		return false
@@ -959,18 +922,18 @@ func (d *Decree) acceptPrepared(stmt *Statement) bool {
 
 	for _, cand := range candidates {
 		if d.currentPhase == BallotPhaseConfirm {
-			// skip old or incompatible ballots
+			// Skip old or incompatible ballots.
 			if !lessAndCompatibleBallots(d.pBallot, cand) {
 				continue
 			}
-			// we should not have accepted prepared ballot that
-			// is incompatible with current commit ballot
+			// We should not have accepted prepared ballot that
+			// is incompatible with current commit ballot.
 			if !compatibleBallots(d.cBallot, cand) {
 				log.Fatal("candidate ballot and commit ballot are not compatible")
 			}
 		}
 
-		// skip prepared ballot
+		// Skip the prepared ballot.
 		if d.qBallot != nil && compareBallots(cand, d.qBallot) <= 0 {
 			continue
 		}
@@ -980,7 +943,7 @@ func (d *Decree) acceptPrepared(stmt *Statement) bool {
 
 		accepted := d.federatedAccept(prepareVoteFilter(cand), prepareAcceptFilter(cand), d.ballots)
 		if accepted {
-			// update prepared ballot
+			// Update the prepared ballot.
 			updated := d.setAcceptPrepared(cand)
 			if d.cBallot != nil && d.hBallot != nil {
 				if (d.pBallot != nil && lessAndIncompatibleBallots(d.hBallot, d.pBallot)) ||
@@ -1002,13 +965,13 @@ func (d *Decree) acceptPrepared(stmt *Statement) bool {
 	return false
 }
 
-// Update internal q and p ballot states with new accepted ballot.
+// Update internal q and p ballot states with the new accepted ballot.
 func (d *Decree) setAcceptPrepared(b *Ballot) bool {
 	updated := false
 	if d.pBallot != nil { // b < p
 		cmp := compareBallots(b, d.pBallot)
 		if cmp < 0 {
-			// check whether we can update q ballot
+			// Check whether we can update q ballot.
 			if d.qBallot == nil || (compareBallots(b, d.qBallot) > 0 && !compatibleBallots(b, d.pBallot)) {
 				d.qBallot = b
 				updated = true
@@ -1029,7 +992,7 @@ func (d *Decree) setAcceptPrepared(b *Ballot) bool {
 
 // Extract unique prepared candidate ballots from statement.
 func (d *Decree) getPreparedCandidates(stmt *Statement) []*Ballot {
-	// filter duplicate ballots with the same values
+	// Filter duplicate ballots that have the same value.
 	ballots := mapset.NewSet()
 
 	switch stmt.StatementType {
@@ -1058,7 +1021,7 @@ func (d *Decree) getPreparedCandidates(stmt *Statement) []*Ballot {
 		return candidates
 	}
 
-	// process ballots in descending order
+	// Process ballots in descending order.
 	candSet := mapset.NewSet()
 	for ballot := range ballots.Iter() {
 		b := ballot.(Ballot)
@@ -1079,7 +1042,7 @@ func (d *Decree) getPreparedCandidates(stmt *Statement) []*Ballot {
 				confirm := stmt.GetConfirm()
 				if compatibleBallots(confirm.B, &b) {
 					candSet.Add(b)
-					// check the highest accepted prepared ballot counter
+					// Check the highest accepted prepared ballot counter.
 					if confirm.PC < b.Counter {
 						candSet.Add(Ballot{Value: b.Value, Counter: confirm.PC})
 					}
@@ -1100,7 +1063,7 @@ func (d *Decree) getPreparedCandidates(stmt *Statement) []*Ballot {
 		candidates = append(candidates, &b)
 	}
 
-	// sort candidates in descending order
+	// Sort the candidates in descending order.
 	sort.Sort(BallotSlice(candidates))
 
 	return candidates
@@ -1116,14 +1079,14 @@ func (d *Decree) confirmPrepared(stmt *Statement) bool {
 
 	log.Debugf("get %d candidates for confirming prepared", len(candidates))
 
-	// candidate for higher ballot
+	// Candidate for the higher ballot.
 	var hCandidate *ultpb.Ballot
 
 	i := 0
 	for ; i < len(candidates); i++ {
 		cand := candidates[i]
-		// skip the ballot if it is impossible to find
-		// a higher confirmed prepared ballot
+		// Skip the ballot if it is impossible to find
+		// a higher ballot that is confirmed prepared.
 		if d.hBallot != nil && compareBallots(cand, d.hBallot) <= 0 {
 			break
 		}
@@ -1135,13 +1098,13 @@ func (d *Decree) confirmPrepared(stmt *Statement) bool {
 	}
 
 	if hCandidate != nil {
-		// candidate for commit ballot
+		// Candidate for commit ballot.
 		var cCandidate *Ballot
 		curb := d.currentBallot
 		if curb == nil {
 			curb = &Ballot{}
 		}
-		// find a new commit ballot
+		// Find a new commit ballot.
 		if d.cBallot == nil &&
 			(d.pBallot == nil || !lessAndIncompatibleBallots(hCandidate, d.pBallot)) &&
 			(d.qBallot == nil || !lessAndIncompatibleBallots(hCandidate, d.qBallot)) {
@@ -1157,9 +1120,9 @@ func (d *Decree) confirmPrepared(stmt *Statement) bool {
 					cCandidate = cand
 					continue
 				}
-				// candidates are sorted in descending order,
+				// Candidates are sorted in descending order,
 				// if we cannot ratify the current candidate we
-				// can directly break out of the  loop
+				// can skip the rest of the checks.
 				break
 			}
 		}
@@ -1172,7 +1135,7 @@ func (d *Decree) confirmPrepared(stmt *Statement) bool {
 
 // Update internal c and h ballots with new confirmed prepared ballots.
 func (d *Decree) setConfirmPrepared(cb *Ballot, hb *Ballot) bool {
-	// save the next ballot value to use
+	// Save the next ballot value to use.
 	d.nextValue = hb.Value
 
 	updated := false
@@ -1201,12 +1164,12 @@ func (d *Decree) acceptCommit(stmt *Statement) bool {
 		return false
 	}
 
-	// create commit ballot from statement
+	// Create a commit ballot from the input statement.
 	ballot := &Ballot{}
 	switch stmt.StatementType {
 	case ultpb.StatementType_PREPARE:
 		prepare := stmt.GetPrepare()
-		if prepare.LC == 0 { // no commit ballot yet
+		if prepare.LC == 0 { // No commit ballot yet.
 			return false
 		}
 		ballot.Value = prepare.B.Value
@@ -1223,12 +1186,12 @@ func (d *Decree) acceptCommit(stmt *Statement) bool {
 		log.Fatal(ErrUnknownStmtType)
 	}
 
-	// make sure the new ballot is compatible with local higher ballot
+	// Make sure the new ballot is compatible with local higher ballot.
 	if d.currentPhase == BallotPhaseConfirm && !compatibleBallots(ballot, d.hBallot) {
 		return false
 	}
 
-	// collect all the candidate counters
+	// Collect all the candidate counters.
 	counters := d.getCommitCounters(ballot)
 
 	filter := func(l, r uint32) bool {
@@ -1253,7 +1216,7 @@ func (d *Decree) acceptCommit(stmt *Statement) bool {
 
 // Update internal c and h ballots with new accepted commit ballots.
 func (d *Decree) setAcceptCommit(cb *Ballot, hb *Ballot) bool {
-	// save the next ballot value to use
+	// Save the next ballot value to use.
 	d.nextValue = hb.Value
 
 	updated := false
@@ -1402,21 +1365,21 @@ func (d *Decree) confirmCommit(stmt *Statement) bool {
 // Update internal c and h ballots with confirmed commit ballot
 // and trigger externalization of the commit value.
 func (d *Decree) setConfirmCommit(cb *Ballot, hb *Ballot) bool {
-	// update commit and higher ballot
+	// Update the commit and higher ballots.
 	d.cBallot = cb
 	d.hBallot = hb
 
 	d.updateBallotIfNeeded(d.hBallot)
 
-	// change phase to externalize
+	// Change phase to externalize.
 	d.currentPhase = BallotPhaseExternalize
 
 	d.sendBallot()
 
-	// stop nomination protocol
+	// Stop nomination protocol.
 	d.nominationStart = false
 
-	// trigger externalization
+	// Trigger externalization.
 	d.externalizeChan <- &ExternalizeValue{
 		Index: d.index,
 		Value: d.cBallot.Value,
@@ -1508,7 +1471,7 @@ func (d *Decree) updateBallot(b *Ballot) {
 		log.Fatal("cannot update current ballot with smaller one")
 	}
 
-	// deep copy the ballot
+	// Deep copy the ballot.
 	d.currentBallot = pb.Clone(b).(*Ballot)
 
 	if d.hBallot != nil && !compatibleBallots(d.currentBallot, d.hBallot) {
@@ -1516,14 +1479,15 @@ func (d *Decree) updateBallot(b *Ballot) {
 	}
 }
 
-// Check invariants of ballot states.
+// Check invariants of ballot states. Any detected errors could
+// imply some bugs in the consensus protocol.
 func (d *Decree) checkBallotInvariants() {
 	if d.currentBallot != nil && d.currentBallot.Counter == 0 {
 		log.Fatal("current ballot is not nil but counter is zero")
 	}
 
-	// q and p ballots are the two hightest ballots accepted as prepared
-	// such that q is imcompatible with p
+	// q and p ballots are the two highest ballots accepted as prepared
+	// such that q is incompatible with p.
 	if d.pBallot != nil && d.qBallot != nil {
 		cond := compareBallots(d.qBallot, d.pBallot) <= 0 && !compatibleBallots(d.qBallot, d.pBallot)
 		if !cond {
@@ -1584,10 +1548,10 @@ func (d *Decree) validateBallot(stmt *Statement) error {
 
 	fromSelf := d.nodeID == stmt.NodeID
 
-	// value set for checking validity of ballot value
+	// Value set for checking validity of ballot value.
 	values := mapset.NewSet()
 
-	// validate quorum
+	// Validate quorum from the statement.
 	quorum := d.getStatementQuorum(stmt)
 	if err := d.validateQuorum(quorum, 0); err != nil {
 		return fmt.Errorf("validate quorum failed: %v", err)
@@ -1596,7 +1560,7 @@ func (d *Decree) validateBallot(stmt *Statement) error {
 	switch stmt.StatementType {
 	case ultpb.StatementType_PREPARE:
 		prepare := stmt.GetPrepare()
-		// checking counter sanity
+		// Checking counter sanity.
 		if !fromSelf && prepare.B.Counter == 0 {
 			return errors.New("prepare ballot counter is zero and not self msg")
 		}
@@ -1612,7 +1576,6 @@ func (d *Decree) validateBallot(stmt *Statement) error {
 		if !cond {
 			return errors.New("prepare ballot counters are not in expected states")
 		}
-		// add value to set
 		if prepare.B.Counter > 0 {
 			values.Add(prepare.B.Value)
 		}
@@ -1621,7 +1584,7 @@ func (d *Decree) validateBallot(stmt *Statement) error {
 		}
 	case ultpb.StatementType_CONFIRM:
 		confirm := stmt.GetConfirm()
-		// check counter sanity
+		// Check counter sanity.
 		if confirm.B.Counter == 0 {
 			return fmt.Errorf("confirm current ballot counter should not be zero")
 		}
@@ -1629,22 +1592,20 @@ func (d *Decree) validateBallot(stmt *Statement) error {
 		if !cond {
 			return fmt.Errorf("confirm ballot counters are not in expected states")
 		}
-		// add value to set
 		values.Add(confirm.B.Value)
 	case ultpb.StatementType_EXTERNALIZE:
 		ext := stmt.GetExternalize()
-		// check counter sanity
+		// Check counter sanity.
 		cond := ext.B.Counter > 0 && ext.B.Counter <= ext.HC
 		if !cond {
 			return fmt.Errorf("externalize ballot counters are not in expected states")
 		}
-		// add value to set
 		values.Add(ext.B.Value)
 	default:
 		log.Fatal(ErrUnknownStmtType)
 	}
 
-	// check values against consensus constraints
+	// Check values against consensus constraints.
 	var valueErr error
 	for v := range values.Iter() {
 		if err := d.validateConsensusValue(v.(string)); err != nil {
@@ -1676,11 +1637,11 @@ func (d *Decree) validateConsensusValue(val string) error {
 
 // Validate consensus value with full checks.
 func (d *Decree) validateConsensusValueFull(cv *ConsensusValue, isNomination bool) error {
-	// check whether the decree index is up to date
+	// Check whether the decree index is up to date.
 	if !d.lm.LedgerSynced() || d.lm.NextLedgerHeaderSeq() != d.index {
 		return errors.New("consensus value is not compatible with ledger state")
 	}
-	// the propose time should be larger than the close time in closed ledger
+	// The propose time should be larger than the close time in closed ledger
 	header := d.lm.CurrLedgerHeader()
 	if header.ConsensusValue != "" {
 		vb, err := b58.Decode(header.ConsensusValue)
@@ -1695,7 +1656,7 @@ func (d *Decree) validateConsensusValueFull(cv *ConsensusValue, isNomination boo
 			return errors.New("consensus value is too old")
 		}
 	}
-	// check the existance of the txset
+	// Check the existance of the txset.
 	txset, err := d.lm.GetTxSet(cv.TxSetHash)
 	if err != nil || txset == nil {
 		return fmt.Errorf("get txset failed: %v", err)
@@ -1713,7 +1674,7 @@ func (d *Decree) validateQuorum(quorum *Quorum, depth int) error {
 		return fmt.Errorf("quorum threshold out of range in depth %d", depth)
 	}
 
-	// check whether there exists duplicate validator in quorum
+	// Check whether there exists duplicate validator in quorum.
 	vset := mapset.NewSet()
 	for _, v := range quorum.Validators {
 		if vset.Contains(v) {
@@ -1722,7 +1683,7 @@ func (d *Decree) validateQuorum(quorum *Quorum, depth int) error {
 		vset.Add(v)
 	}
 
-	// check nested quorum
+	// Check nested quorum recursively.
 	for _, nq := range quorum.NestQuorums {
 		if err := d.validateQuorum(nq, depth+1); err != nil {
 			return fmt.Errorf("validate nest quorum in depth %d failed: %v", depth+1, err)

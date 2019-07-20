@@ -1,11 +1,13 @@
 package consensus
 
 import (
+	"bytes"
 	"math"
 	"sort"
 	"strings"
 
 	"github.com/deckarep/golang-set"
+	b58 "github.com/mr-tron/base58/base58"
 
 	"github.com/ultiledger/go-ultiledger/log"
 	"github.com/ultiledger/go-ultiledger/ultpb"
@@ -23,6 +25,37 @@ type (
 	TxSet          = ultpb.TxSet
 	ConsensusValue = ultpb.ConsensusValue
 )
+
+// Check whether the first input string is smaller than the second one
+// after byte-wise OR.
+func lessBytesOr(l string, r string, h string) bool {
+	lb, _ := b58.Decode(l)
+	rb, _ := b58.Decode(r)
+	hb, _ := b58.Decode(h)
+
+	lbuf := bytes.NewBuffer(nil)
+	rbuf := bytes.NewBuffer(nil)
+	for i, _ := range hb {
+		lbuf.WriteByte(lb[i] ^ hb[i])
+		rbuf.WriteByte(rb[i] ^ hb[i])
+	}
+
+	return lbuf.String() < rbuf.String()
+}
+
+// Compute the byte-wise OR bit operation between input string,
+// the decoded bytes from input string should have the same length
+func bytesOr(l string, r string) string {
+	lb, _ := b58.Decode(l)
+	rb, _ := b58.Decode(r)
+
+	buf := bytes.NewBuffer(nil)
+	for i, _ := range lb {
+		buf.WriteByte(lb[i] ^ rb[i])
+	}
+
+	return buf.String()
+}
 
 // Ballots comparison utilities.
 func lessAndCompatibleBallots(lb *Ballot, rb *Ballot) bool {

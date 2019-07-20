@@ -71,6 +71,7 @@ func NewNode(conf *Config) *Node {
 
 	addr := strings.Split(netAddr.String(), ":")[0] + ":" + conf.Port
 	nodeID := conf.NodeID
+	role := conf.Role
 	seed := conf.Seed
 	networkID := conf.NetworkID
 
@@ -109,6 +110,7 @@ func NewNode(conf *Config) *Node {
 		Database:        database,
 		Seed:            seed,
 		NodeID:          nodeID,
+		Role:            role,
 		PM:              pm,
 		AM:              am,
 		LM:              lm,

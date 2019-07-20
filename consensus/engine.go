@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/deckarep/golang-set"
-	lru "github.com/hashicorp/golang-lru"
 	b58 "github.com/mr-tron/base58/base58"
 
 	"github.com/ultiledger/go-ultiledger/account"
@@ -28,15 +26,18 @@ var (
 
 // EngineContext represents contextual information Engine needs.
 type EngineContext struct {
-	Database        db.Database      // database instance
-	Seed            string           // node seed
-	NodeID          string           // node ID
-	PM              *peer.Manager    // peer manager
-	AM              *account.Manager // account manager
-	LM              *ledger.Manager  // ledger manager
-	TM              *tx.Manager      // tx manager
-	Quorum          *ultpb.Quorum    // initial quorum parsed from config
-	ProposeInterval int              // consensus proposition interval (in seconds)
+	Database db.Database
+	Seed     string
+	NodeID   string
+	Role     string
+	PM       *peer.Manager
+	AM       *account.Manager
+	LM       *ledger.Manager
+	TM       *tx.Manager
+	// Initial quorum parsed from config file.
+	Quorum *ultpb.Quorum
+	// Interval of consensus proposition in seconds.
+	ProposeInterval int
 }
 
 func ValidateEngineContext(ec *EngineContext) error {
@@ -48,6 +49,9 @@ func ValidateEngineContext(ec *EngineContext) error {
 	}
 	if ec.NodeID == "" {
 		return fmt.Errorf("empty node ID")
+	}
+	if ec.Role == "" {
+		return fmt.Errorf("empty node role")
 	}
 	if ec.PM == nil {
 		return fmt.Errorf("peer manager is nil")
@@ -74,57 +78,51 @@ func ValidateEngineContext(ec *EngineContext) error {
 type Engine struct {
 	database db.Database
 	bucket   string
-	// for saving transaction status
-	statusBucket string
 
 	seed   string
 	nodeID string
+	role   string
 
 	pm *peer.Manager
 	am *account.Manager
 	lm *ledger.Manager
 	tm *tx.Manager
 
-	// statement validator
+	// Validator of consensus statements.
 	validator *Validator
 
-	// consensus quorum
-	// each time quorum is updated, its quorum hash should be recomputed accordingly
+	// Quorum of the local node and its hash. Note that each time quorum is updated,
+	// its quorum hash should be recomputed accordingly.
 	quorum     *ultpb.Quorum
 	quorumHash string
 
-	// decrees for each round
+	// Decrees of each round.
 	decrees map[uint64]*Decree
-	// max number of decrees to remember
+	// Max number of historical decrees to remember. Decree which has maxDecrees of
+	// difference with the current decree will be skipped for subsequent processing.
 	maxDecrees uint64
 
-	// transactions status
-	txStatus *lru.Cache
-
-	// transactions waiting to be include in the ledger
-	txSet mapset.Set
-
-	// channel for broadcasting statement
+	// Channel for broadcasting statements.
 	statementChan chan *ultpb.Statement
-	// channel for broadcasting tx
+	// Channel for broadcasting transactions.
 	txChan chan *ultpb.Tx
-	// channel for downloading txset
+	// Channel for downloading txset.
 	txsetDownloadChan chan string
-	// channel for downloading quorum
+	// Channel for downloading quorum.
 	quorumDownloadChan chan string
 
-	// channel for listening externalized value
+	// Channel for listening externalized consensus value.
 	externalizeChan chan *ExternalizeValue
 
-	// channel for listening propose signal
+	// Channel for listening propose signal.
 	proposeChan   chan struct{}
 	proposeTicker *time.Ticker
 
-	// channel for stopping goroutines
+	// Channel for stopping goroutines.
 	stopChan chan struct{}
 }
 
-// NewEngine creates an instance of Engine with EngineContext
+// NewEngine creates an instance of Engine with EngineContext.
 func NewEngine(ctx *EngineContext) *Engine {
 	if err := ValidateEngineContext(ctx); err != nil {
 		log.Fatalf("engine context is invalid: %v", err)
@@ -138,8 +136,8 @@ func NewEngine(ctx *EngineContext) *Engine {
 	e := &Engine{
 		database:           ctx.Database,
 		bucket:             "ENGINE",
-		statusBucket:       "TXSTATUS",
 		nodeID:             ctx.NodeID,
+		role:               ctx.Role,
 		seed:               ctx.Seed,
 		pm:                 ctx.PM,
 		am:                 ctx.AM,
@@ -148,7 +146,6 @@ func NewEngine(ctx *EngineContext) *Engine {
 		quorum:             ctx.Quorum,
 		quorumHash:         quorumHash,
 		decrees:            make(map[uint64]*Decree),
-		txSet:              mapset.NewSet(),
 		statementChan:      make(chan *ultpb.Statement),
 		txChan:             make(chan *ultpb.Tx),
 		txsetDownloadChan:  make(chan string),
@@ -159,7 +156,7 @@ func NewEngine(ctx *EngineContext) *Engine {
 		stopChan:           make(chan struct{}),
 	}
 
-	// create validator
+	// Create a validator.
 	vctx := &ValidatorContext{
 		Database:           e.database,
 		LM:                 e.lm,
@@ -173,22 +170,11 @@ func NewEngine(ctx *EngineContext) *Engine {
 		log.Fatalf("create db bucket %s failed: %v", e.bucket, err)
 	}
 
-	err = e.database.NewBucket(e.statusBucket)
-	if err != nil {
-		log.Fatalf("create db bucket %s failed: %v", e.statusBucket, err)
-	}
-
-	cache, err := lru.New(1000)
-	if err != nil {
-		log.Fatalf("create consensus engine LRU cache failed: %v", err)
-	}
-	e.txStatus = cache
-
 	return e
 }
 
 func (e *Engine) Start() {
-	// goroutine for listening broadcast tasks
+	// Goroutine for processing network messages.
 	go func() {
 		for {
 			select {
@@ -226,14 +212,15 @@ func (e *Engine) Start() {
 			}
 		}
 	}()
-	// goroutine for dealing with internal events
+	// Goroutine for processing internal events.
 	go func() {
 		for {
 			select {
 			case stmt := <-e.validator.Ready():
 				seq := e.lm.NextLedgerHeaderSeq()
+				// Skip old statement.
 				if stmt.Index < seq-e.maxDecrees {
-					// skip old statement
+					log.Warnw("received an old statement", "index", stmt.Index, "ledgerSeq", seq)
 					continue
 				}
 				if _, ok := e.decrees[stmt.Index]; !ok {
@@ -258,11 +245,16 @@ func (e *Engine) Start() {
 			}
 		}
 	}()
-	// goroutine for proposing new consensus value
+	// Goroutine for proposing a new consensus value
 	go func() {
 		for {
 			select {
 			case <-e.proposeChan:
+				// Node without the role of "validator" cannot propose
+				// value for consensus.
+				if e.role != "validator" {
+					continue
+				}
 				err := e.Propose()
 				if err != nil {
 					log.Errorf("propose new consensus value failed: %v", err)
@@ -310,13 +302,13 @@ func (e *Engine) RecvTxSet(txsetHash string, txset *TxSet) error {
 
 // RecvStatement deals with received broadcast statement.
 func (e *Engine) RecvStatement(stmt *ultpb.Statement) error {
-	// ignore own message
+	// Ignore own message.
 	if stmt.NodeID == e.nodeID {
 		return nil
 	}
 
-	// send statement to validator for fetching transaction set
-	// and quorum of the corresponding node
+	// Send statement to validator for fetching transaction set
+	// and quorum of the corresponding node.
 	err := e.validator.Recv(stmt)
 	if err != nil {
 		return fmt.Errorf("send statement to validator failed: %v", err)
@@ -324,7 +316,7 @@ func (e *Engine) RecvStatement(stmt *ultpb.Statement) error {
 	return nil
 }
 
-// Broadcast consensus message through rpc broadcast.
+// Broadcast the consensus statement.
 func (e *Engine) broadcastStatement(stmt *ultpb.Statement) error {
 	clients := e.pm.GetLiveClients()
 	metadata := e.pm.GetMetadata()
@@ -371,7 +363,7 @@ func (e *Engine) queryQuorum(quorumHash string) (*Quorum, error) {
 		return nil, fmt.Errorf("rpc query failed: %v", err)
 	}
 
-	// check compatibility of quorum and its hash
+	// Check the compatibility of quorum and its hash.
 	hash, err := ultpb.SHA256Hash(quorum)
 	if err != nil {
 		return nil, fmt.Errorf("compute quorum hash failed: %v", err)
@@ -400,7 +392,7 @@ func (e *Engine) queryTxSet(txsetHash string) (*TxSet, error) {
 		return nil, fmt.Errorf("rpc query failed: %v", err)
 	}
 
-	// check compatibility of quorum and its hash
+	// Check the compatibility of txset and its hash.
 	hash, err := ultpb.SHA256Hash(txset)
 	if err != nil {
 		return nil, fmt.Errorf("compute txset hash failed: %v", err)
@@ -419,25 +411,25 @@ func (e *Engine) Propose() error {
 		TxList:         e.tm.GetTxList(),
 	}
 
-	// compute hash
+	// Compute the hash of the txset.
 	hash, err := ultpb.GetTxSetKey(txSet)
 	if err != nil {
 		return fmt.Errorf("get tx set hash failed: %v", err)
 	}
 
-	// sync txset info to validator
+	// Sync txset info to validator.
 	err = e.validator.RecvTxSet(hash, txSet)
 	if err != nil {
 		return fmt.Errorf("sync txset with validator failed: %v", err)
 	}
 
-	// sync quorum info to validator
+	// Sync quorum info to validator.
 	err = e.validator.RecvQuorum(e.quorumHash, e.quorum)
 	if err != nil {
 		return fmt.Errorf("sync quorum with validator failed: %v", err)
 	}
 
-	// construct new consensus value
+	// Construct a new consensus value.
 	cv := &ultpb.ConsensusValue{
 		TxSetHash:   hash,
 		ProposeTime: time.Now().Unix(),
@@ -448,7 +440,7 @@ func (e *Engine) Propose() error {
 	}
 	cvStr := b58.Encode(cvb)
 
-	// nominate new consensus value
+	// Nominate the new consensus value.
 	decreeIdx := e.lm.NextLedgerHeaderSeq()
 	currHeader := e.lm.CurrLedgerHeader()
 
@@ -461,7 +453,7 @@ func (e *Engine) Propose() error {
 
 // Nominate a new consensus value for specified decree.
 func (e *Engine) nominate(idx uint64, prevValue string, currValue string) error {
-	// get new slot
+	// Create a new decree if there is no existing decree with the index.
 	if _, ok := e.decrees[idx]; !ok {
 		decreeCtx := &DecreeContext{
 			Index:           idx,
@@ -476,7 +468,7 @@ func (e *Engine) nominate(idx uint64, prevValue string, currValue string) error 
 		e.decrees[idx] = NewDecree(decreeCtx)
 	}
 
-	// nominate new value for the slot
+	// Nominate a new value for the decree.
 	e.decrees[idx].Nominate(prevValue, currValue)
 
 	return nil
@@ -484,12 +476,11 @@ func (e *Engine) nominate(idx uint64, prevValue string, currValue string) error 
 
 // Externalize a consensus value with decree index.
 func (e *Engine) Externalize(idx uint64, value string) error {
-	// skip old externalized value
+	// Skip old externalized value.
 	if idx < e.lm.NextLedgerHeaderSeq() {
 		return nil
 	}
 
-	// decode consensus value
 	b, err := b58.Decode(value)
 	if err != nil {
 		return fmt.Errorf("hex decode consensus value failed: %v", err)
@@ -507,20 +498,22 @@ func (e *Engine) Externalize(idx uint64, value string) error {
 		return errors.New("txset not exist")
 	}
 
-	// send value to ledger manager
+	// Send the value to ledger manager.
 	err = e.lm.RecvExtVal(idx, value, txset)
 	if err != nil {
 		return fmt.Errorf("externalize value in ledger manager failed: %v", err)
 	}
 
-	// delete processed tx
+	// Delete transactions that have been processed.
 	e.tm.DeleteTxList(txset.TxList)
 
-	// remove old decree
+	// Remove decrees that are too old.
 	threshold := idx - e.maxDecrees
-	for i, _ := range e.decrees {
-		if i <= threshold {
-			delete(e.decrees, i)
+	if threshold > 0 {
+		for i, _ := range e.decrees {
+			if i <= threshold {
+				delete(e.decrees, i)
+			}
 		}
 	}
 
