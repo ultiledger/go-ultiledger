@@ -52,26 +52,26 @@ type Validator struct {
 
 	lm *ledger.Manager
 
-	// statements which are downloading
+	// Statements which are downloading.
 	rwm       sync.RWMutex
 	downloads map[string]*Statement
 
-	// set of received statements
+	// Set of received statements.
 	statements mapset.Set
 
-	// quorum hash to quorum LRU cache
+	// Cache of quorum with quorum hash as the key.
 	quorumCache *lru.Cache
 
-	// channel for sending quorum download task
+	// Channel for sending quorum download task.
 	quorumDownloadChan chan<- string
-	// channel for sending txset download task
+	// Channel for sending txset download task.
 	txsetDownloadChan chan<- string
-	// stop channel
+
 	stopChan chan struct{}
 
-	// notify engine new statements are ready
+	// Channel for notifying consensus engine that the statement is ready.
 	readyChan chan *Statement
-	// channel for downloding missing info of statement
+	// Channel for downloding missing information of the statement.
 	downloadChan chan *Statement
 }
 
@@ -104,9 +104,9 @@ func NewValidator(ctx *ValidatorContext) *Validator {
 	}
 	v.quorumCache = qc
 
-	// listening for download task
+	// Listening for download tasks.
 	go v.download()
-	// monitor for downloaded statements
+	// Monitor for downloaded statements.
 	go v.monitor()
 
 	return v
@@ -117,19 +117,23 @@ func (v *Validator) Stop() {
 	close(v.stopChan)
 }
 
-// Ready retrives ready statements with decree index less than
-// and equal to input idx.
+// Ready returns ready statements with full information.
 func (v *Validator) Ready() <-chan *Statement {
 	return v.readyChan
 }
 
-// Receive new statement
+// Recv checks whether the input statement has the complete
+// information including quorum and txset for the consensus
+// engine to process. If all the necessary information are
+// present, it will directly return the statement to ready
+// channel. Otherwise, it will try to download the missing
+// part of information from peers.
 func (v *Validator) Recv(stmt *Statement) error {
 	if stmt == nil {
 		return nil
 	}
 
-	// filter duplicate stmt
+	// Filter the duplicate statement using the statement hash.
 	hash, err := ultpb.SHA256Hash(stmt)
 	if err != nil {
 		return fmt.Errorf("compute statement hash failed: %v", err)
@@ -139,7 +143,7 @@ func (v *Validator) Recv(stmt *Statement) error {
 	}
 	v.statements.Add(hash)
 
-	// validate statement
+	// Check whether the statement has all the information.
 	valid, err := v.validate(stmt)
 	if err != nil {
 		return fmt.Errorf("validate statement failed: %v", err)
@@ -149,7 +153,7 @@ func (v *Validator) Recv(stmt *Statement) error {
 		v.readyChan <- stmt
 	} else {
 		v.downloadChan <- stmt
-		// save statement to downloads
+		// Save the ongoing downloading statement.
 		v.rwm.Lock()
 		v.downloads[hash] = stmt
 		v.rwm.Unlock()
@@ -158,7 +162,7 @@ func (v *Validator) Recv(stmt *Statement) error {
 	return nil
 }
 
-// Receive downloaded quorum and save it in db and cache.
+// RecvQuorum receives downloaded quorum and save it.
 func (v *Validator) RecvQuorum(quorumHash string, quorum *Quorum) error {
 	// encode quorum to pb format
 	qb, err := ultpb.Encode(quorum)
@@ -177,7 +181,7 @@ func (v *Validator) RecvQuorum(quorumHash string, quorum *Quorum) error {
 	return nil
 }
 
-// Receive downloaded txset and save it to db and cache
+// RecvTxSet receives downloaded txset and save it.
 func (v *Validator) RecvTxSet(txsetHash string, txset *TxSet) error {
 	err := v.lm.AddTxSet(txsetHash, txset)
 	if err != nil {
@@ -214,13 +218,13 @@ func (v *Validator) GetQuorum(quorumHash string) (*Quorum, error) {
 		return nil, fmt.Errorf("decode quorum failed: %v", err)
 	}
 
-	// cache the quorum
+	// Cache the quorum.
 	v.quorumCache.Add(quorumHash, quorum)
 
 	return quorum, nil
 }
 
-// Monitor downloaded statement and dispatch to ready channel
+// Monitor downloaded statements and dispatch them to ready channel.
 func (v *Validator) monitor() {
 	ticker := time.NewTicker(100 * time.Millisecond)
 	for {
@@ -228,10 +232,9 @@ func (v *Validator) monitor() {
 		case <-ticker.C:
 			v.rwm.RLock()
 			for h, stmt := range v.downloads {
-				// no need to check error here
 				valid, _ := v.validate(stmt)
 				if valid {
-					log.Infof("statement %s is ready with full info", h)
+					log.Debugf("statement %s is ready with full info", h)
 					v.readyChan <- stmt
 					delete(v.downloads, h)
 				}
@@ -248,7 +251,7 @@ func (v *Validator) download() {
 	for {
 		select {
 		case stmt := <-v.downloadChan:
-			// no need to check error since we have already passed the validity check
+			// No need to check error as we have already passed the validity checks.
 			quorumHash, _ := extractQuorumHash(stmt)
 			quorum, _ := v.GetQuorum(quorumHash)
 			if quorum == nil {
@@ -268,7 +271,7 @@ func (v *Validator) download() {
 	}
 }
 
-// Validate statement by checking whether we have its quorum and tx list.
+// Validate statement by checking whether we have its quorum and txset.
 func (v *Validator) validate(stmt *Statement) (bool, error) {
 	quorumHash, err := extractQuorumHash(stmt)
 	if err != nil {
