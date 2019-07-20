@@ -41,7 +41,7 @@ func lessAndIncompatibleBallots(lb *Ballot, rb *Ballot) bool {
 
 // Compare two ballots by counter then value.
 func compareBallots(lb *Ballot, rb *Ballot) int {
-	// check input with nil ballot
+	// Check input with nil ballots.
 	if lb == nil && rb == nil {
 		return 0
 	} else if lb == nil && rb != nil {
@@ -50,17 +50,18 @@ func compareBallots(lb *Ballot, rb *Ballot) int {
 		return 1
 	}
 
-	// check normal case
+	// First compare the counters.
 	if lb.Counter < rb.Counter {
 		return -1
 	} else if lb.Counter > rb.Counter {
 		return 1
 	}
 
+	// Then compare the values.
 	return strings.Compare(lb.Value, rb.Value)
 }
 
-// Check whether the two ballots has the same value.
+// Check whether the two ballots have the same value.
 func compatibleBallots(lb *Ballot, rb *Ballot) bool {
 	if lb == nil || rb == nil {
 		return false
@@ -73,28 +74,28 @@ func compatibleBallots(lb *Ballot, rb *Ballot) bool {
 	return false
 }
 
-// Check whether the latter ballot statement is newer than the first one.
+// Check whether the second ballot statement is newer than the first one.
 func isNewerBallot(lb *Statement, rb *Statement) bool {
-	// check statement type
+	// Compare statetment types in predefined order.
 	if lb.StatementType != rb.StatementType {
 		return lb.StatementType < rb.StatementType
 	}
 
 	switch rb.StatementType {
-	case ultpb.StatementType_PREPARE: // compare order: b, p, q, h
+	case ultpb.StatementType_PREPARE: // Order of ballots: b, p, q, h.
 		lp := lb.GetPrepare()
 		rp := rb.GetPrepare()
-		// compare working ballot
+		// Compare working ballots.
 		cmp := compareBallots(lp.B, rp.B)
 		if cmp < 0 {
 			return true
 		} else if cmp == 0 {
-			// compare p ballot
+			// Compare p ballots.
 			cmpp := compareBallots(lp.P, rp.P)
 			if cmpp < 0 {
 				return true
 			} else if cmpp == 0 {
-				// compare q ballot
+				// Compare q ballots.
 				cmpq := compareBallots(lp.Q, rp.Q)
 				if cmpq < 0 {
 					return true
@@ -124,7 +125,7 @@ func isNewerBallot(lb *Statement, rb *Statement) bool {
 	return false
 }
 
-// Check whether the first set is the proper subset of the second subset.
+// Check whether the first set is the proper subset of the second set.
 func isProperSubset(a []string, b []string) bool {
 	if len(a) > len(b) {
 		return false
@@ -143,7 +144,7 @@ func isProperSubset(a []string, b []string) bool {
 	return false
 }
 
-// Check whether the latter nomination contains all the information of the first one.
+// Check whether the second nomination contains all the information of the first one.
 func isNewerNomination(anom *ultpb.Nominate, bnom *ultpb.Nominate) bool {
 	if anom == nil && bnom != nil {
 		return true
@@ -208,7 +209,7 @@ func isVblocking(quorum *ultpb.Quorum, nodeSet mapset.Set) bool {
 	return false
 }
 
-// Check whether the input node set form quorum slice for input quorum.
+// Check whether the input node set forms quorum slice for input quorum.
 func isQuorumSlice(quorum *ultpb.Quorum, nodeSet mapset.Set) bool {
 	qsize := float64(len(quorum.Validators) + len(quorum.NestQuorums))
 	threshold := int(math.Ceil(qsize * quorum.Threshold))
@@ -236,7 +237,7 @@ func isQuorumSlice(quorum *ultpb.Quorum, nodeSet mapset.Set) bool {
 
 // Check whether the quorum is valid.
 func isValidQuorum(quorum *ultpb.Quorum, depth int, extraChecks bool) bool {
-	// quorum depth cannot be greater than two
+	// The depth of quorum should not be greater than two.
 	if depth > 2 {
 		return false
 	}
@@ -280,7 +281,7 @@ func normalizeQuorum(quorum *Quorum, nodeID string) {
 
 // Simplify quorum by eliminating unnecessary nesting structures.
 func simplifyQuorum(quorum *Quorum, nodeID string) {
-	// remove self from validators
+	// Remove input node from validators.
 	var validators []string
 	for _, v := range quorum.Validators {
 		if v == nodeID {
@@ -289,11 +290,11 @@ func simplifyQuorum(quorum *Quorum, nodeID string) {
 		validators = append(validators, v)
 	}
 	quorum.Validators = validators
-	// remove self from nested quorums
+	// Remove input node from the nested quorums.
 	for i, _ := range quorum.NestQuorums {
 		simplifyQuorum(quorum.NestQuorums[i], nodeID)
 	}
-	// flatten unnecessary nesting quorums
+	// Flatten unnecessary nesting quorums.
 	if quorum.Threshold == 1.0 && len(quorum.Validators) == 0 && len(quorum.NestQuorums) == 1 {
 		quorum = quorum.NestQuorums[0]
 	}
@@ -301,13 +302,13 @@ func simplifyQuorum(quorum *Quorum, nodeID string) {
 
 // Sort the quorum by validators then nest quorums.
 func sortQuorum(quorum *Quorum) {
-	// sort validators
+	// Sort validators.
 	sort.Strings(quorum.Validators)
-	// sort validators of nest quorums
+	// Sort validators of the nest quorums.
 	for i, _ := range quorum.NestQuorums {
 		sortQuorum(quorum.NestQuorums[i])
 	}
-	// sort nest quorums
+	// Sort the nest quorums.
 	sort.Sort(QuorumSlice(quorum.NestQuorums))
 }
 

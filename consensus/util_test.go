@@ -15,8 +15,8 @@ func TestCompareBallots(t *testing.T) {
 
 	// test one nil ballot case
 	lBallot = &Ballot{Value: "ABC", Counter: uint32(1)}
-	assert.Equal(t, -1, compareBallots(lBallot, rBallot))
-	assert.Equal(t, 1, compareBallots(rBallot, lBallot))
+	assert.Equal(t, 1, compareBallots(lBallot, rBallot))
+	assert.Equal(t, -1, compareBallots(rBallot, lBallot))
 
 	// test ballots with different counter
 	rBallot = &Ballot{Value: "ABC", Counter: uint32(2)}
