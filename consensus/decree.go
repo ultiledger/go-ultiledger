@@ -278,7 +278,7 @@ func (d *Decree) updateRoundLeaders() {
 func (d *Decree) getNodePriority(quorum *Quorum, nodeID string) uint64 {
 	var weight, priority uint64
 	if nodeID == d.nodeID {
-		weight = math.MaxInt64
+		weight = math.MaxUint64
 	} else {
 		weight = d.getNodeWeight(quorum, nodeID)
 	}
