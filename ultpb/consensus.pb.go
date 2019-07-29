@@ -82,6 +82,14 @@ func (m *ConsensusValue) GetCloseTime() int64 {
 // related to FBA consensus should contain the quorum of
 // the node.
 type Quorum struct {
+	// We choose the threshold to be a floatint point number instead of
+	// an integer to maintain a more conservative and safer
+	// requirement of the quorum. For instance, if the threshold
+	// is 0.6 and the number of validators is 7, the required number
+	// of nodes needed to pass a decision would be 4.2 in floating point,
+	// and we take the ceiling of the number to be the final required
+	// integer threshold which is 5. As a result the requirement
+	// is sticter than that to set the threshold to 4 in integer form.
 	Threshold   float64   `protobuf:"fixed64,1,opt,name=Threshold" json:"Threshold,omitempty"`
 	Validators  []string  `protobuf:"bytes,2,rep,name=Validators" json:"Validators,omitempty"`
 	NestQuorums []*Quorum `protobuf:"bytes,3,rep,name=NestQuorums" json:"NestQuorums,omitempty"`
