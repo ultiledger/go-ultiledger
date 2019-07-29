@@ -3,6 +3,7 @@ package consensus
 import (
 	"testing"
 
+	"github.com/deckarep/golang-set"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/ultiledger/go-ultiledger/ultpb"
@@ -120,4 +121,36 @@ func TestIsNewerBallot(t *testing.T) {
 		},
 	}
 	assert.Equal(t, false, isNewerBallot(lStmt, rStmt))
+}
+
+func TestIsProperSubset(t *testing.T) {
+	// Case 1: the first set is the proper subset of the second one.
+	set1 := []string{"A", "B"}
+	set2 := []string{"A", "B", "C"}
+	assert.Equal(t, true, isProperSubset(set1, set2))
+	// Case 2: the first set is not the proper subset of the second
+	// one because of mismatched set.
+	set1 = []string{"A", "B", "D"}
+	assert.Equal(t, false, isProperSubset(set1, set2))
+	// Case 3: the first set is not the proper subset of the second
+	// one because of equal set member.
+	set1 = []string{"A", "B", "C"}
+	assert.Equal(t, false, isProperSubset(set1, set2))
+}
+
+func TestIsVBlocking(t *testing.T) {
+	// Create a quorum with only first level validators.
+	quorum := &ultpb.Quorum{
+		Validators: []string{"A", "B", "C", "D", "E"},
+		Threshold:  0.5,
+	}
+	// Case 1: the nodeset forms a v-blocking set.
+	nodeset := mapset.NewSet()
+	nodeset.Add("A")
+	nodeset.Add("B")
+	nodeset.Add("C")
+	assert.Equal(t, true, isVblocking(quorum, nodeset))
+	// Case 2: the nodeset does not form a v-blocking set.
+	nodeset.Pop()
+	assert.Equal(t, false, isVblocking(quorum, nodeset))
 }
