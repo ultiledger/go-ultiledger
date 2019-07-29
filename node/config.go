@@ -81,6 +81,7 @@ func NewConfig(v *viper.Viper) (*Config, error) {
 	netIDStr := b58.Encode(netID[:])
 
 	config := Config{
+		Role:            v.GetString("role"),
 		NetworkID:       netIDStr,
 		Port:            v.GetString("port"),
 		Peers:           v.GetStringSlice("peers"),

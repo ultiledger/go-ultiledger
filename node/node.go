@@ -107,10 +107,10 @@ func NewNode(conf *Config) *Node {
 
 	// construct consensus engine context and create consensus engine
 	engineCtx := &consensus.EngineContext{
+		Role:            role,
 		Database:        database,
 		Seed:            seed,
 		NodeID:          nodeID,
-		Role:            role,
 		PM:              pm,
 		AM:              am,
 		LM:              lm,
