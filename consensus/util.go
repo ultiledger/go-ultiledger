@@ -2,6 +2,8 @@ package consensus
 
 import (
 	"bytes"
+	"errors"
+	"fmt"
 	"math"
 	"sort"
 	"strings"
@@ -25,6 +27,35 @@ type (
 	TxSet          = ultpb.TxSet
 	ConsensusValue = ultpb.ConsensusValue
 )
+
+// Check whether the quorum is valid.
+func ValidateQuorum(quorum *ultpb.Quorum, depth int, extraChecks bool) error {
+	// The depth of quorum should not be greater than two.
+	if depth > 2 {
+		return errors.New("invalid quorum depth")
+	}
+	if quorum.Threshold <= 0.0 || quorum.Threshold > 1.0 {
+		return fmt.Errorf("invalid quorum threshold: %v", quorum.Threshold)
+	}
+
+	nodes := mapset.NewSet()
+	if extraChecks && quorum.Threshold < 1.0-quorum.Threshold {
+		return fmt.Errorf("bad quorum threshold range: %v", quorum.Threshold)
+	}
+	for _, v := range quorum.Validators {
+		// duplicate validators are not allowed
+		if nodes.Contains(v) {
+			return errors.New("duplicated quorum nodes")
+		}
+		nodes.Add(v)
+	}
+	for _, q := range quorum.NestQuorums {
+		if err := ValidateQuorum(q, depth+1, extraChecks); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 
 // Check whether the first input string is smaller than the second one
 // after byte-wise OR.
@@ -220,22 +251,21 @@ func getWorkingBallot(stmt *Statement) *Ballot {
 func isVblocking(quorum *ultpb.Quorum, nodeSet mapset.Set) bool {
 	qsize := float64(len(quorum.Validators) + len(quorum.NestQuorums))
 	threshold := int(math.Ceil(qsize * (1.0 - quorum.Threshold)))
-
 	for _, vid := range quorum.Validators {
-		if threshold == 0 {
-			return true
-		}
 		if nodeSet.Contains(vid) {
 			threshold = threshold - 1
+		}
+		if threshold == 0 {
+			return true
 		}
 	}
 
 	for _, nq := range quorum.NestQuorums {
-		if threshold == 0 {
-			return true
-		}
 		if isVblocking(nq, nodeSet) {
 			threshold = threshold - 1
+		}
+		if threshold == 0 {
+			return true
 		}
 	}
 
@@ -266,35 +296,6 @@ func isQuorumSlice(quorum *ultpb.Quorum, nodeSet mapset.Set) bool {
 	}
 
 	return false
-}
-
-// Check whether the quorum is valid.
-func isValidQuorum(quorum *ultpb.Quorum, depth int, extraChecks bool) bool {
-	// The depth of quorum should not be greater than two.
-	if depth > 2 {
-		return false
-	}
-	if quorum.Threshold <= 0.0 || quorum.Threshold > 1.0 {
-		return false
-	}
-
-	nodes := mapset.NewSet()
-	if extraChecks && quorum.Threshold < 1.0-quorum.Threshold {
-		return false
-	}
-	for _, v := range quorum.Validators {
-		// duplicate validators are not allowed
-		if nodes.Contains(v) {
-			return false
-		}
-		nodes.Add(v)
-	}
-	for _, q := range quorum.NestQuorums {
-		if isValidQuorum(q, depth+1, extraChecks) {
-			return false
-		}
-	}
-	return true
 }
 
 // Build a quorum with one node.

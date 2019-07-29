@@ -153,4 +153,75 @@ func TestIsVBlocking(t *testing.T) {
 	// Case 2: the nodeset does not form a v-blocking set.
 	nodeset.Pop()
 	assert.Equal(t, false, isVblocking(quorum, nodeset))
+	// Create a quorum with nested quorums.
+	quorum = &ultpb.Quorum{
+		Validators: []string{"A", "B", "C", "D", "E"},
+		Threshold:  0.5,
+		NestQuorums: []*ultpb.Quorum{
+			&ultpb.Quorum{Validators: []string{"F", "G"}, Threshold: 0.5},
+			&ultpb.Quorum{Validators: []string{"H", "I"}, Threshold: 0.5},
+		},
+	}
+	// Case 3: the nodeset forms a v-blocking set with
+	// members of the nested quorums.
+	nodeset.Clear()
+	nodeset.Add("A")
+	nodeset.Add("B")
+	nodeset.Add("F")
+	nodeset.Add("H")
+	assert.Equal(t, true, isVblocking(quorum, nodeset))
+}
+
+func TestIsQuorumSlice(t *testing.T) {
+	// Create a quorum with nested quorums.
+	quorum := &ultpb.Quorum{
+		Validators: []string{"A", "B", "C", "D", "E"},
+		Threshold:  0.5,
+		NestQuorums: []*ultpb.Quorum{
+			&ultpb.Quorum{Validators: []string{"F", "G"}, Threshold: 0.5},
+			&ultpb.Quorum{Validators: []string{"H", "I"}, Threshold: 0.5},
+		},
+	}
+	// Case 1: the nodeset forms a quorum slice
+	nodeset := mapset.NewSet()
+	nodeset.Add("A")
+	nodeset.Add("B")
+	nodeset.Add("F")
+	nodeset.Add("H")
+	assert.Equal(t, true, isQuorumSlice(quorum, nodeset))
+	// Case 2 : the nodeset does not form a quorum slice
+	nodeset.Clear()
+	nodeset.Add("A")
+	nodeset.Add("B")
+	nodeset.Add("F")
+	nodeset.Add("G")
+	assert.Equal(t, false, isQuorumSlice(quorum, nodeset))
+}
+
+func TestValidateQuorum(t *testing.T) {
+	// Create a quorum with nested quorums.
+	quorum := &ultpb.Quorum{
+		Validators: []string{"A", "B", "C", "D", "E"},
+		Threshold:  0.5,
+		NestQuorums: []*ultpb.Quorum{
+			&ultpb.Quorum{Validators: []string{"F", "G"}, Threshold: 0.5},
+			&ultpb.Quorum{Validators: []string{"H", "I"}, Threshold: 0.5},
+		},
+	}
+	assert.Nil(t, ValidateQuorum(quorum, 0, true))
+	// Create a quorum with redundant validators.
+	quorum.NestQuorums[0].NestQuorums = []*ultpb.Quorum{
+		&ultpb.Quorum{Validators: []string{"X", "Y", "Y"}, Threshold: 1.0},
+		&ultpb.Quorum{Validators: []string{"M", "N"}, Threshold: 1.0},
+	}
+	assert.NotNil(t, ValidateQuorum(quorum, 0, true))
+	// Create a quorum with deeper depth.
+	quorum.NestQuorums[0].NestQuorums = []*ultpb.Quorum{
+		&ultpb.Quorum{Validators: []string{"X", "Y"}, Threshold: 1.0},
+		&ultpb.Quorum{Validators: []string{"M", "N"}, Threshold: 1.0},
+	}
+	quorum.NestQuorums[0].NestQuorums[0].NestQuorums = []*ultpb.Quorum{
+		&ultpb.Quorum{Validators: []string{"O", "P"}, Threshold: 1.0},
+	}
+	assert.NotNil(t, ValidateQuorum(quorum, 0, true))
 }

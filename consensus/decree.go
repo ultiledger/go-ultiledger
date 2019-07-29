@@ -1553,7 +1553,7 @@ func (d *Decree) validateBallot(stmt *Statement) error {
 
 	// Validate quorum from the statement.
 	quorum := d.getStatementQuorum(stmt)
-	if err := d.validateQuorum(quorum, 0); err != nil {
+	if err := ValidateQuorum(quorum, 0, false); err != nil {
 		return fmt.Errorf("validate quorum failed: %v", err)
 	}
 
@@ -1661,34 +1661,5 @@ func (d *Decree) validateConsensusValueFull(cv *ConsensusValue, isNomination boo
 	if err != nil || txset == nil {
 		return fmt.Errorf("get txset failed: %v", err)
 	}
-	return nil
-}
-
-// Validate statement quorum.
-func (d *Decree) validateQuorum(quorum *Quorum, depth int) error {
-	if depth > 2 {
-		return errors.New("quorum nesting too deep")
-	}
-
-	if quorum.Threshold <= 0.0 && quorum.Threshold > 1.0 {
-		return fmt.Errorf("quorum threshold out of range in depth %d", depth)
-	}
-
-	// Check whether there exists duplicate validator in quorum.
-	vset := mapset.NewSet()
-	for _, v := range quorum.Validators {
-		if vset.Contains(v) {
-			return fmt.Errorf("duplicate quorum validator %s exists", v)
-		}
-		vset.Add(v)
-	}
-
-	// Check nested quorum recursively.
-	for _, nq := range quorum.NestQuorums {
-		if err := d.validateQuorum(nq, depth+1); err != nil {
-			return fmt.Errorf("validate nest quorum in depth %d failed: %v", depth+1, err)
-		}
-	}
-
 	return nil
 }

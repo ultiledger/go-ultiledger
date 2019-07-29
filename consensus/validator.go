@@ -164,6 +164,9 @@ func (v *Validator) Recv(stmt *Statement) error {
 
 // RecvQuorum receives downloaded quorum and save it.
 func (v *Validator) RecvQuorum(quorumHash string, quorum *Quorum) error {
+	if err := ValidateQuorum(quorum, 0, false); err != nil {
+		return err
+	}
 	// encode quorum to pb format
 	qb, err := ultpb.Encode(quorum)
 	if err != nil {
