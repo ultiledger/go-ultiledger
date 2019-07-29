@@ -188,6 +188,15 @@ func DecodeLedgerHeader(b []byte) (*LedgerHeader, error) {
 	return ledgerHeader, nil
 }
 
+// Decoder pb messge to ledger checkpoint.
+func DecodeLedgerCheckpoint(b []byte) (*LedgerCheckpoint, error) {
+	ledgerCheckpoint := &LedgerCheckpoint{}
+	if err := proto.Unmarshal(b, ledgerCheckpoint); err != nil {
+		return nil, err
+	}
+	return ledgerCheckpoint, nil
+}
+
 // Decode pb message to consensus value
 func DecodeConsensusValue(b []byte) (*ConsensusValue, error) {
 	cv := &ConsensusValue{}
