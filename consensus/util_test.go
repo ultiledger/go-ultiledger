@@ -9,6 +9,20 @@ import (
 	"github.com/ultiledger/go-ultiledger/ultpb"
 )
 
+func TestIsNewerNomination(t *testing.T) {
+	// Case 1: the second has newer votes
+	nom1 := &ultpb.Nominate{
+		VoteList: []string{"A", "B", "C"},
+	}
+	nom2 := &ultpb.Nominate{
+		VoteList: []string{"A", "B", "C", "D"},
+	}
+	assert.Equal(t, true, isNewerNomination(nom1, nom2))
+	// Case 2: the second has the same votes
+	nom2.VoteList = []string{"A", "B", "C"}
+	assert.Equal(t, false, isNewerNomination(nom1, nom2))
+}
+
 func TestCompareBallots(t *testing.T) {
 	// test nil ballots case
 	var lBallot, rBallot *Ballot

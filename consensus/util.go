@@ -215,7 +215,6 @@ func isNewerNomination(anom *ultpb.Nominate, bnom *ultpb.Nominate) bool {
 	}
 
 	if isProperSubset(anom.VoteList, bnom.VoteList) {
-		// TODO(bobonovski) more elaborate check like interset?
 		return true
 	}
 
