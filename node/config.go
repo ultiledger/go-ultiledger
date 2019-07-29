@@ -7,6 +7,7 @@ import (
 	b58 "github.com/mr-tron/base58/base58"
 	"github.com/spf13/viper"
 
+	"github.com/ultiledger/go-ultiledger/consensus"
 	"github.com/ultiledger/go-ultiledger/crypto"
 	"github.com/ultiledger/go-ultiledger/ultpb"
 )
@@ -143,6 +144,9 @@ func parseQuorum(qmap map[string]interface{}) (*ultpb.Quorum, error) {
 		Threshold:   threshold,
 		Validators:  vs,
 		NestQuorums: nestQuorums,
+	}
+	if err := consensus.ValidateQuorum(quorum, 0, true); err != nil {
+		return nil, err
 	}
 
 	return quorum, nil
