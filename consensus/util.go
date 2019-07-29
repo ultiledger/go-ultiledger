@@ -308,13 +308,15 @@ func getSingletonQuorum(nodeID string) *Quorum {
 }
 
 // Normalize quorum for the convenience of computing node weights.
-func normalizeQuorum(quorum *Quorum, nodeID string) {
-	simplifyQuorum(quorum, nodeID)
-	sortQuorum(quorum)
+func normalizeQuorum(quorum *Quorum, nodeID string) *Quorum {
+	q := simplifyQuorum(quorum, nodeID)
+	sortQuorum(q)
+	return q
 }
 
 // Simplify quorum by eliminating unnecessary nesting structures.
-func simplifyQuorum(quorum *Quorum, nodeID string) {
+func simplifyQuorum(quorum *Quorum, nodeID string) *Quorum {
+	q := &ultpb.Quorum{}
 	// Remove input node from validators.
 	var validators []string
 	for _, v := range quorum.Validators {
@@ -323,15 +325,16 @@ func simplifyQuorum(quorum *Quorum, nodeID string) {
 		}
 		validators = append(validators, v)
 	}
-	quorum.Validators = validators
+	q.Validators = validators
 	// Remove input node from the nested quorums.
 	for i, _ := range quorum.NestQuorums {
-		simplifyQuorum(quorum.NestQuorums[i], nodeID)
+		q.NestQuorums = append(q.NestQuorums, simplifyQuorum(quorum.NestQuorums[i], nodeID))
 	}
 	// Flatten unnecessary nesting quorums.
 	if quorum.Threshold == 1.0 && len(quorum.Validators) == 0 && len(quorum.NestQuorums) == 1 {
-		quorum = quorum.NestQuorums[0]
+		q = quorum.NestQuorums[0]
 	}
+	return q
 }
 
 // Sort the quorum by validators then nest quorums.

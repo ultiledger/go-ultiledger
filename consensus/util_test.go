@@ -225,3 +225,23 @@ func TestValidateQuorum(t *testing.T) {
 	}
 	assert.NotNil(t, ValidateQuorum(quorum, 0, true))
 }
+
+func TestSimplifyQuorum(t *testing.T) {
+	// Create a quorum with nested quorums.
+	quorum := &ultpb.Quorum{
+		Validators: []string{"A", "B", "C", "D", "E"},
+		Threshold:  0.5,
+		NestQuorums: []*ultpb.Quorum{
+			&ultpb.Quorum{Validators: []string{"F", "G"}, Threshold: 0.5},
+		},
+	}
+	// Case 1: remove supplied node from quorum.
+	q := simplifyQuorum(quorum, "B")
+	assert.Equal(t, []string{"A", "C", "D", "E"}, q.Validators)
+	// Case 2: flatten unnecessary nesting quorums.
+	quorum.Validators = []string{}
+	quorum.Threshold = 1.0
+	q = simplifyQuorum(quorum, "B")
+	assert.Nil(t, q.NestQuorums)
+	assert.Equal(t, []string{"F", "G"}, q.Validators)
+}

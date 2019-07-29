@@ -249,10 +249,7 @@ func (d *Decree) getConsensusValue(stmt *Statement) (string, error) {
 
 // Update the leaders of this round of nomination.
 func (d *Decree) updateRoundLeaders() {
-	// Clone the quorum as it will be transformed.
-	quorum := (pb.Clone(d.quorum)).(*Quorum)
-
-	normalizeQuorum(quorum, d.nodeID)
+	quorum := normalizeQuorum(d.quorum, d.nodeID)
 
 	var leaders []string
 	leaders = append(leaders, d.nodeID)
