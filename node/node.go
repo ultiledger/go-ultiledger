@@ -22,16 +22,16 @@ import (
 	"github.com/ultiledger/go-ultiledger/tx"
 )
 
-// Node is the central controller for ultiledger
+// Node is the central controller for ultiledger.
 type Node struct {
 	database db.Database
 
-	// Network address of this node
+	// Network address of the node.
 	addr string
-	// NodeID and seed of this node
+	// NodeID and seed of the node.
 	nodeID string
 	seed   string
-	// start time of the node
+	// Start timestamp of the node.
 	startTime int64
 
 	config *Config
@@ -43,10 +43,10 @@ type Node struct {
 	tm     *tx.Manager
 	engine *consensus.Engine
 
-	// channel for stopping all the subroutines
+	// Channel for stopping all the subroutines.
 	stopChan chan struct{}
 
-	// futures for task with error responses
+	// Futures for communicating among components.
 	txFuture      chan *future.Tx
 	peerFuture    chan *future.Peer
 	stmtFuture    chan *future.Statement
@@ -57,7 +57,7 @@ type Node struct {
 	accountFuture chan *future.Account
 }
 
-// NewNode creates a Node which controls all the sub tasks
+// NewNode creates a Node which controls all the sub components.
 func NewNode(conf *Config) *Node {
 	// get outbound IP
 	conn, err := net.Dial("udp", "8.8.8.8:80")
@@ -75,15 +75,15 @@ func NewNode(conf *Config) *Node {
 	seed := conf.Seed
 	networkID := conf.NetworkID
 
-	// create database store
+	// Create database store.
 	database := boltdb.New(conf.DBPath)
 
-	// peer and account managers are independent
+	// Peer and account managers are independent.
 	pm := peer.NewManager(conf.Peers, addr, nodeID, conf.MaxPeers)
 	am := account.NewManager(database, ledger.GenesisBaseReserve)
 	em := exchange.NewManager(database, am)
 
-	// tx manager depends on peer, account and exchange manager
+	// Tx manager depends on peer, account and exchange manager.
 	txCtx := &tx.ManagerContext{
 		Database:    database,
 		PM:          pm,
@@ -94,7 +94,7 @@ func NewNode(conf *Config) *Node {
 	}
 	tm := tx.NewManager(txCtx)
 
-	// ledger manager depends on account and tx manager
+	// Ledger manager depends on account and tx manager.
 	lmCtx := &ledger.ManagerContext{
 		Database: database,
 		PM:       pm,
@@ -105,7 +105,7 @@ func NewNode(conf *Config) *Node {
 
 	stopChan := make(chan struct{})
 
-	// construct consensus engine context and create consensus engine
+	// Construct consensus engine context and create the consensus engine.
 	engineCtx := &consensus.EngineContext{
 		Role:            role,
 		Database:        database,
@@ -129,7 +129,7 @@ func NewNode(conf *Config) *Node {
 	txsetFuture := make(chan *future.TxSet)
 	accountFuture := make(chan *future.Account)
 
-	// construct node server context and create node server
+	// Construct node server context and create node server.
 	serverCtx := &rpc.ServerContext{
 		NetworkID:      networkID,
 		Addr:           addr,
@@ -146,7 +146,7 @@ func NewNode(conf *Config) *Node {
 	}
 	nodeServer := rpc.NewNodeServer(serverCtx)
 
-	// create local node
+	// Create the local node.
 	node := &Node{
 		config:    conf,
 		database:  database,
@@ -165,8 +165,7 @@ func NewNode(conf *Config) *Node {
 	return node
 }
 
-// Start checks the provided configurations, if the config is valid,
-// it will trigger sub goroutines to do the sub tasks.
+// Start triggers sub goroutines to do the sub tasks.
 func (n *Node) Start(newnode bool) {
 	// start node server
 	go n.serveNode()
@@ -213,7 +212,7 @@ func (n *Node) Start(newnode bool) {
 	}
 }
 
-// Close node by signaling all the goroutines to stop
+// Close node by signaling all the goroutines to stop.
 func (n *Node) Stop() {
 	close(n.stopChan)
 	n.pm.Stop()
@@ -222,9 +221,9 @@ func (n *Node) Stop() {
 	n.tm.Stop()
 }
 
-// Event loop for processing messages from peers and internal queries.
+// Event loop for processing messages from peers and internal events.
 func (n *Node) eventLoop() {
-	// listening for node server events
+	// Listening for node server events.
 	for {
 		select {
 		case pf := <-n.peerFuture:
@@ -269,7 +268,7 @@ func (n *Node) eventLoop() {
 
 // ServeNode starts a listener on the port and starts to accept external requests.
 func (n *Node) serveNode() {
-	// register rpc service and start the ULTNode server
+	// Register rpc service and start the ULTNode server.
 	listener, err := net.Listen("tcp", n.config.Port)
 	if err != nil {
 		log.Fatal(err)

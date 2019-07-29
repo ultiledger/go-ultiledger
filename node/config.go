@@ -69,7 +69,7 @@ func NewConfig(v *viper.Viper) (*Config, error) {
 		return nil, errors.New("propose interval is not positive")
 	}
 
-	// Parse quorum infor and construct an internal quorum.
+	// Parse quorum info and construct the quorum for the node.
 	quorumMap := v.GetStringMap("quorum")
 	quorum, err := parseQuorum(quorumMap)
 	if err != nil {

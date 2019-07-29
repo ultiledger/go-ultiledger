@@ -27,6 +27,7 @@ It has these top-level messages:
 	Statement
 	LedgerHeader
 	Ledger
+	LedgerCheckpoint
 	Liability
 	Price
 	Offer

@@ -5,32 +5,53 @@ package ultpb;
 import "transaction.proto";
 
 message LedgerHeader {
-  // version of pb message, each time we update the pb message definition, the
+  // Version of pb message, each time we update the pb message definition, the
   // version number will incremented. The specific version number to use is 
   // hard coded and changed each time we do some changes.  
   uint32 Version = 1;
-  // hash of the previous ledger
+  // Hash of the previous ledger.
   string PrevLedgerHash = 2;
-  // hash of the transaction set in this ledger
+  // Hash of the transaction set in this ledger.
   string TxSetHash = 3;
-  // the consensus value the network agreed in hex coding string
+  // The consensus value the network agreed in hex coding string.
   string ConsensusValue = 4;
-  // maximun number of transactions allowed in a transaction list
+  // Maximun number of transactions allowed in a transaction list.
   uint32 MaxTxListSize = 5;
-  // sequence number of this ledger
+  // Sequence number of this ledger.
   uint64 SeqNum = 6;
-  // total number of tokens in existence
+  // Total number of tokens in existence.
   int64 TotalTokens = 7;
-  // base fee per operation
+  // Base fee per operation.
   int64 BaseFee = 8;
-  // base reserver for an account
+  // Base reserve for an account.
   int64 BaseReserve = 9;
-  // close time
+  // Close time.
   int64 CloseTime = 10;
 }
 
-// Full ledger info of a ledger index
+// Full ledger info of a ledger index.
 message Ledger {
   LedgerHeader LedgerHeader = 1;
   TxSet TxSet = 2;
+}
+
+// LedgerCheckpoint contains the states of the latest closed ledger.
+// It is mainly used for making the snapshot of the states of the
+// latest closed ledger so that the node can recover its states
+// after node failures.
+message LedgerCheckpoint {
+  // Timestamp of last ledger closed.
+  int64 LastCloseTime = 1; 
+  // The number of ledgers processed.
+  int64 LedgerHeaderCount = 2;
+  // The largest consensus index that the manager met.
+  uint64 LargestConsensusIndex = 3;
+  // Previous committed ledger header.
+  LedgerHeader PrevLedgerHeader = 4;
+  // Hash of previous committed ledger header.
+  string PrevLedgerHeaderHash = 5;
+  // Current latest committed ledger header.
+  LedgerHeader CurrLedgerHeader = 6;
+  // Hash of current latest committed ledger header.
+  string CurrLedgerHeaderHash = 7; 
 }
