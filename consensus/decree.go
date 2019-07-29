@@ -894,12 +894,11 @@ func (d *Decree) abandonBallot(c uint32) bool {
 		if d.currentBallot != nil {
 			cv = d.currentBallot.Value
 		}
+	}
+	if c == 0 {
+		updated = d.updateBallotPhase(cv, true)
 	} else {
-		if c == 0 {
-			updated = d.updateBallotPhase(cv, true)
-		} else {
-			updated = d.updateBallotPhaseWithCounter(cv, c)
-		}
+		updated = d.updateBallotPhaseWithCounter(cv, c)
 	}
 
 	return updated
@@ -1638,7 +1637,7 @@ func (d *Decree) validateConsensusValueFull(cv *ConsensusValue, isNomination boo
 	if !d.lm.LedgerSynced() || d.lm.NextLedgerHeaderSeq() != d.index {
 		return errors.New("consensus value is not compatible with ledger state")
 	}
-	// The propose time should be larger than the close time in closed ledger
+	// The propose time should be larger than the close time in closed ledger.
 	header := d.lm.CurrLedgerHeader()
 	if header.ConsensusValue != "" {
 		vb, err := b58.Decode(header.ConsensusValue)

@@ -18,7 +18,7 @@ func getTestFlatQuorum(nodeids []string, threshold float64) *ultpb.Quorum {
 	return q
 }
 
-func TestDecree(t *testing.T) {
+func TestLeaderUpdate(t *testing.T) {
 	// Create test nodes.
 	var nodes []string
 	for i := 0; i < 3; i++ {
