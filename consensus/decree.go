@@ -895,10 +895,12 @@ func (d *Decree) abandonBallot(c uint32) bool {
 			cv = d.currentBallot.Value
 		}
 	}
-	if c == 0 {
-		updated = d.updateBallotPhase(cv, true)
-	} else {
-		updated = d.updateBallotPhaseWithCounter(cv, c)
+	if cv != "" {
+		if c == 0 {
+			updated = d.updateBallotPhase(cv, true)
+		} else {
+			updated = d.updateBallotPhaseWithCounter(cv, c)
+		}
 	}
 
 	return updated
