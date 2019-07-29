@@ -324,14 +324,14 @@ func (d *Decree) getNodeHash(nodeID string, isPriority bool) uint64 {
 }
 
 // Compute the decree specific hash of the consensus value.
-func (d *Decree) getConsensusValueHash(nodeID string) uint64 {
+func (d *Decree) getConsensusValueHash(vote string) uint64 {
 	hashK := uint64(3)
 	buf := make([]byte, binary.MaxVarintLen64)
 	binary.PutUvarint(buf, d.index)
 	buf = append(buf, []byte(d.prevConsensusValue)...)
 	binary.PutUvarint(buf, hashK)
 	binary.PutUvarint(buf, uint64(d.nominationRound))
-	buf = append(buf, []byte(nodeID)...)
+	buf = append(buf, []byte(vote)...)
 	// Compute the SHA256 hash and use the first 8 bytes as the result.
 	result := crypto.SHA256HashUint64(buf)
 	return result
