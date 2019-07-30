@@ -1,6 +1,10 @@
 package ledger
 
-import "sync"
+import (
+	"sync"
+
+	"github.com/ultiledger/go-ultiledger/ultpb"
+)
 
 // CloseInfo contains the information that the
 // manager needs to close the current ledger.
