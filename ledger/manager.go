@@ -38,12 +38,19 @@ var (
 )
 
 var (
-	GenesisVersion      = uint32(1)
+	GenesisVersion = uint32(1)
+	// The sequence number of the genesis ledger header.
+	GenesisSeqNum = uint64(1)
+	// Maximum number of transactions in a transaction set.
 	GenesisMaxTxSetSize = uint32(100)
-	GenesisSeqNum       = uint64(1)
-	GenesisTotalTokens  = int64(4500000000000000000)
-	GenesisBaseFee      = int64(1000)
-	GenesisBaseReserve  = int64(1000000000)
+	// There are in total 4.5 billion ULT and the smallest unit is a
+	// ULU which is 1/1000000000 of a ULT. The number of tokens is
+	// counted in ULU.
+	GenesisTotalTokens = int64(4500000000000000000)
+	// The base fee for a transaction is 1000 ULU.
+	GenesisBaseFee = int64(1000)
+	// The base reserve for an account (1 ULT).
+	GenesisBaseReserve = int64(1000000000)
 )
 
 // ManagerContext contains contextural information the ledger manager needs.
