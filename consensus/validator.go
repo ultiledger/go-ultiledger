@@ -307,7 +307,7 @@ func (v *Validator) validate(stmt *Statement) (bool, error) {
 	return true, nil
 }
 
-// Extract quorum hash from statement
+// Extract quorum hash from statement.
 func extractQuorumHash(stmt *Statement) (string, error) {
 	if stmt == nil {
 		return "", errors.New("statement is nil")
@@ -332,7 +332,7 @@ func extractQuorumHash(stmt *Statement) (string, error) {
 	return hash, nil
 }
 
-// Extract list of tx set hash from statement
+// Extract list of tx set hash from statement.
 func extractTxSetHash(stmt *Statement) ([]string, error) {
 	if stmt == nil {
 		return nil, errors.New("statement is nil")
