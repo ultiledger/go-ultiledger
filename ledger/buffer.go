@@ -2,6 +2,17 @@ package ledger
 
 import "sync"
 
+// CloseInfo contains the information that the
+// manager needs to close the current ledger.
+type CloseInfo struct {
+	// decree index
+	Index uint64
+	// encoded consensus value
+	Value string
+	// transaction set
+	TxSet *ultpb.TxSet
+}
+
 // CloseInfoBuffer caches unclosed ledger close info until
 // local ledger state catch up with the network state.
 type CloseInfoBuffer struct {
