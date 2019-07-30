@@ -24,47 +24,47 @@ import (
 // controls all the internal components to generate corresponding
 // responses and errors.
 type NodeServer struct {
-	networkID string // Hash of the networkID
-	addr      string // Network address of this node
-	nodeID    string // ID of this node (public key)
-	seed      string // Private key of this node
+	networkID string // Hash of the networkID.
+	addr      string // Network address of this node.
+	nodeID    string // ID of this node (public key).
+	seed      string // Private key of this node.
 
-	// network address to nodeID map
+	// Peer network address to nodeID map.
 	nodeKey map[string]*crypto.ULTKey
 
-	// future for adding peer addr
+	// Future for adding peer addr.
 	peerFuture chan<- *future.Peer
-	// future for adding tx
+	// Future for adding tx.
 	txFuture chan<- *future.Tx
-	// future for adding consensus statement
+	// Future for adding consensus statement.
 	stmtFuture chan<- *future.Statement
 
-	// future for query ledger
+	// Future for querying ledger.
 	ledgerFuture chan<- *future.Ledger
-	// future for query quorum
+	// Future for querying quorum.
 	quorumFuture chan<- *future.Quorum
-	// future for query txset
+	// Future for querying txset.
 	txsetFuture chan<- *future.TxSet
-	// future for query tx status
+	// Future for querying tx status.
 	txsFuture chan<- *future.TxStatus
-	// future for query account
+	// Future for querying account.
 	accountFuture chan<- *future.Account
 }
 
 // ServerContext represents contextual information for running server.
 type ServerContext struct {
-	NetworkID      string                 // Hash of the network ID
-	Addr           string                 // local network address
-	NodeID         string                 // local node ID
-	Seed           string                 // local node seed
-	PeerFuture     chan *future.Peer      // channel for sending discovered peer to node
-	TxFuture       chan *future.Tx        // channel for sending received tx to node
-	StmtFuture     chan *future.Statement // channel for sending received statement to node
-	LedgerFuture   chan *future.Ledger    // channel for sending ledger query to ledger manager
-	QuorumFuture   chan *future.Quorum    // channel for sending quorum query to consensus engine
-	TxSetFuture    chan *future.TxSet     // channel for sending txset query to consensus engine
-	TxStatusFuture chan *future.TxStatus  // channel for sending txstatus query to consensus engine
-	AccountFuture  chan *future.Account   // channel for sending account query to node
+	NetworkID      string
+	Addr           string
+	NodeID         string
+	Seed           string
+	PeerFuture     chan *future.Peer
+	TxFuture       chan *future.Tx
+	StmtFuture     chan *future.Statement
+	LedgerFuture   chan *future.Ledger
+	QuorumFuture   chan *future.Quorum
+	TxSetFuture    chan *future.TxSet
+	TxStatusFuture chan *future.TxStatus
+	AccountFuture  chan *future.Account
 }
 
 func ValidateServerContext(sc *ServerContext) error {
@@ -134,8 +134,12 @@ func NewNodeServer(ctx *ServerContext) *NodeServer {
 
 // Validate checks the ip and nodeID info from metadata and
 // checks the correctness of digital signature of the data.
-func (s *NodeServer) validate(ctx context.Context, data []byte, signature string) error {
-	// retrieve nodeID and ip addr
+func (s *NodeServer) validate(ctx context.Context, data []byte, signature string, networkID string) error {
+	if s.networkID != networkID {
+		return errors.New("incompatible network id.")
+	}
+
+	// Retrieve nodeID and ip addr.
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
 		return errors.New("retrieve incoming context failed")
@@ -144,14 +148,14 @@ func (s *NodeServer) validate(ctx context.Context, data []byte, signature string
 		return errors.New("network address or nodeID is absent")
 	}
 
-	// check whether we know this addr
+	// Check whether we know this addr.
 	addr := md.Get("Addr")[0]
 	if _, ok := s.nodeKey[addr]; !ok {
 		return fmt.Errorf("unknown network address %s, forgot to say hello?", addr)
 	}
 	key := s.nodeKey[addr]
 
-	// check signature
+	// Check signature.
 	if !crypto.VerifyByKey(key, signature, data) {
 		return errors.New("signature verification failed")
 	}
@@ -164,6 +168,10 @@ func (s *NodeServer) validate(ctx context.Context, data []byte, signature string
 func (s *NodeServer) Hello(ctx context.Context, req *rpcpb.HelloRequest) (*rpcpb.HelloResponse, error) {
 	resp := &rpcpb.HelloResponse{}
 
+	if s.networkID != req.NetworkID {
+		return resp, status.Error(codes.InvalidArgument, "incompatible network id.")
+	}
+
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
 		return resp, status.Error(codes.NotFound, "retrieve incoming context failed")
@@ -172,7 +180,7 @@ func (s *NodeServer) Hello(ctx context.Context, req *rpcpb.HelloRequest) (*rpcpb
 		return resp, status.Error(codes.NotFound, "network address or nodeid is missing")
 	}
 
-	// validate nodeID
+	// Validate node id of the peer.
 	k, err := crypto.DecodeKey(md.Get("NodeID")[0])
 	if err != nil {
 		return resp, status.Error(codes.InvalidArgument, "decode nodeid to crypto key failed")
@@ -182,7 +190,7 @@ func (s *NodeServer) Hello(ctx context.Context, req *rpcpb.HelloRequest) (*rpcpb
 	}
 	s.nodeKey[md.Get("Addr")[0]] = k
 
-	// add peer address
+	// Add the peer address.
 	f := &future.Peer{Addr: md.Get("Addr")[0]}
 	f.Init()
 	s.peerFuture <- f
@@ -198,13 +206,19 @@ func (s *NodeServer) Hello(ctx context.Context, req *rpcpb.HelloRequest) (*rpcpb
 func (s *NodeServer) SubmitTx(ctx context.Context, req *rpcpb.SubmitTxRequest) (*rpcpb.SubmitTxResponse, error) {
 	resp := &rpcpb.SubmitTxResponse{}
 
-	// decode pb to tx
+	log.Infow("received new tx submission", "req", req)
+
+	if s.networkID != req.NetworkID {
+		return resp, status.Error(codes.InvalidArgument, "incompatible network id.")
+	}
+
+	// Decode pb to Tx.
 	tx, err := ultpb.DecodeTx(req.Data)
 	if err != nil {
 		return resp, status.Error(codes.InvalidArgument, "decode tx failed")
 	}
 
-	// get account key
+	// Get the account key.
 	accKey, err := crypto.DecodeKey(tx.AccountID)
 	if err != nil {
 		return resp, status.Error(codes.InvalidArgument, "decode account key failed")
@@ -213,12 +227,12 @@ func (s *NodeServer) SubmitTx(ctx context.Context, req *rpcpb.SubmitTxRequest) (
 		return resp, status.Error(codes.InvalidArgument, "invalid account key type")
 	}
 
-	// verify signature
+	// Verify signature.
 	if !crypto.VerifyByKey(accKey, req.Signature, req.Data) {
 		return resp, status.Error(codes.InvalidArgument, "signature verification failed")
 	}
 
-	// verify tx key
+	// Verify tx key.
 	txKey, err := crypto.DecodeKey(req.TxKey)
 	if err != nil {
 		return resp, status.Error(codes.InvalidArgument, "decode tx key failed")
@@ -244,7 +258,13 @@ func (s *NodeServer) SubmitTx(ctx context.Context, req *rpcpb.SubmitTxRequest) (
 func (s *NodeServer) QueryTx(ctx context.Context, req *rpcpb.QueryTxRequest) (*rpcpb.QueryTxResponse, error) {
 	resp := &rpcpb.QueryTxResponse{}
 
-	// check the validity of the tx key
+	log.Infow("received new tx query", "req", req)
+
+	if s.networkID != req.NetworkID {
+		return resp, status.Error(codes.InvalidArgument, "incompatible network id.")
+	}
+
+	// Check the validity of the tx key.
 	if !crypto.IsValidTxKey(req.TxKey) {
 		return resp, status.Errorf(codes.InvalidArgument, "invalid tx key")
 	}
@@ -265,7 +285,11 @@ func (s *NodeServer) QueryTx(ctx context.Context, req *rpcpb.QueryTxRequest) (*r
 func (s *NodeServer) GetAccount(ctx context.Context, req *rpcpb.GetAccountRequest) (*rpcpb.GetAccountResponse, error) {
 	resp := &rpcpb.GetAccountResponse{}
 
-	// check the validity of the account key
+	if s.networkID != req.NetworkID {
+		return resp, status.Error(codes.InvalidArgument, "incompatible network id.")
+	}
+
+	// Check the validity of the account key.
 	if !crypto.IsValidAccountKey(req.AccountID) {
 		return resp, status.Errorf(codes.InvalidArgument, "invalid account id")
 	}
@@ -291,7 +315,7 @@ func (s *NodeServer) GetAccount(ctx context.Context, req *rpcpb.GetAccountReques
 func (s *NodeServer) Query(ctx context.Context, req *rpcpb.QueryRequest) (*rpcpb.QueryResponse, error) {
 	resp := &rpcpb.QueryResponse{}
 
-	if err := s.validate(ctx, req.Data, req.Signature); err != nil {
+	if err := s.validate(ctx, req.Data, req.Signature, req.NetworkID); err != nil {
 		return resp, status.Errorf(codes.InvalidArgument, "input validation failed: %v", err)
 	}
 
@@ -347,11 +371,11 @@ func (s *NodeServer) Query(ctx context.Context, req *rpcpb.QueryRequest) (*rpcpb
 }
 
 // Notify accepts transaction and consensus message and
-// redistribute message to internal managing components
+// redistribute message to internal managing components.
 func (s *NodeServer) Notify(ctx context.Context, req *rpcpb.NotifyRequest) (*rpcpb.NotifyResponse, error) {
 	resp := &rpcpb.NotifyResponse{}
 
-	if err := s.validate(ctx, req.Data, req.Signature); err != nil {
+	if err := s.validate(ctx, req.Data, req.Signature, req.NetworkID); err != nil {
 		return resp, status.Errorf(codes.InvalidArgument, "input validation failed: %v", err)
 	}
 

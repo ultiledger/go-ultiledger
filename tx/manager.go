@@ -39,6 +39,7 @@ var (
 
 // ManagerContext represents contextual information TxManager needs.
 type ManagerContext struct {
+	NetworkID   string
 	Database    db.Database
 	AM          *account.Manager
 	PM          *peer.Manager
@@ -49,19 +50,22 @@ type ManagerContext struct {
 
 func ValidateManagerContext(mc *ManagerContext) error {
 	if mc == nil {
-		return fmt.Errorf("tx context is nil")
+		return errors.New("tx context is nil")
+	}
+	if mc.NetworkID == "" {
+		return errors.New("network id is empty")
 	}
 	if mc.Database == nil {
-		return fmt.Errorf("database instance is nil")
+		return errors.New("database instance is nil")
 	}
 	if mc.AM == nil {
-		return fmt.Errorf("account manager is nil")
+		return errors.New("account manager is nil")
 	}
 	if mc.PM == nil {
-		return fmt.Errorf("peer manager is nil")
+		return errors.New("peer manager is nil")
 	}
 	if mc.Seed == "" {
-		return fmt.Errorf("seed is empty")
+		return errors.New("seed is empty")
 	}
 	return nil
 }
@@ -69,6 +73,8 @@ func ValidateManagerContext(mc *ManagerContext) error {
 // Manager manages incoming tx and coordinate with ledger manager
 // and consensus engine.
 type Manager struct {
+	networkID string
+
 	database db.Database
 	bucket   string
 
@@ -102,6 +108,7 @@ func NewManager(ctx *ManagerContext) *Manager {
 		log.Fatalf("tx manager context is invalid: %v", err)
 	}
 	tm := &Manager{
+		networkID:   ctx.NetworkID,
 		database:    ctx.Database,
 		bucket:      "TXSTATUS",
 		seed:        ctx.Seed,
@@ -453,7 +460,7 @@ func (tm *Manager) broadcastTx(tx *ultpb.Tx) error {
 		return fmt.Errorf("sign tx failed: %v", err)
 	}
 
-	err = rpc.BroadcastTx(clients, metadata, payload, sign)
+	err = rpc.BroadcastTx(clients, metadata, payload, sign, tm.networkID)
 	if err != nil {
 		return fmt.Errorf("rpc broadcas failed: %v", err)
 	}

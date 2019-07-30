@@ -15,6 +15,7 @@ import (
 )
 
 var (
+	ErrEmptyNetworkID = errors.New("empty network id")
 	ErrEmptyPayload   = errors.New("empty payload")
 	ErrEmptySignature = errors.New("empty digital signature")
 )
@@ -31,7 +32,10 @@ func init() {
 }
 
 // Broadcast consensus statements.
-func BroadcastStatement(clients []rpcpb.NodeClient, md metadata.MD, payload []byte, signature string) error {
+func BroadcastStatement(clients []rpcpb.NodeClient, md metadata.MD, payload []byte, signature string, networkID string) error {
+	if networkID == "" {
+		return ErrEmptyNetworkID
+	}
 	if len(payload) == 0 {
 		return ErrEmptyPayload
 	}
@@ -39,6 +43,7 @@ func BroadcastStatement(clients []rpcpb.NodeClient, md metadata.MD, payload []by
 		return ErrEmptySignature
 	}
 	req := &rpcpb.NotifyRequest{
+		NetworkID: networkID,
 		MsgType:   rpcpb.NotifyMsgType_STATEMENT,
 		Data:      payload,
 		Signature: signature,
@@ -51,7 +56,10 @@ func BroadcastStatement(clients []rpcpb.NodeClient, md metadata.MD, payload []by
 }
 
 // Broadcast transaction.
-func BroadcastTx(clients []rpcpb.NodeClient, md metadata.MD, payload []byte, signature string) error {
+func BroadcastTx(clients []rpcpb.NodeClient, md metadata.MD, payload []byte, signature string, networkID string) error {
+	if networkID == "" {
+		return ErrEmptyNetworkID
+	}
 	if len(payload) == 0 {
 		return ErrEmptyPayload
 	}
@@ -59,6 +67,7 @@ func BroadcastTx(clients []rpcpb.NodeClient, md metadata.MD, payload []byte, sig
 		return ErrEmptySignature
 	}
 	req := &rpcpb.NotifyRequest{
+		NetworkID: networkID,
 		MsgType:   rpcpb.NotifyMsgType_TX,
 		Data:      payload,
 		Signature: signature,

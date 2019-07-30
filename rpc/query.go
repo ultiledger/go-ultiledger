@@ -22,8 +22,11 @@ type (
 	Ledger = ultpb.Ledger
 )
 
-// Query quorum information from peers
-func QueryQuorum(clients []rpcpb.NodeClient, md metadata.MD, payload []byte, signature string) (*Quorum, error) {
+// Query quorum information from peers.
+func QueryQuorum(clients []rpcpb.NodeClient, md metadata.MD, payload []byte, signature string, networkID string) (*Quorum, error) {
+	if networkID == "" {
+		return nil, ErrEmptyNetworkID
+	}
 	if len(payload) == 0 {
 		return nil, ErrEmptyPayload
 	}
@@ -32,6 +35,7 @@ func QueryQuorum(clients []rpcpb.NodeClient, md metadata.MD, payload []byte, sig
 	}
 
 	req := &rpcpb.QueryRequest{
+		NetworkID: networkID,
 		MsgType:   rpcpb.QueryMsgType_QUORUM,
 		Data:      payload,
 		Signature: signature,
@@ -47,8 +51,11 @@ func QueryQuorum(clients []rpcpb.NodeClient, md metadata.MD, payload []byte, sig
 	return quorum, nil
 }
 
-// Query txset information from peers
-func QueryTxSet(clients []rpcpb.NodeClient, md metadata.MD, payload []byte, signature string) (*TxSet, error) {
+// Query txset information from peers.
+func QueryTxSet(clients []rpcpb.NodeClient, md metadata.MD, payload []byte, signature string, networkID string) (*TxSet, error) {
+	if networkID == "" {
+		return nil, ErrEmptyNetworkID
+	}
 	if len(payload) == 0 {
 		return nil, ErrEmptyPayload
 	}
@@ -72,8 +79,11 @@ func QueryTxSet(clients []rpcpb.NodeClient, md metadata.MD, payload []byte, sign
 	return txset, nil
 }
 
-// Query ledger information from peers
-func QueryLedger(clients []rpcpb.NodeClient, md metadata.MD, payload []byte, signature string) (*Ledger, error) {
+// Query ledger information from peers.
+func QueryLedger(clients []rpcpb.NodeClient, md metadata.MD, payload []byte, signature string, networkID string) (*Ledger, error) {
+	if networkID == "" {
+		return nil, ErrEmptyNetworkID
+	}
 	if len(payload) == 0 {
 		return nil, ErrEmptyPayload
 	}
@@ -98,7 +108,7 @@ func QueryLedger(clients []rpcpb.NodeClient, md metadata.MD, payload []byte, sig
 }
 
 // Query needed information from peers iteratively
-// and return immediately after receiving the info
+// and return immediately after receiving the info.
 func query(clients []rpcpb.NodeClient, md metadata.MD, req *rpcpb.QueryRequest) (pb.Message, error) {
 	var message pb.Message
 	var err error

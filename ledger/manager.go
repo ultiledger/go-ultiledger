@@ -55,15 +55,19 @@ var (
 
 // ManagerContext contains contextural information the ledger manager needs.
 type ManagerContext struct {
-	Database db.Database
-	AM       *account.Manager
-	TM       *tx.Manager
-	PM       *peer.Manager
+	NetworkID string
+	Database  db.Database
+	AM        *account.Manager
+	TM        *tx.Manager
+	PM        *peer.Manager
 }
 
 func ValidateManagerContext(mc *ManagerContext) error {
 	if mc == nil {
 		return errors.New("manager context is nil")
+	}
+	if mc.NetworkID == "" {
+		return errors.New("network id is empty")
 	}
 	if mc.Database == nil {
 		return errors.New("database instance is nil")
@@ -82,6 +86,8 @@ func ValidateManagerContext(mc *ManagerContext) error {
 
 // Ledger manager is responsible for all the operations on the ledger.
 type Manager struct {
+	networkID string
+
 	database    db.Database
 	bucket      string
 	txsetBucket string
@@ -136,7 +142,7 @@ func NewManager(ctx *ManagerContext) *Manager {
 		am:          ctx.AM,
 		tm:          ctx.TM,
 		buffer:      new(CloseInfoBuffer),
-		downloader:  NewDownloader(ctx.Database, ctx.PM),
+		downloader:  NewDownloader(ctx.NetworkID, ctx.Database, ctx.PM),
 		ledgerState: LedgerStateNotSynced,
 		startTime:   time.Now().Unix(),
 		stopChan:    make(chan struct{}),

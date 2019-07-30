@@ -15,14 +15,18 @@ import (
 
 // Hello checks the health of remote peer and at the
 // same time exchanges nodeID (public key) between peers.
-func Hello(client rpcpb.NodeClient, md metadata.MD) (string, string, error) {
+func Hello(client rpcpb.NodeClient, md metadata.MD, networkID string) (string, string, error) {
+	if networkID == "" {
+		return "", "", ErrEmptyNetworkID
+	}
+
 	ctx := metadata.NewOutgoingContext(context.Background(), md)
 	ctx, cancel := context.WithTimeout(ctx, time.Duration(1*time.Second))
 	defer cancel()
 
 	var header metadata.MD
 
-	req := rpcpb.HelloRequest{}
+	req := rpcpb.HelloRequest{NetworkID: networkID}
 	_, err := client.Hello(ctx, &req, grpc.Header(&header))
 	if err != nil {
 		st, ok := status.FromError(err)

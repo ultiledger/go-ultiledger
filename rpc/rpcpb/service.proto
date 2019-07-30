@@ -3,15 +3,21 @@ syntax = "proto3";
 package rpcpb;
 
 service Node {
+  // GetAccount allows the client to get the account information of an account.
   rpc GetAccount(GetAccountRequest) returns (GetAccountResponse) {}
+  // SubmitTx is the main way for the client to submit a transaction.
   rpc SubmitTx(SubmitTxRequest) returns (SubmitTxResponse) {}
+  // QueryTx is used for querying the status of previous submitted transactions.
   rpc QueryTx(QueryTxRequest) returns (QueryTxResponse) {}
-  // the following methods are used for communicating between nodes
+  // Hello is used for initial connection between new peers.
   rpc Hello(HelloRequest) returns (HelloResponse) {}
+  // Notify is used for the node to notify transactions and consensus messages to other peers.
   rpc Notify(NotifyRequest) returns (NotifyResponse) {}
+  // Query is used for the node to ask for missing information about transactions.
   rpc Query(QueryRequest) returns (QueryResponse) {}
 }
 
+// TxStatusCode enumerates the status of a transaction in the node.
 enum TxStatusCode {
   NOTEXIST = 0;  // transaction not exist
   REJECTED = 1;  // rejected because of some immediate error checking
@@ -20,31 +26,35 @@ enum TxStatusCode {
   FAILED = 4;    // failed because of some error
 }
 
-// Transaction status
+// TxStatus contains the status code of a queried transaction and
+// the error message associated with a failed transaction.
 message TxStatus {
   TxStatusCode StatusCode = 1;
   string ErrorMessage = 2;
 }
 
-message HelloRequest {}
+message HelloRequest {
+  string NetworkID = 1;
+}
 
 message HelloResponse {}
 
 message SubmitTxRequest {
-  // transaction data in pb format
-  bytes Data = 1;
-  // transaction ULTKey
-  string TxKey = 2;
-  // digital signature of the data signed by 
-  // the source account private key
-  string Signature = 3;
+  // Network id of the network.
+  string NetworkID = 1;
+  // Transaction data in pb format.
+  bytes Data = 2;
+  // Transaction ULTKey.
+  string TxKey = 3;
+  // Digital signature of the data signed by the source account private key.
+  string Signature = 4;
 }
 
 message SubmitTxResponse {}
 
 message QueryTxRequest {
-  // transaction ULTKey
-  string TxKey = 1;
+  string NetworkID = 1;
+  string TxKey = 2;
 }
 
 message QueryTxResponse {
@@ -52,12 +62,13 @@ message QueryTxResponse {
 }
 
 message GetAccountRequest {
-  string AccountID = 1;
+  string NetworkID = 1;
+  string AccountID = 2;
 }
 
 message GetAccountResponse {
-  // account data in pb format
-  bytes Data = 1;
+  string NetworkID = 1;
+  bytes Data = 2;
 }
 
 enum NotifyMsgType {
@@ -66,31 +77,35 @@ enum NotifyMsgType {
 }
 
 message NotifyRequest {
-  // type of message
-  NotifyMsgType MsgType = 1;
-  // message payload in pb format
-  bytes Data = 2;
-  // digital signature of the data signed by
-  // the private key of peer node
-  string Signature = 3;
+  string NetworkID = 1;
+  // Type of the message.
+  NotifyMsgType MsgType = 2;
+  // Message payload in pb format.
+  bytes Data = 3;
+  // Digital signature of the data signed by the private key of peer node.
+  string Signature = 4;
 }
 
 message NotifyResponse {}
 
+// QueryMsgType enumerates the type of query issued by the node.
 enum QueryMsgType {
-  QUORUM = 0; // query quorum information
-  TXSET = 1;  // query txset information
-  LEDGER = 2; // query ledger information
+  // Query Quorum information.
+  QUORUM = 0;
+  // Query TxSet information. 
+  TXSET = 1;
+  // Query Ledger information. 
+  LEDGER = 2;
 }
 
 message QueryRequest {
-  // type of message
-  QueryMsgType MsgType = 1;
-  // message payload in pb format
-  bytes Data = 2;
-  // digital signature of the data signed by
-  // the private key of peer node
-  string Signature = 3;
+  string NetworkID = 1;
+  // Type of message.
+  QueryMsgType MsgType = 2;
+  // Message payload in pb format.
+  bytes Data = 3;
+  // Digital signature of the data signed by the private key of peer node.
+  string Signature = 4;
 }
 
 message QueryResponse {

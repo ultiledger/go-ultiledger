@@ -16,6 +16,9 @@ import (
 
 // Manager manages known remote peers.
 type Manager struct {
+	// Network id of the network.
+	networkID string
+
 	// Network address of the node.
 	addr string
 
@@ -54,8 +57,9 @@ type Manager struct {
 	deleteChan chan *Peer
 }
 
-func NewManager(ps []string, addr string, nodeID string, maxPeers int) *Manager {
+func NewManager(ps []string, networkID string, addr string, nodeID string, maxPeers int) *Manager {
 	return &Manager{
+		networkID:    networkID,
 		addr:         addr,
 		nodeID:       nodeID,
 		metadata:     metadata.Pairs(addr, nodeID),
@@ -180,7 +184,7 @@ func (pm *Manager) connect() {
 					continue
 				}
 				// Healthcheck the peer and save the node id.
-				remoteAddr, nodeID, err := rpc.Hello(p.client, p.metadata)
+				remoteAddr, nodeID, err := rpc.Hello(p.client, p.metadata, pm.networkID)
 				if err != nil {
 					log.Errorf("say hello to peer %s failed: %v", addr, err)
 					// Save unhealthy peers for later reconnect.

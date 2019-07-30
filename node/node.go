@@ -79,12 +79,13 @@ func NewNode(conf *Config) *Node {
 	database := boltdb.New(conf.DBPath)
 
 	// Peer and account managers are independent.
-	pm := peer.NewManager(conf.Peers, addr, nodeID, conf.MaxPeers)
+	pm := peer.NewManager(conf.Peers, networkID, addr, nodeID, conf.MaxPeers)
 	am := account.NewManager(database, ledger.GenesisBaseReserve)
 	em := exchange.NewManager(database, am)
 
 	// Tx manager depends on peer, account and exchange manager.
 	txCtx := &tx.ManagerContext{
+		NetworkID:   networkID,
 		Database:    database,
 		PM:          pm,
 		AM:          am,
@@ -96,10 +97,11 @@ func NewNode(conf *Config) *Node {
 
 	// Ledger manager depends on account and tx manager.
 	lmCtx := &ledger.ManagerContext{
-		Database: database,
-		PM:       pm,
-		AM:       am,
-		TM:       tm,
+		NetworkID: networkID,
+		Database:  database,
+		PM:        pm,
+		AM:        am,
+		TM:        tm,
 	}
 	lm := ledger.NewManager(lmCtx)
 
@@ -107,6 +109,7 @@ func NewNode(conf *Config) *Node {
 
 	// Construct consensus engine context and create the consensus engine.
 	engineCtx := &consensus.EngineContext{
+		NetworkID:       networkID,
 		Role:            role,
 		Database:        database,
 		Seed:            seed,

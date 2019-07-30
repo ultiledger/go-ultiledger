@@ -26,14 +26,15 @@ var (
 
 // EngineContext represents contextual information Engine needs.
 type EngineContext struct {
-	Database db.Database
-	Seed     string
-	NodeID   string
-	Role     string
-	PM       *peer.Manager
-	AM       *account.Manager
-	LM       *ledger.Manager
-	TM       *tx.Manager
+	NetworkID string
+	Database  db.Database
+	Seed      string
+	NodeID    string
+	Role      string
+	PM        *peer.Manager
+	AM        *account.Manager
+	LM        *ledger.Manager
+	TM        *tx.Manager
 	// Initial quorum parsed from config file.
 	Quorum *ultpb.Quorum
 	// Interval of consensus proposition in seconds.
@@ -42,40 +43,45 @@ type EngineContext struct {
 
 func ValidateEngineContext(ec *EngineContext) error {
 	if ec == nil {
-		return fmt.Errorf("engine context is nil")
+		return errors.New("engine context is nil")
+	}
+	if ec.NetworkID == "" {
+		return errors.New("network id is empty")
 	}
 	if ec.Seed == "" {
-		return fmt.Errorf("empty node seed")
+		return errors.New("empty node seed")
 	}
 	if ec.NodeID == "" {
-		return fmt.Errorf("empty node ID")
+		return errors.New("empty node ID")
 	}
 	if ec.Role == "" {
-		return fmt.Errorf("empty node role")
+		return errors.New("empty node role")
 	}
 	if ec.PM == nil {
-		return fmt.Errorf("peer manager is nil")
+		return errors.New("peer manager is nil")
 	}
 	if ec.AM == nil {
-		return fmt.Errorf("account manager is nil")
+		return errors.New("account manager is nil")
 	}
 	if ec.LM == nil {
-		return fmt.Errorf("ledger manager is nil")
+		return errors.New("ledger manager is nil")
 	}
 	if ec.TM == nil {
-		return fmt.Errorf("tx manager is nil")
+		return errors.New("tx manager is nil")
 	}
 	if ec.Quorum == nil {
-		return fmt.Errorf("initial quorum is nil")
+		return errors.New("initial quorum is nil")
 	}
 	if ec.ProposeInterval <= 0 {
-		return fmt.Errorf("propose interval is invalid")
+		return errors.New("propose interval is invalid")
 	}
 	return nil
 }
 
 // Engine is the driver of underlying federated consensus protocol.
 type Engine struct {
+	networkID string
+
 	database db.Database
 	bucket   string
 
@@ -134,6 +140,7 @@ func NewEngine(ctx *EngineContext) *Engine {
 	}
 
 	e := &Engine{
+		networkID:          ctx.NetworkID,
 		database:           ctx.Database,
 		bucket:             "ENGINE",
 		nodeID:             ctx.NodeID,
@@ -338,7 +345,7 @@ func (e *Engine) broadcastStatement(stmt *ultpb.Statement) error {
 		return fmt.Errorf("sign statement failed: %v", err)
 	}
 
-	err = rpc.BroadcastStatement(clients, metadata, payload, sign)
+	err = rpc.BroadcastStatement(clients, metadata, payload, sign, e.networkID)
 	if err != nil {
 		return fmt.Errorf("rpc broadcast failed: %v", err)
 	}
@@ -358,7 +365,7 @@ func (e *Engine) queryQuorum(quorumHash string) (*Quorum, error) {
 		return nil, fmt.Errorf("sign statement failed: %v", err)
 	}
 
-	quorum, err := rpc.QueryQuorum(clients, metadata, payload, sign)
+	quorum, err := rpc.QueryQuorum(clients, metadata, payload, sign, e.networkID)
 	if err != nil {
 		return nil, fmt.Errorf("rpc query failed: %v", err)
 	}
@@ -387,7 +394,7 @@ func (e *Engine) queryTxSet(txsetHash string) (*TxSet, error) {
 		return nil, fmt.Errorf("sign statement failed: %v", err)
 	}
 
-	txset, err := rpc.QueryTxSet(clients, metadata, payload, sign)
+	txset, err := rpc.QueryTxSet(clients, metadata, payload, sign, e.networkID)
 	if err != nil {
 		return nil, fmt.Errorf("rpc query failed: %v", err)
 	}

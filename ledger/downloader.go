@@ -22,6 +22,8 @@ type DownloadRange struct {
 
 // Downloader downloads missing ledgers from peers.
 type Downloader struct {
+	networkID string
+
 	database db.Database
 	bucket   string
 
@@ -51,8 +53,9 @@ type Downloader struct {
 }
 
 // Create a new instance of downloader.
-func NewDownloader(db db.Database, pm *peer.Manager) *Downloader {
+func NewDownloader(networkID string, db db.Database, pm *peer.Manager) *Downloader {
 	dlr := &Downloader{
+		networkID: networkID,
 		database:  db,
 		bucket:    "DOWNLOADER",
 		pm:        pm,
@@ -186,7 +189,7 @@ func (d *Downloader) runTask(done <-chan bool, taskChan <-chan uint64) <-chan *C
 		}
 
 		// query ledger from peers
-		ledger, err := rpc.QueryLedger(clients, metadata, payload, sign)
+		ledger, err := rpc.QueryLedger(clients, metadata, payload, sign, d.networkID)
 		if err != nil {
 			log.Errorf("rpc query ledger %d failed: %v", i, err)
 			return nil
