@@ -15,10 +15,13 @@ var (
 type AssetType uint8
 
 const (
+	// The native asset.
 	NATIVE AssetType = iota
+	// The custom asset.
 	CUSTOM
 )
 
+// Asset contains the required information of working with an asset.
 type Asset struct {
 	AssetType AssetType
 	AssetName string
@@ -26,12 +29,12 @@ type Asset struct {
 }
 
 // TxMutator defines the method which all the transaction
-// related types should implement.
+// mutators should implement.
 type TxMutator interface {
 	Mutate(tx *ultpb.Tx) error
 }
 
-// AccountID sets the AccountID field in the tx.
+// AccountID sets the AccountID field in the Tx.
 type AccountID struct {
 	AccountID string
 }
@@ -40,24 +43,21 @@ func (a *AccountID) validate() error {
 	if a.AccountID == "" {
 		return errors.New("empty account id")
 	}
-
-	// check whether the account id is valid ULTKey
+	// Check whether the account id is valid ULTKey.
 	if !crypto.IsValidAccountKey(a.AccountID) {
 		return errors.New("invalid account key")
 	}
-
 	return nil
 }
 
+// Mutate changes the corresponding AccountID field of the Tx.
 func (a *AccountID) Mutate(tx *ultpb.Tx) error {
 	if tx == nil {
 		return ErrNilTx
 	}
-
 	if err := a.validate(); err != nil {
 		return err
 	}
-
 	tx.AccountID = a.AccountID
 
 	return nil
@@ -69,36 +69,48 @@ type Note struct {
 }
 
 func (n *Note) validate() error {
-	if len(n.Note) > 512 {
+	if len(n.Note) > 128 {
 		return errors.New("note is too long")
 	}
-
 	return nil
 }
 
+// Mutate changes the corresponding Note field of the Tx.
 func (n *Note) Mutate(tx *ultpb.Tx) error {
 	if tx == nil {
 		return ErrNilTx
 	}
-
 	if err := n.validate(); err != nil {
 		return err
 	}
-
 	tx.Note = n.Note
-
 	return nil
 }
 
 // SeqNum sets the SeqNum field in the tx.
-type SeqNum struct{}
+type SeqNum struct {
+	SeqNum uint64
+}
 
-func (s *SeqNum) Mutate(tx *ultpb.Tx) error {
-	// TODO(bobonovski)
+func (s *SeqNum) validate() error {
+	if s.SeqNum == 0 {
+		return errors.New("seqnum is zero")
+	}
 	return nil
 }
 
-// Fee computes the total fee for the transaction.
+// Mutate changes the corresponding SeqNum field of the Tx.
+func (s *SeqNum) Mutate(tx *ultpb.Tx) error {
+	if tx == nil {
+		return ErrNilTx
+	}
+	if err := s.validate(); err != nil {
+		return err
+	}
+	return nil
+}
+
+// Fee computes the total fees for the Tx.
 type Fee struct {
 	BaseFee int64
 }
@@ -111,6 +123,7 @@ func (f *Fee) validate() error {
 	return nil
 }
 
+// Mutate changes the corresponding Fee field of the Tx.
 func (f *Fee) Mutate(tx *ultpb.Tx) error {
 	if tx == nil {
 		return ErrNilTx
@@ -125,7 +138,7 @@ func (f *Fee) Mutate(tx *ultpb.Tx) error {
 	return nil
 }
 
-// CreateAccount adds a CreateAccount operator to the OpList of tx.
+// CreateAccount adds a CreateAccount op to the OpList field of tx.
 type CreateAccount struct {
 	AccountID string
 	Balance   int64
@@ -147,6 +160,7 @@ func (ca *CreateAccount) validate() error {
 	return nil
 }
 
+// Mutate appends a CreateAccount op to the OpList.
 func (ca *CreateAccount) Mutate(tx *ultpb.Tx) error {
 	if tx == nil {
 		return ErrNilTx
@@ -169,7 +183,7 @@ func (ca *CreateAccount) Mutate(tx *ultpb.Tx) error {
 	return nil
 }
 
-// Payment adds a Payment operator to the OpList of tx.
+// Payment adds a Payment operation to the OpList field of Tx.
 type Payment struct {
 	AccountID string
 	Asset     *Asset
@@ -209,6 +223,7 @@ func (p *Payment) validate() error {
 	return nil
 }
 
+// Mutates appends a Payment operation to the OpList of the Tx.
 func (p *Payment) Mutate(tx *ultpb.Tx) error {
 	if tx == nil {
 		return ErrNilTx
@@ -245,7 +260,7 @@ func (p *Payment) Mutate(tx *ultpb.Tx) error {
 	return nil
 }
 
-// Trust adds a Trust operator to the OpList of tx.
+// Trust adds a Trust operation to the OpList field of the Tx.
 type Trust struct {
 	Asset *Asset
 	Limit int64
@@ -280,6 +295,7 @@ func (t *Trust) validate() error {
 	return nil
 }
 
+// Mutate appends a Trust operation to the OpList of the Tx.
 func (t *Trust) Mutate(tx *ultpb.Tx) error {
 	if tx == nil {
 		return ErrNilTx

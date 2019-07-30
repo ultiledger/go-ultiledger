@@ -9,7 +9,7 @@ import (
 )
 
 func TestTx(t *testing.T) {
-	// create random account
+	// Create a random account.
 	src, seed, err := crypto.GetAccountKeypair()
 	assert.Nil(t, err)
 
@@ -18,26 +18,26 @@ func TestTx(t *testing.T) {
 
 	tx := NewTx()
 
-	// AccountID mutator
+	// AccountID mutator.
 	accID := &AccountID{AccountID: src}
 
-	// Note mutator
+	// Note mutator.
 	n := &Note{Note: "SIMPLE NOTE"}
 
-	// CreateAcount mutator
+	// CreateAcount mutator.
 	ca := &CreateAccount{
 		AccountID: dst,
 		Balance:   int64(1000),
 	}
 
-	// Payment mutator
+	// Payment mutator.
 	p := &Payment{
 		AccountID: dst,
 		Amount:    int64(1000),
 		Asset:     &Asset{AssetName: "ABC", Issuer: src, AssetType: NATIVE},
 	}
 
-	// Trust mutator
+	// Trust mutator.
 	trust := &Trust{
 		Asset: &Asset{AssetName: "XYZ", Issuer: dst, AssetType: CUSTOM},
 		Limit: 100,
@@ -48,7 +48,7 @@ func TestTx(t *testing.T) {
 
 	assert.Equal(t, tx.Tx.Fee, int64(3)*BaseFee)
 
-	// testing signing the tx
+	// Testing signing the tx.
 	payload, signature, err := tx.Sign(seed)
 	assert.Nil(t, err)
 

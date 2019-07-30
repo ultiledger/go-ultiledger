@@ -11,26 +11,26 @@ import (
 )
 
 func TestAccountMutator(t *testing.T) {
-	// create random account
+	// Create a random account.
 	pk, _, err := crypto.GetAccountKeypair()
 	assert.Nil(t, err)
 
 	tx := &ultpb.Tx{}
 
-	// test AccountID mutator with correct account key
+	// Test AccountID mutator with a valid account key.
 	accID := AccountID{AccountID: pk}
 	err = accID.Mutate(tx)
 	assert.Nil(t, err)
 	assert.Equal(t, tx.AccountID, accID.AccountID)
 
-	// test AccountID mutator with incorrect account key
+	// Test AccountID mutator with a invaid account key.
 	accID = AccountID{AccountID: "InvalidID"}
 	err = accID.Mutate(tx)
 	assert.NotNil(t, err)
 }
 
 func TestNoteMutator(t *testing.T) {
-	// create a long note
+	// Create a long note.
 	var strs []string
 	for i := 0; i < 1024; i++ {
 		strs = append(strs, "X")
@@ -39,14 +39,14 @@ func TestNoteMutator(t *testing.T) {
 
 	tx := &ultpb.Tx{}
 
-	// test Note mutator with invalid Note
+	// Test Note mutator with a invalid note.
 	n := Note{Note: note}
 	err := n.Mutate(tx)
 	assert.NotNil(t, err)
 }
 
 func TestCreateAccountMutator(t *testing.T) {
-	// create random account
+	// Create a random account.
 	pk, _, err := crypto.GetAccountKeypair()
 	assert.Nil(t, err)
 
@@ -65,7 +65,7 @@ func TestCreateAccountMutator(t *testing.T) {
 }
 
 func TestPaymentMutator(t *testing.T) {
-	// create random account
+	// Create random account.
 	pk, _, err := crypto.GetAccountKeypair()
 	assert.Nil(t, err)
 
@@ -79,26 +79,26 @@ func TestPaymentMutator(t *testing.T) {
 	err = p.Mutate(tx)
 	assert.Nil(t, err)
 
-	// test invalid payment amount
+	// Test an invalid payment amount.
 	p.Amount = int64(-1)
 	err = p.Mutate(tx)
 	assert.NotNil(t, err)
 	p.Amount = int64(1000)
 
-	// test invalid asset name
+	// Test an invalid asset name.
 	p.Asset.AssetName = "ABCDE"
 	err = p.Mutate(tx)
 	assert.NotNil(t, err)
-	p.Asset.AssetName = "ABC"
 
-	// test invalid asset type
+	// Test an invalid asset type.
+	p.Asset.AssetName = "ABC"
 	p.Asset.AssetType = AssetType(2)
 	err = p.Mutate(tx)
 	assert.NotNil(t, err)
 }
 
 func TestTrustMutator(t *testing.T) {
-	// create random account
+	// Create a random account.
 	pk, _, err := crypto.GetAccountKeypair()
 	assert.Nil(t, err)
 
@@ -111,7 +111,7 @@ func TestTrustMutator(t *testing.T) {
 	err = trust.Mutate(tx)
 	assert.Nil(t, err)
 
-	// test invalid trust limit
+	// Test an invalid trust limit.
 	trust.Limit = int64(-1)
 	err = trust.Mutate(tx)
 	assert.NotNil(t, err)

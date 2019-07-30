@@ -5,12 +5,11 @@ import (
 	"fmt"
 
 	"github.com/ultiledger/go-ultiledger/crypto"
+	"github.com/ultiledger/go-ultiledger/ledger"
 	"github.com/ultiledger/go-ultiledger/ultpb"
 )
 
-// We could import this constant from the ledger package
-// but we define a constant value here for convenience.
-var BaseFee = int64(1000)
+var BaseFee = ledger.GenesisBaseFee
 
 // Tx serves as the main object for building an transaction.
 type Tx struct {
