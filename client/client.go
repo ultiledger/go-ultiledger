@@ -61,6 +61,7 @@ func (c *GrpcClient) SubmitTx(txKey string, signature string, data []byte) error
 	defer cancel()
 
 	req := &rpcpb.SubmitTxRequest{
+		NetworkID: c.networkID,
 		TxKey:     txKey,
 		Signature: signature,
 		Data:      data,
@@ -73,13 +74,16 @@ func (c *GrpcClient) SubmitTx(txKey string, signature string, data []byte) error
 	return nil
 }
 
-// QueryTx query the tx status from ult servers and return current
+// QueryTx queries the tx status from ult servers and return current
 // tx status.
 func (c *GrpcClient) QueryTx(txKey string) (*TxStatus, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(time.Second))
 	defer cancel()
 
-	req := &rpcpb.QueryTxRequest{TxKey: txKey}
+	req := &rpcpb.QueryTxRequest{
+		NetworkID: c.networkID,
+		TxKey:     txKey,
+	}
 	resp, err := c.client.QueryTx(ctx, req)
 	if err != nil {
 		return nil, err
