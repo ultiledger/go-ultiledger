@@ -202,6 +202,11 @@ func (n *Node) Start(newnode bool) {
 		if err != nil {
 			log.Fatalf("propose new value failed: %v", err)
 		}
+	} else {
+		err := n.lm.RecoverFromCheckpoint()
+		if err != nil {
+			log.Fatalf("recover ledger from checkpoint failed: %v", err)
+		}
 	}
 
 	for {
