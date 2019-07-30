@@ -30,14 +30,21 @@ var (
 	ErrInvalidOpType      = errors.New("invalid op type")
 )
 
+var (
+	// Maximum number of operations in a transactions.
+	MaxTxOpList = int(100)
+	// Maximum length of note in a transaction.
+	MaxTxNote = int(128)
+)
+
 // ManagerContext represents contextual information TxManager needs.
 type ManagerContext struct {
-	Database    db.Database       // database instance
-	AM          *account.Manager  // account manager
-	PM          *peer.Manager     // peer manager
-	EM          *exchange.Manager // exchange manager
-	BaseReserve int64             // global base reserve for an account
-	Seed        string            // local node seed for signing message
+	Database    db.Database
+	AM          *account.Manager
+	PM          *peer.Manager
+	EM          *exchange.Manager
+	BaseReserve int64
+	Seed        string
 }
 
 func ValidateManagerContext(mc *ManagerContext) error {
@@ -73,19 +80,19 @@ type Manager struct {
 	pm *peer.Manager
 	em *exchange.Manager
 
-	// transactions status
+	// LRU cache of the tx status.
 	txStatus *lru.Cache
 
-	// transactions waiting to be include in the ledger
+	// Set for filtering duplicated tx.
 	txSet mapset.Set
 
 	// accountID to tx history map
 	rwm      sync.RWMutex
 	accTxMap map[string]*TxHistory
 
-	// channel for broadcasting tx
+	// Channel for broadcasting tx.
 	txChan chan *ultpb.Tx
-	// channel for stopping goroutines
+
 	stopChan chan struct{}
 }
 
@@ -144,17 +151,18 @@ func (tm *Manager) Stop() {
 // Add transaction to internal pending set.
 func (tm *Manager) AddTx(txKey string, tx *ultpb.Tx) error {
 	if tm.txSet.Contains(txKey) {
-		// directly return for duplicate tx
 		return nil
 	}
 
-	// get the account information
 	acc, err := tm.am.GetAccount(tm.database, tx.AccountID)
 	if err != nil {
-		return fmt.Errorf("get account %s failed: %v", tx.AccountID, err)
+		return fmt.Errorf("get account failed: %v", err)
+	}
+	if acc == nil {
+		return errors.New("account not exist")
 	}
 
-	// compute the total fees and max sequence number
+	// Compute the total fees and max sequence number of the account.
 	totalFees := tx.Fee
 	maxSeq := tx.SeqNum
 	if h, ok := tm.accTxMap[tx.AccountID]; ok {
@@ -164,15 +172,25 @@ func (tm *Manager) AddTx(txKey string, tx *ultpb.Tx) error {
 		tm.accTxMap[tx.AccountID] = NewTxHistory()
 	}
 
-	// check whether tx sequence number is larger than existing one
+	// Check whether tx sequence number is larger than the existing one.
 	if maxSeq > tx.SeqNum {
-		return fmt.Errorf("account %s seqnum mismatch: max %d, input %d", tx.AccountID, maxSeq, tx.SeqNum)
+		return errors.New("invalid sequence number")
 	}
 
-	// check whether the accounts has sufficient balance
+	// Check whether the account has sufficient balance.
 	balance := acc.Balance - tm.baseReserve*int64(acc.EntryCount)
 	if balance < totalFees {
-		return fmt.Errorf("account %s insufficient balance", tx.AccountID)
+		return errors.New("insufficient account balance")
+	}
+
+	// Check the validity of tx note.
+	if len(tx.Note) > MaxTxNote {
+		return errors.New("tx note is too long")
+	}
+
+	// Check the validity of op list.
+	if len(tx.OpList) > MaxTxOpList {
+		return errors.New("too much tx ops")
 	}
 
 	tm.rwm.Lock()
@@ -181,7 +199,7 @@ func (tm *Manager) AddTx(txKey string, tx *ultpb.Tx) error {
 
 	tm.txSet.Add(txKey)
 
-	// change tx status
+	// Update tx status.
 	status := &rpcpb.TxStatus{
 		StatusCode: rpcpb.TxStatusCode_ACCEPTED,
 	}
@@ -190,7 +208,7 @@ func (tm *Manager) AddTx(txKey string, tx *ultpb.Tx) error {
 		return fmt.Errorf("update tx status failed: %v", err)
 	}
 
-	// add tx to broadcast channel
+	// Broadcast the tx.
 	go func() { tm.txChan <- tx }()
 
 	return nil
@@ -198,17 +216,17 @@ func (tm *Manager) AddTx(txKey string, tx *ultpb.Tx) error {
 
 // Apply the tx list by charging fees and applying all the ops.
 func (tm *Manager) ApplyTxList(txList []*ultpb.Tx, seqNum uint64) error {
-	// sort tx by sequence number
+	// Sort tx by sequence number.
 	sort.Sort(TxSlice(txList))
 
-	// group tx by account and txs of each account is sorted
-	// by sequence number in increasing order
+	// Group txs by account and txs of each account is sorted
+	// by sequence number in increasing order.
 	accTxMap := make(map[string][]*ultpb.Tx)
 	for _, tx := range txList {
 		accTxMap[tx.AccountID] = append(accTxMap[tx.AccountID], tx)
 	}
 
-	// charge tx fees
+	// Charge tx fees.
 	restTxList := make([]*ultpb.Tx, 0)
 	for id, txs := range accTxMap {
 		acc, err := tm.am.GetAccount(tm.database, id)
@@ -219,7 +237,7 @@ func (tm *Manager) ApplyTxList(txList []*ultpb.Tx, seqNum uint64) error {
 		for i := 0; i < len(txs); i++ {
 			txk, _ := ultpb.GetTxKey(txs[i])
 
-			// check validity of sequence number
+			// Check validity of the sequence number.
 			if acc.SeqNum > txs[i].SeqNum {
 				status := &rpcpb.TxStatus{
 					StatusCode:   rpcpb.TxStatusCode_FAILED,
@@ -232,7 +250,7 @@ func (tm *Manager) ApplyTxList(txList []*ultpb.Tx, seqNum uint64) error {
 				continue
 			}
 
-			// check sufficiency of balance
+			// Check sufficiency of the balance.
 			if acc.Balance < txs[i].Fee {
 				status := &rpcpb.TxStatus{
 					StatusCode:   rpcpb.TxStatusCode_FAILED,
@@ -250,7 +268,7 @@ func (tm *Manager) ApplyTxList(txList []*ultpb.Tx, seqNum uint64) error {
 			restTxList = append(restTxList, txs[i])
 		}
 
-		// update account balance to charge fees
+		// Update account balance.
 		err = tm.am.SaveAccount(tm.database, acc)
 		if err != nil {
 			return fmt.Errorf("update account failed: %v", err)
@@ -275,7 +293,7 @@ func (tm *Manager) ApplyTxList(txList []*ultpb.Tx, seqNum uint64) error {
 			}
 		}
 
-		// start db transaction
+		// Apply the operations in a db transaction.
 		dt, err := tm.database.Begin()
 		if err != nil {
 			return fmt.Errorf("start db transaction failed: %v", err)
@@ -420,7 +438,7 @@ func (tm *Manager) UpdateTxStatus(txKey string, status *rpcpb.TxStatus) error {
 	return nil
 }
 
-// Broadcast transaction through rpc broadcast.
+// Broadcast the transaction through rpc.
 func (tm *Manager) broadcastTx(tx *ultpb.Tx) error {
 	clients := tm.pm.GetLiveClients()
 	metadata := tm.pm.GetMetadata()
