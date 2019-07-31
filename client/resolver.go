@@ -11,7 +11,7 @@ type resolver struct {
 	addrs []string
 }
 
-// NewResolver creates a simple resolver which returns saved addrs
+// NewResolver creates a simple resolver which returns saved addrs.
 func NewResolver() naming.Resolver {
 	return &resolver{}
 }
