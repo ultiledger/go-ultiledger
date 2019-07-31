@@ -105,7 +105,7 @@ func (m *memdb) Begin() (db.Tx, error) {
 	return mtx, nil
 }
 
-// memdbTx mocks at the transactions of real db.
+// memdbTx mocks at the transaction of a real db.
 type memdbTx struct{ mdb *memdb }
 
 func (m *memdbTx) Get(bucket string, key []byte) ([]byte, error) {

@@ -111,7 +111,7 @@ func (bt *boltdb) Begin() (db.Tx, error) {
 	return btx, nil
 }
 
-// boltdbTx wraps boltdb Tx to provide a desired interface.
+// boltdbTx wraps the boltdb transaction to provide the desired interface.
 type boltdbTx struct {
 	tx *bolt.Tx
 }
