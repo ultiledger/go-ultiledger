@@ -67,8 +67,7 @@ message GetAccountRequest {
 }
 
 message GetAccountResponse {
-  string NetworkID = 1;
-  bytes Data = 2;
+  bytes Data = 1;
 }
 
 enum NotifyMsgType {
