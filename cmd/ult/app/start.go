@@ -15,8 +15,6 @@
 package app
 
 import (
-	"errors"
-
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
@@ -26,30 +24,31 @@ import (
 
 var startCmd = &cobra.Command{
 	Use:   "start",
-	Short: "Start the node with config",
-	Long: `Start a ultiledger node with specified configuration, the program will
-try to recover from previous saved states if the --newnode command arg
+	Short: "Start the ULT node with config",
+	Long: `Start a Ultiledger node with specified configuration, the program will
+try to recover from latest checkpoint if the --newnode command argument
 is not specified or it will bootstrap a completely new node.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		// read in config file
+		// Read in configuration.
 		if cfgFile == "" {
-			log.Fatal(errors.New("config file not provided"))
+			log.Fatal("config file not provided")
 		}
 		v := viper.New()
 		v.SetConfigFile(cfgFile)
 		if err := v.ReadInConfig(); err != nil {
-			log.Fatal(err)
+			log.Fatalf("read in configuration failed: %v", err)
 		}
+		// Whether switch on the debug mode of the logger.
 		if viper.GetBool("debug") {
 			log.OpenDebug()
 		}
-		// init node config from viper
-		c, err := node.NewConfig(v)
+		// Initialize node configuration.
+		config, err := node.NewConfig(v)
 		if err != nil {
 			log.Fatal(err)
 		}
-		// start a ULTNode
-		n := node.NewNode(c)
+		// Start the ULT node.
+		n := node.NewNode(config)
 		n.Start(viper.GetBool("newnode"))
 	},
 }
