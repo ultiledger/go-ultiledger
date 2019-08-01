@@ -621,8 +621,7 @@ func (d *Decree) combineCandidates() (string, error) {
 		if ts.PrevLedgerHash != headerHash {
 			continue
 		}
-		if txset == nil || len(ts.TxList) > len(txset.TxList) ||
-			((len(ts.TxList) == len(txset.TxList)) && lessBytesOr(txsetHash, cv.TxSetHash, hash)) {
+		if txset == nil || compareTxSet(txsetHash, txset, cv.TxSetHash, ts, ledger.GenesisBaseFee, hash) {
 			txset = ts
 			txsetHash = cv.TxSetHash
 		}

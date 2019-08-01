@@ -13,6 +13,7 @@ import (
 
 	"github.com/ultiledger/go-ultiledger/log"
 	"github.com/ultiledger/go-ultiledger/ultpb"
+	"github.com/ultiledger/go-ultiledger/util"
 )
 
 // Type alias for proto types.
@@ -55,6 +56,39 @@ func ValidateQuorum(quorum *ultpb.Quorum, depth int, extraChecks bool) error {
 		}
 	}
 	return nil
+}
+
+// Compare two txset in the order of the size of the tx list, the total
+// fees of the txset and random bytes. It returns true if the left txset
+// is smaller than the right txset.
+func compareTxSet(ltsHash string, lts *ultpb.TxSet, rtsHash string, rts *ultpb.TxSet, baseFee int64, hash string) bool {
+	if lts == nil {
+		return true
+	}
+	if rts == nil {
+		return false
+	}
+	if len(lts.TxList) < len(rts.TxList) {
+		return true
+	} else if len(lts.TxList) > len(rts.TxList) {
+		return false
+	}
+
+	// Compute the total fees of each txset.
+	ltsTotalFees, rtsTotalFees := int64(0), int64(0)
+	for _, tx := range lts.TxList {
+		ltsTotalFees += util.MinInt64(tx.Fee, baseFee*int64(util.MaxInt(1, len(tx.OpList))))
+	}
+	for _, tx := range rts.TxList {
+		rtsTotalFees += util.MinInt64(tx.Fee, baseFee*int64(util.MaxInt(1, len(tx.OpList))))
+	}
+	if ltsTotalFees < rtsTotalFees {
+		return true
+	} else if ltsTotalFees > rtsTotalFees {
+		return false
+	}
+
+	return lessBytesOr(ltsHash, rtsHash, hash)
 }
 
 // Check whether the first input string is smaller than the second one
