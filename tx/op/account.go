@@ -15,7 +15,7 @@ type CreateAccount struct {
 	DstAccountID string
 	Balance      int64
 	BaseReserve  int64
-	SeqNum       uint64
+	LedgerSeqNum uint64
 }
 
 func (c *CreateAccount) Apply(dt db.Tx) error {
@@ -59,7 +59,7 @@ func (c *CreateAccount) Apply(dt db.Tx) error {
 	}
 
 	// create the dst account
-	err = c.AM.CreateAccount(dt, c.DstAccountID, c.Balance, c.SrcAccountID, c.SeqNum)
+	err = c.AM.CreateAccount(dt, c.DstAccountID, c.Balance, c.SrcAccountID, c.LedgerSeqNum)
 	if err != nil {
 		return fmt.Errorf("create account %s failed: %v", c.DstAccountID, err)
 	}

@@ -223,7 +223,7 @@ func (tm *Manager) AddTx(txKey string, tx *ultpb.Tx) error {
 }
 
 // Apply the tx list by charging fees and applying all the ops.
-func (tm *Manager) ApplyTxList(txList []*ultpb.Tx, seqNum uint64) error {
+func (tm *Manager) ApplyTxList(txList []*ultpb.Tx, ledgerSeqNum uint64) error {
 	// Sort tx by sequence number.
 	sort.Sort(TxSlice(txList))
 
@@ -297,7 +297,7 @@ func (tm *Manager) ApplyTxList(txList []*ultpb.Tx, seqNum uint64) error {
 	for _, tx := range restTxList {
 		txk, _ := ultpb.GetTxKey(tx)
 
-		ops, err := tm.getTxOpList(tx.OpList, tx.AccountID, seqNum)
+		ops, err := tm.getTxOpList(tx.OpList, tx.AccountID, ledgerSeqNum)
 		if err != nil {
 			status := &rpcpb.TxStatus{
 				StatusCode:   rpcpb.TxStatusCode_FAILED,
@@ -345,7 +345,7 @@ func (tm *Manager) ApplyTxList(txList []*ultpb.Tx, seqNum uint64) error {
 }
 
 // Construct tx op list from generic op list.
-func (tm *Manager) getTxOpList(opList []*ultpb.Op, accountID string, seqNum uint64) ([]op.Op, error) {
+func (tm *Manager) getTxOpList(opList []*ultpb.Op, accountID string, ledgerSeqNum uint64) ([]op.Op, error) {
 	var ops []op.Op
 	for _, o := range opList {
 		switch o.OpType {
@@ -356,7 +356,7 @@ func (tm *Manager) getTxOpList(opList []*ultpb.Op, accountID string, seqNum uint
 				DstAccountID: ca.AccountID,
 				Balance:      ca.Balance,
 				BaseReserve:  tm.baseReserve,
-				SeqNum:       seqNum,
+				LedgerSeqNum: ledgerSeqNum,
 			})
 		case ultpb.OpType_PAYMENT:
 			payment := o.GetPayment()
