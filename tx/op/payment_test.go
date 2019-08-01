@@ -53,4 +53,6 @@ func TestPaymentOp(t *testing.T) {
 	srcAcc, err := am.GetAccount(memorytx, srcAccount)
 	assert.Nil(t, err)
 	assert.Equal(t, srcAcc.Balance, int64(990000))
+
+	memorydb.Commit()
 }

@@ -79,4 +79,6 @@ func TestTrustOp(t *testing.T) {
 	trust, err = am.GetTrust(memorytx, srcAccount, asset)
 	assert.Nil(t, err)
 	assert.Nil(t, trust)
+
+	memorydb.Commit()
 }

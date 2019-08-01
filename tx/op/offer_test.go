@@ -94,4 +94,6 @@ func TestOfferOp(t *testing.T) {
 	trust, err = am.GetTrust(memorytx, srcAccount, asset)
 	assert.Nil(t, err)
 	assert.Equal(t, int64(666), trust.Liability.Buying)
+
+	memorydb.Commit()
 }
