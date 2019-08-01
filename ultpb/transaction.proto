@@ -6,7 +6,7 @@ import "asset.proto";
 import "offer.proto";
 
 // Every operation is related to a specific account and 
-// each transaction could contain one or more operations
+// each transaction could contain one or more operations.
 enum OpType {
   CREATE_ACCOUNT = 0;
   PAYMENT = 1;
@@ -14,11 +14,9 @@ enum OpType {
   TRUST = 3;
 }
 
-// Operation
+// Operation is the concrete way to mutate a account.
 message Op {
-  // operation type of this transaction
   OpType OpType = 1;
-  // defacto operation
   oneof Op {
     CreateAccountOp CreateAccount = 2;
     PaymentOp Payment = 3;
@@ -27,90 +25,102 @@ message Op {
   }
 }
 
-// Transaction
+// Tx is the abstraction of the concrete actions
+// that the node will execute.
 message Tx {
-  // the source account for sending asset to the new account
+  // The source account for the transaction.
   string AccountID = 1;
-  // fee to pay
+  // Fee of the transaction that the source account wishes to pay.
   int64 Fee = 2;
-  // extra note about the transaction
+  // Extra note about the transaction.
   string Note = 3;
-  // unique transaction sequence number
+  // Unique transaction sequence number, the number is used for
+  // distinguishing transactions initiated from the same source
+  // account. The number should be larger than the latest sequence
+  // number of the confirmed transactions belong to the source account.
   uint64 SeqNum = 4;
-  // list of operations
+  // List of operations.
   repeated Op OpList = 5;
 }
 
-// Transaction set for consensus
+// TxSet is the container of a number of transactions that are waiting
+// to be confirmed in consensus by the Ultiledger network.
 message TxSet {
-  // hash of previous closed ledger header
+  // Hash of previous closed ledger header.
   string PrevLedgerHash = 1;
-  // list of transaction hashes
+  // List of transactions.
   repeated Tx TxList = 2;  
 }
 
-// Create a new account by sending asset to it
+// CreateAccountOp creates a new account by sending some native
+// asset to it from the source account.
 message CreateAccountOp {
-  // destination account
+  // Destination account.
   string AccountID = 1;
-  // initial balance in ULUs
+  // Initial balance in ULU.
   int64 Balance = 2;
 }
 
-// Peer to peer payment
+// PaymentOp creates an peer-to-peer payment from the source account
+// to the destination account in specified asset type.
 message PaymentOp {
-  // destination account of the payment
+  // Destination account of the payment.
   string AccountID = 1;
-  // asset type of payment
+  // Asset type of payment.
   Asset Asset = 2;
-  // amount of payment in specified asset type
+  // The amount of payment in specified asset type.
   int64 Amount = 3;
 }
 
-// Path payment
+// PathPaymentOp creates an peer-to-peer payment which could use multiple
+// hops of asset exchanges to reach the deal by utilizing an intelligent
+// asset exchanges path.
 message PathPaymentOp {
-  // source asset to send
+  // Source asset to send.
   Asset SrcAsset = 1;
-  // amount of source asset to send
+  // The amount of source asset to send.
   int64 SrcAmount = 2;
-  // destination account of the path payment
+  // Destination account of the path payment.
   string AccountID = 3; 
-  // destination asset type   
+  // Destination asset type.   
   Asset DstAsset = 4;
-  // payment asset path
+  // Payment asset path.
   repeated Asset Path = 5;
 }
 
-// Trust management
+// TrustOp creates a trustline for the source account to trust a custom
+// asset issued by other account.
 message TrustOp {
-  // asset for trust
+  // Asset to trust.
   Asset Asset = 2;
-  // limit of trust
+  // Limit of the trustline.
   int64 Limit = 3;
 }
 
-// Trust authorization management
+// AllowTrustOp creates an op to manage the authorization of the custom asset.
 message AllowTrustOp {
-  // accountID of trustor
+  // The account id of trustor.
   string AccountID = 1;
-  // asset of trust
+  // Asset to trust.
   Asset Asset = 2;
-  // authorization flag
+  // Authorization flag.
   int32 Authorized = 3;  
 }
 
-// Offer management
+// OfferOp creates an asset exchange offer to exchange specified asset pairs.
 message OfferOp {
-  // asset for selling
+  // Asset for selling.
   Asset SellingAsset = 1;
-  // asset for buying
+  // Asset for buying.
   Asset BuyingAsset = 2;
-  // amount of asset for selling
+  // The amount of asset for selling.
   int64 Amount = 3;
-  // price in fractional format
+  // The price of selling asset in terms of buying asset in fractional format.
+  // For instance, if the price = 3/4, then it means the price of one selling
+  // asset is 3/4 buying asset.
   Price Price = 4;
-  // ID of this offer
+  // ID of this offer, this field is empty for an new offer.
   string OfferID = 5;
-  // whether the offer is passive
+  // Whether the offer is passive.
   int32 Passive = 6;
 }

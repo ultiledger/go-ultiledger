@@ -13,7 +13,7 @@ var _ = fmt.Errorf
 var _ = math.Inf
 
 // Every operation is related to a specific account and
-// each transaction could contain one or more operations
+// each transaction could contain one or more operations.
 type OpType int32
 
 const (
@@ -41,12 +41,9 @@ func (x OpType) String() string {
 }
 func (OpType) EnumDescriptor() ([]byte, []int) { return fileDescriptor6, []int{0} }
 
-// Operation
+// Operation is the concrete way to mutate a account.
 type Op struct {
-	// operation type of this transaction
 	OpType OpType `protobuf:"varint,1,opt,name=OpType,enum=ultpb.OpType" json:"OpType,omitempty"`
-	// defacto operation
-	//
 	// Types that are valid to be assigned to Op:
 	//	*Op_CreateAccount
 	//	*Op_Payment
@@ -236,17 +233,21 @@ func _Op_OneofSizer(msg proto.Message) (n int) {
 	return n
 }
 
-// Transaction
+// Tx is the abstraction of the concrete actions
+// that the node will execute.
 type Tx struct {
-	// the source account for sending asset to the new account
+	// The source account for the transaction.
 	AccountID string `protobuf:"bytes,1,opt,name=AccountID" json:"AccountID,omitempty"`
-	// fee to pay
+	// Fee of the transaction that the source account wishes to pay.
 	Fee int64 `protobuf:"varint,2,opt,name=Fee" json:"Fee,omitempty"`
-	// extra note about the transaction
+	// Extra note about the transaction.
 	Note string `protobuf:"bytes,3,opt,name=Note" json:"Note,omitempty"`
-	// unique transaction sequence number
+	// Unique transaction sequence number, the number is used for
+	// distinguishing transactions initiated from the same source
+	// account. The number should be larger than the latest sequence
+	// number of the confirmed transactions belong to the source account.
 	SeqNum uint64 `protobuf:"varint,4,opt,name=SeqNum" json:"SeqNum,omitempty"`
-	// list of operations
+	// List of operations.
 	OpList []*Op `protobuf:"bytes,5,rep,name=OpList" json:"OpList,omitempty"`
 }
 
@@ -290,11 +291,12 @@ func (m *Tx) GetOpList() []*Op {
 	return nil
 }
 
-// Transaction set for consensus
+// TxSet is the container of a number of transactions that are waiting
+// to be confirmed in consensus by the Ultiledger network.
 type TxSet struct {
-	// hash of previous closed ledger header
+	// Hash of previous closed ledger header.
 	PrevLedgerHash string `protobuf:"bytes,1,opt,name=PrevLedgerHash" json:"PrevLedgerHash,omitempty"`
-	// list of transaction hashes
+	// List of transactions.
 	TxList []*Tx `protobuf:"bytes,2,rep,name=TxList" json:"TxList,omitempty"`
 }
 
@@ -317,11 +319,12 @@ func (m *TxSet) GetTxList() []*Tx {
 	return nil
 }
 
-// Create a new account by sending asset to it
+// CreateAccountOp creates a new account by sending some native
+// asset to it from the source account.
 type CreateAccountOp struct {
-	// destination account
+	// Destination account.
 	AccountID string `protobuf:"bytes,1,opt,name=AccountID" json:"AccountID,omitempty"`
-	// initial balance in ULUs
+	// Initial balance in ULU.
 	Balance int64 `protobuf:"varint,2,opt,name=Balance" json:"Balance,omitempty"`
 }
 
@@ -344,13 +347,14 @@ func (m *CreateAccountOp) GetBalance() int64 {
 	return 0
 }
 
-// Peer to peer payment
+// PaymentOp creates an peer-to-peer payment from the source account
+// to the destination account in specified asset type.
 type PaymentOp struct {
-	// destination account of the payment
+	// Destination account of the payment.
 	AccountID string `protobuf:"bytes,1,opt,name=AccountID" json:"AccountID,omitempty"`
-	// asset type of payment
+	// Asset type of payment.
 	Asset *Asset `protobuf:"bytes,2,opt,name=Asset" json:"Asset,omitempty"`
-	// amount of payment in specified asset type
+	// The amount of payment in specified asset type.
 	Amount int64 `protobuf:"varint,3,opt,name=Amount" json:"Amount,omitempty"`
 }
 
@@ -380,17 +384,19 @@ func (m *PaymentOp) GetAmount() int64 {
 	return 0
 }
 
-// Path payment
+// PathPaymentOp creates an peer-to-peer payment which could use multiple
+// hops of asset exchanges to reach the deal by utilizing an intelligent
+// asset exchanges path.
 type PathPaymentOp struct {
-	// source asset to send
+	// Source asset to send.
 	SrcAsset *Asset `protobuf:"bytes,1,opt,name=SrcAsset" json:"SrcAsset,omitempty"`
-	// amount of source asset to send
+	// The amount of source asset to send.
 	SrcAmount int64 `protobuf:"varint,2,opt,name=SrcAmount" json:"SrcAmount,omitempty"`
-	// destination account of the path payment
+	// Destination account of the path payment.
 	AccountID string `protobuf:"bytes,3,opt,name=AccountID" json:"AccountID,omitempty"`
-	// destination asset type
+	// Destination asset type.
 	DstAsset *Asset `protobuf:"bytes,4,opt,name=DstAsset" json:"DstAsset,omitempty"`
-	// payment asset path
+	// Payment asset path.
 	Path []*Asset `protobuf:"bytes,5,rep,name=Path" json:"Path,omitempty"`
 }
 
@@ -434,11 +440,12 @@ func (m *PathPaymentOp) GetPath() []*Asset {
 	return nil
 }
 
-// Trust management
+// TrustOp creates a trustline for the source account to trust a custom
+// asset issued by other account.
 type TrustOp struct {
-	// asset for trust
+	// Asset to trust.
 	Asset *Asset `protobuf:"bytes,2,opt,name=Asset" json:"Asset,omitempty"`
-	// limit of trust
+	// Limit of the trustline.
 	Limit int64 `protobuf:"varint,3,opt,name=Limit" json:"Limit,omitempty"`
 }
 
@@ -461,13 +468,13 @@ func (m *TrustOp) GetLimit() int64 {
 	return 0
 }
 
-// Trust authorization management
+// AllowTrustOp creates an op to manage the authorization of the custom asset.
 type AllowTrustOp struct {
-	// accountID of trustor
+	// The account id of trustor.
 	AccountID string `protobuf:"bytes,1,opt,name=AccountID" json:"AccountID,omitempty"`
-	// asset of trust
+	// Asset to trust.
 	Asset *Asset `protobuf:"bytes,2,opt,name=Asset" json:"Asset,omitempty"`
-	// authorization flag
+	// Authorization flag.
 	Authorized int32 `protobuf:"varint,3,opt,name=Authorized" json:"Authorized,omitempty"`
 }
 
@@ -497,19 +504,21 @@ func (m *AllowTrustOp) GetAuthorized() int32 {
 	return 0
 }
 
-// Offer management
+// OfferOp creates an asset exchange offer to exchange specified asset pairs.
 type OfferOp struct {
-	// asset for selling
+	// Asset for selling.
 	SellingAsset *Asset `protobuf:"bytes,1,opt,name=SellingAsset" json:"SellingAsset,omitempty"`
-	// asset for buying
+	// Asset for buying.
 	BuyingAsset *Asset `protobuf:"bytes,2,opt,name=BuyingAsset" json:"BuyingAsset,omitempty"`
-	// amount of asset for selling
+	// The amount of asset for selling.
 	Amount int64 `protobuf:"varint,3,opt,name=Amount" json:"Amount,omitempty"`
-	// price in fractional format
+	// The price of selling asset in terms of buying asset in fractional format.
+	// For instance, if the price = 3/4, then it means the price of one selling
+	// asset is 3/4 buying asset.
 	Price *Price `protobuf:"bytes,4,opt,name=Price" json:"Price,omitempty"`
-	// ID of this offer
+	// ID of this offer, this field is empty for an new offer.
 	OfferID string `protobuf:"bytes,5,opt,name=OfferID" json:"OfferID,omitempty"`
-	// whether the offer is passive
+	// Whether the offer is passive.
 	Passive int32 `protobuf:"varint,6,opt,name=Passive" json:"Passive,omitempty"`
 }
 
