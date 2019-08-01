@@ -80,5 +80,5 @@ func TestTrustOp(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Nil(t, trust)
 
-	memorydb.Commit()
+	memorytx.Commit()
 }

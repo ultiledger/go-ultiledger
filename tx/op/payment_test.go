@@ -54,5 +54,5 @@ func TestPaymentOp(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, srcAcc.Balance, int64(990000))
 
-	memorydb.Commit()
+	memorytx.Commit()
 }

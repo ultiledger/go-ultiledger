@@ -95,5 +95,5 @@ func TestOfferOp(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, int64(666), trust.Liability.Buying)
 
-	memorydb.Commit()
+	memorytx.Commit()
 }
