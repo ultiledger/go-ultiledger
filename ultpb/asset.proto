@@ -2,16 +2,19 @@ syntax = "proto3";
 
 package ultpb;
 
-// enumerable asset types
+// Enumeration of asset types.
 enum AssetType {
+  // The native asset of Ultiledger network is ULT,
+  // and the smallest unit of ULT is ULU.
   NATIVE = 0;
   CUSTOM = 1;
 }
 
 message Asset {
   AssetType AssetType = 1;
-  // user defined asset name, name length should not be more than 4
+  // User defined asset name. The length of the
+  // name should not be more than four.
   string AssetName = 2;
-  // issuer of this asset
+  // The issuer account of the asset.
   string Issuer = 3;
 }

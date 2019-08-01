@@ -4,11 +4,11 @@ package ultpb;
 
 // ConsensusValue is used for reaching consensus in FBA. 
 message ConsensusValue {
-  // hash of the transaction set
+  // Hash of the transaction set.
   string TxSetHash = 1;
-  // propose time
+  // Propose time of the consensus value.
   int64 ProposeTime = 2;
-  // close time
+  // Close time of the consensus value.
   int64 CloseTime = 3;
 }
 
@@ -29,7 +29,7 @@ message Quorum {
   repeated Quorum NestQuorums = 3;
 }
 
-// Nominate statement is used to find a candidate value for ballot protocol.
+// Nominate statement is used to find a candidate value for a specific decree.
 message Nominate {
   repeated string VoteList = 1;
   repeated string AcceptList = 2;
@@ -38,45 +38,45 @@ message Nominate {
 
 // Ballot is used to finalize a consensus value for a specific decree.
 message Ballot {
-  // ballot counter
+  // Ballot counter.
   uint32 Counter = 1;
-  // composite candidate value
+  // Composite candidate value.
   string Value = 2;
 }
 
 // Prepare message for ballot protocol.
 message Prepare {
-  // current ballot
+  // Current working ballot.
   Ballot B = 1;
-  // two hightest ballot accepted as 
-  // prepared such as Q < P and Q ~ P
+  // Two hightest ballots accepted as 
+  // prepared such as Q < P and Q ~ P.
   Ballot Q = 2;
   Ballot P = 3;
-  // counter of highest ballot confirmed as prepared
+  // Counter of highest ballot confirmed as prepared.
   uint32 HC = 4;
-  // counter of lowest ballot confirmed as prepared
+  // Counter of lowest ballot confirmed as prepared.
   uint32 LC = 5;
   string QuorumHash = 6;
 }
 
 // Confirm message for ballot protocol.
 message Confirm {
-  // current ballot
+  // Current working ballot.
   Ballot B = 1;
-  // counter of highest accepted prepared ballot
+  // Counter of the highest ballot accepted as prepared. 
   uint32 PC = 2;
-  // counter of lowest ballot for which the node has accepted commit
+  // Counter of the lowest ballot accepted as committed.
   uint32 LC = 3; 
-  // counter of highest ballot for which the node has accepted commit
+  // Counter of the highest ballot accepted as committed.
   uint32 HC = 4;
   string QuorumHash = 5; 
 }
 
 // Externalize message for ballot protocol.
 message Externalize {
-  // lowest confirmed committed ballot
+  // Lowest ballot confirmed as committed. 
   Ballot B = 1;
-  // counter of highest confirmed committed ballot
+  // Counter of the highest ballot accepted as committed.
   uint32 HC = 2;
   string QuorumHash = 3;
 }
@@ -93,11 +93,10 @@ enum StatementType {
 
 message Statement {
   StatementType StatementType = 1;
-  // node ID of sender
+  // Node ID of source node.
   string NodeID = 2;
-  // decree index
+  // Decree index.
   uint64 Index = 3;
-  // corresponding statement
   oneof Stmt {
     Nominate Nominate = 4;
     Prepare Prepare = 5;

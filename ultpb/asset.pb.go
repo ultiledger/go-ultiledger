@@ -12,10 +12,12 @@ var _ = proto.Marshal
 var _ = fmt.Errorf
 var _ = math.Inf
 
-// enumerable asset types
+// Enumeration of asset types.
 type AssetType int32
 
 const (
+	// The native asset of Ultiledger network is ULT,
+	// and the smallest unit of ULT is ULU.
 	AssetType_NATIVE AssetType = 0
 	AssetType_CUSTOM AssetType = 1
 )
@@ -36,9 +38,10 @@ func (AssetType) EnumDescriptor() ([]byte, []int) { return fileDescriptor1, []in
 
 type Asset struct {
 	AssetType AssetType `protobuf:"varint,1,opt,name=AssetType,enum=ultpb.AssetType" json:"AssetType,omitempty"`
-	// user defined asset name, name length should not be more than 4
+	// User defined asset name. The length of the
+	// name should not be more than four.
 	AssetName string `protobuf:"bytes,2,opt,name=AssetName" json:"AssetName,omitempty"`
-	// issuer of this asset
+	// The issuer account of the asset.
 	Issuer string `protobuf:"bytes,3,opt,name=Issuer" json:"Issuer,omitempty"`
 }
 

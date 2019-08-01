@@ -10,19 +10,19 @@ message Price {
 }
 
 message Offer {
-  // seller of the offer
+  // Seller of the offer.
   string AccountID = 1;
-  // ID of the offer
+  // ID of the offer.
   string OfferID = 2;
-  // asset for selling
+  // Asset for selling.
   Asset SellAsset = 3;
-  // asset for buying
+  // Asset for buying.
   Asset BuyAsset = 4;
-  // amount of asset for selling
+  // The amount of asset for selling.
   int64 Amount = 5;
-  // price of the selling asset in terms of buying asset
+  // The price of the selling asset in terms of buying asset.
   Price Price = 6;
-  // passive offer?
+  // Whether the offer is passive.
   int32 Passive = 7;
 }
 

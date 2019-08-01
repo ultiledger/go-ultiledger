@@ -60,19 +60,19 @@ var _ = math.Inf
 const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
 
 type Account struct {
-	// public key of this account
+	// Public key of the account.
 	AccountID string `protobuf:"bytes,1,opt,name=AccountID" json:"AccountID,omitempty"`
-	// balance in ULUs
+	// The account balance in ULU.
 	Balance int64 `protobuf:"varint,2,opt,name=Balance" json:"Balance,omitempty"`
-	// public key of the signer of this account
+	// Public key of the signer of the account.
 	Signer string `protobuf:"bytes,3,opt,name=Signer" json:"Signer,omitempty"`
-	// latest transaction sequence number
+	// Latest transaction sequence number.
 	SeqNum uint64 `protobuf:"varint,4,opt,name=SeqNum" json:"SeqNum,omitempty"`
-	// number of entries belong to this account
+	// The number of entries belong to the account.
 	EntryCount int32 `protobuf:"varint,5,opt,name=EntryCount" json:"EntryCount,omitempty"`
-	// ULTkeys of transactions belongs to this account
+	// ULTkeys of transactions belongs to this account.
 	TxKeyList []string `protobuf:"bytes,6,rep,name=TxKeyList" json:"TxKeyList,omitempty"`
-	// liability of native asset
+	// Liability of the native asset.
 	Liability *Liability `protobuf:"bytes,7,opt,name=Liability" json:"Liability,omitempty"`
 }
 

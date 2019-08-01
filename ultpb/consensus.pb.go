@@ -44,11 +44,11 @@ func (StatementType) EnumDescriptor() ([]byte, []int) { return fileDescriptor2, 
 
 // ConsensusValue is used for reaching consensus in FBA.
 type ConsensusValue struct {
-	// hash of the transaction set
+	// Hash of the transaction set.
 	TxSetHash string `protobuf:"bytes,1,opt,name=TxSetHash" json:"TxSetHash,omitempty"`
-	// propose time
+	// Propose time of the consensus value.
 	ProposeTime int64 `protobuf:"varint,2,opt,name=ProposeTime" json:"ProposeTime,omitempty"`
-	// close time
+	// Close time of the consensus value.
 	CloseTime int64 `protobuf:"varint,3,opt,name=CloseTime" json:"CloseTime,omitempty"`
 }
 
@@ -121,7 +121,7 @@ func (m *Quorum) GetNestQuorums() []*Quorum {
 	return nil
 }
 
-// Nominate statement is used to find a candidate value for ballot protocol.
+// Nominate statement is used to find a candidate value for a specific decree.
 type Nominate struct {
 	VoteList   []string `protobuf:"bytes,1,rep,name=VoteList" json:"VoteList,omitempty"`
 	AcceptList []string `protobuf:"bytes,2,rep,name=AcceptList" json:"AcceptList,omitempty"`
@@ -156,9 +156,9 @@ func (m *Nominate) GetQuorumHash() string {
 
 // Ballot is used to finalize a consensus value for a specific decree.
 type Ballot struct {
-	// ballot counter
+	// Ballot counter.
 	Counter uint32 `protobuf:"varint,1,opt,name=Counter" json:"Counter,omitempty"`
-	// composite candidate value
+	// Composite candidate value.
 	Value string `protobuf:"bytes,2,opt,name=Value" json:"Value,omitempty"`
 }
 
@@ -183,15 +183,15 @@ func (m *Ballot) GetValue() string {
 
 // Prepare message for ballot protocol.
 type Prepare struct {
-	// current ballot
+	// Current working ballot.
 	B *Ballot `protobuf:"bytes,1,opt,name=B" json:"B,omitempty"`
-	// two hightest ballot accepted as
-	// prepared such as Q < P and Q ~ P
+	// Two hightest ballots accepted as
+	// prepared such as Q < P and Q ~ P.
 	Q *Ballot `protobuf:"bytes,2,opt,name=Q" json:"Q,omitempty"`
 	P *Ballot `protobuf:"bytes,3,opt,name=P" json:"P,omitempty"`
-	// counter of highest ballot confirmed as prepared
+	// Counter of highest ballot confirmed as prepared.
 	HC uint32 `protobuf:"varint,4,opt,name=HC" json:"HC,omitempty"`
-	// counter of lowest ballot confirmed as prepared
+	// Counter of lowest ballot confirmed as prepared.
 	LC         uint32 `protobuf:"varint,5,opt,name=LC" json:"LC,omitempty"`
 	QuorumHash string `protobuf:"bytes,6,opt,name=QuorumHash" json:"QuorumHash,omitempty"`
 }
@@ -245,13 +245,13 @@ func (m *Prepare) GetQuorumHash() string {
 
 // Confirm message for ballot protocol.
 type Confirm struct {
-	// current ballot
+	// Current working ballot.
 	B *Ballot `protobuf:"bytes,1,opt,name=B" json:"B,omitempty"`
-	// counter of highest accepted prepared ballot
+	// Counter of the highest ballot accepted as prepared.
 	PC uint32 `protobuf:"varint,2,opt,name=PC" json:"PC,omitempty"`
-	// counter of lowest ballot for which the node has accepted commit
+	// Counter of the lowest ballot accepted as committed.
 	LC uint32 `protobuf:"varint,3,opt,name=LC" json:"LC,omitempty"`
-	// counter of highest ballot for which the node has accepted commit
+	// Counter of the highest ballot accepted as committed.
 	HC         uint32 `protobuf:"varint,4,opt,name=HC" json:"HC,omitempty"`
 	QuorumHash string `protobuf:"bytes,5,opt,name=QuorumHash" json:"QuorumHash,omitempty"`
 }
@@ -298,9 +298,9 @@ func (m *Confirm) GetQuorumHash() string {
 
 // Externalize message for ballot protocol.
 type Externalize struct {
-	// lowest confirmed committed ballot
+	// Lowest ballot confirmed as committed.
 	B *Ballot `protobuf:"bytes,1,opt,name=B" json:"B,omitempty"`
-	// counter of highest confirmed committed ballot
+	// Counter of the highest ballot accepted as committed.
 	HC         uint32 `protobuf:"varint,2,opt,name=HC" json:"HC,omitempty"`
 	QuorumHash string `protobuf:"bytes,3,opt,name=QuorumHash" json:"QuorumHash,omitempty"`
 }
@@ -333,12 +333,10 @@ func (m *Externalize) GetQuorumHash() string {
 
 type Statement struct {
 	StatementType StatementType `protobuf:"varint,1,opt,name=StatementType,enum=ultpb.StatementType" json:"StatementType,omitempty"`
-	// node ID of sender
+	// Node ID of source node.
 	NodeID string `protobuf:"bytes,2,opt,name=NodeID" json:"NodeID,omitempty"`
-	// decree index
+	// Decree index.
 	Index uint64 `protobuf:"varint,3,opt,name=Index" json:"Index,omitempty"`
-	// corresponding statement
-	//
 	// Types that are valid to be assigned to Stmt:
 	//	*Statement_Nominate
 	//	*Statement_Prepare

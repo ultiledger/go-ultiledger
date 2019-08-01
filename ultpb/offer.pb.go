@@ -37,19 +37,19 @@ func (m *Price) GetDenominator() int64 {
 }
 
 type Offer struct {
-	// seller of the offer
+	// Seller of the offer.
 	AccountID string `protobuf:"bytes,1,opt,name=AccountID" json:"AccountID,omitempty"`
-	// ID of the offer
+	// ID of the offer.
 	OfferID string `protobuf:"bytes,2,opt,name=OfferID" json:"OfferID,omitempty"`
-	// asset for selling
+	// Asset for selling.
 	SellAsset *Asset `protobuf:"bytes,3,opt,name=SellAsset" json:"SellAsset,omitempty"`
-	// asset for buying
+	// Asset for buying.
 	BuyAsset *Asset `protobuf:"bytes,4,opt,name=BuyAsset" json:"BuyAsset,omitempty"`
-	// amount of asset for selling
+	// The amount of asset for selling.
 	Amount int64 `protobuf:"varint,5,opt,name=Amount" json:"Amount,omitempty"`
-	// price of the selling asset in terms of buying asset
+	// The price of the selling asset in terms of buying asset.
 	Price *Price `protobuf:"bytes,6,opt,name=Price" json:"Price,omitempty"`
-	// passive offer?
+	// Whether the offer is passive.
 	Passive int32 `protobuf:"varint,7,opt,name=Passive" json:"Passive,omitempty"`
 }
 

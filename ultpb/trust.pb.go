@@ -13,17 +13,17 @@ var _ = fmt.Errorf
 var _ = math.Inf
 
 type Trust struct {
-	// owner of this trust
+	// Owner of this trust.
 	AccountID string `protobuf:"bytes,1,opt,name=AccountID" json:"AccountID,omitempty"`
-	// trusted asset
+	// Trusted asset.
 	Asset *Asset `protobuf:"bytes,2,opt,name=Asset" json:"Asset,omitempty"`
-	// balance of the asset
+	// Balance of the trusted asset.
 	Balance int64 `protobuf:"varint,3,opt,name=Balance" json:"Balance,omitempty"`
-	// upper limit the balance
+	// Upper limit the balance of the trusted asset.
 	Limit int64 `protobuf:"varint,4,opt,name=Limit" json:"Limit,omitempty"`
-	// liability of trusted asset
+	// Liability of the trusted asset.
 	Liability *Liability `protobuf:"bytes,5,opt,name=Liability" json:"Liability,omitempty"`
-	// trust authorized or not
+	// Whether the trust if authorized.
 	Authorized int32 `protobuf:"varint,6,opt,name=Authorized" json:"Authorized,omitempty"`
 }
 

@@ -2,10 +2,10 @@ syntax = "proto3";
 
 package ultpb;
 
-// Account and Trust liabilities
+// Account and Trust liabilities.
 message Liability {
-  // buying liability
+  // Buying liability.
   int64 Buying = 1;
-  // selling liability
+  // Selling liability.
   int64 Selling = 2;
 }

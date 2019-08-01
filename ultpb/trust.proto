@@ -6,16 +6,16 @@ import "asset.proto";
 import "liability.proto";
 
 message Trust {
-  // owner of this trust
+  // Owner of this trust.
   string AccountID = 1;
-  // trusted asset
+  // Trusted asset.
   Asset Asset = 2;
-  // balance of the asset
+  // Balance of the trusted asset.
   int64 Balance = 3;
-  // upper limit the balance
+  // Upper limit the balance of the trusted asset.
   int64 Limit = 4;
-  // liability of trusted asset
+  // Liability of the trusted asset.
   Liability Liability = 5;
-  // trust authorized or not
+  // Whether the trust if authorized.
   int32 Authorized = 6;
 }

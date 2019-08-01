@@ -12,11 +12,11 @@ var _ = proto.Marshal
 var _ = fmt.Errorf
 var _ = math.Inf
 
-// Account and Trust liabilities
+// Account and Trust liabilities.
 type Liability struct {
-	// buying liability
+	// Buying liability.
 	Buying int64 `protobuf:"varint,1,opt,name=Buying" json:"Buying,omitempty"`
-	// selling liability
+	// Selling liability.
 	Selling int64 `protobuf:"varint,2,opt,name=Selling" json:"Selling,omitempty"`
 }
 
