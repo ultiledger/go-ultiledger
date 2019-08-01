@@ -1,5 +1,21 @@
 package util
 
+// Find the max between two int values
+func MaxInt(x int, y int) int {
+	if x >= y {
+		return x
+	}
+	return y
+}
+
+// Find the min between two int values
+func MinInt(x int, y int) int {
+	if x <= y {
+		return x
+	}
+	return y
+}
+
 // Find the max between two uint64 values
 func MaxUint64(x uint64, y uint64) uint64 {
 	if x >= y {
