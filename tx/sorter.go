@@ -2,7 +2,7 @@ package tx
 
 import "github.com/ultiledger/go-ultiledger/ultpb"
 
-// Custom tx sort by sequence number
+// Custom tx sort by sequence number.
 type TxSlice []*ultpb.Tx
 
 func (ts TxSlice) Len() int {

@@ -24,6 +24,7 @@ import (
 )
 
 var (
+	ErrAccountNotExist    = errors.New("account not exist")
 	ErrInsufficientForFee = errors.New("insufficient balance for fee")
 	ErrInsufficientForTx  = errors.New("insufficient balance for tx")
 	ErrInvalidSeqNum      = errors.New("invalid sequence number")
@@ -70,7 +71,7 @@ func ValidateManagerContext(mc *ManagerContext) error {
 	return nil
 }
 
-// Manager manages incoming tx and coordinate with ledger manager
+// Manager manages incoming tx and coordinates with ledger manager
 // and consensus engine.
 type Manager struct {
 	networkID string
@@ -166,7 +167,7 @@ func (tm *Manager) AddTx(txKey string, tx *ultpb.Tx) error {
 		return fmt.Errorf("get account failed: %v", err)
 	}
 	if acc == nil {
-		return errors.New("account not exist")
+		return ErrAccountNotExist
 	}
 
 	// Compute the total fees and max sequence number of the account.
@@ -226,7 +227,7 @@ func (tm *Manager) ApplyTxList(txList []*ultpb.Tx, seqNum uint64) error {
 	// Sort tx by sequence number.
 	sort.Sort(TxSlice(txList))
 
-	// Group txs by account and txs of each account is sorted
+	// Group txs by account and txs of each account are sorted
 	// by sequence number in increasing order.
 	accTxMap := make(map[string][]*ultpb.Tx)
 	for _, tx := range txList {
@@ -238,7 +239,15 @@ func (tm *Manager) ApplyTxList(txList []*ultpb.Tx, seqNum uint64) error {
 	for id, txs := range accTxMap {
 		acc, err := tm.am.GetAccount(tm.database, id)
 		if err != nil {
-			return fmt.Errorf("get account failed: %v", err)
+			return fmt.Errorf("get account %s failed: %v", id, err)
+		}
+		if acc == nil {
+			// This should never happen as tx that is added to the tx manager
+			// should have been checked against the existance of its corresponding
+			// account. If this happens, it means there are some nodes without some
+			// accounts. This situation will only happen if the consensus protocol
+			// is broken.
+			return ErrAccountNotExist
 		}
 
 		for i := 0; i < len(txs); i++ {
@@ -300,7 +309,8 @@ func (tm *Manager) ApplyTxList(txList []*ultpb.Tx, seqNum uint64) error {
 			}
 		}
 
-		// Apply the operations in a db transaction.
+		// Apply the operations in a db transaction. If any of the
+		// operation failed the tx will be deemed as failed.
 		dt, err := tm.database.Begin()
 		if err != nil {
 			return fmt.Errorf("start db transaction failed: %v", err)

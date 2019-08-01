@@ -8,11 +8,11 @@ import (
 
 // TxHistory is used to hold unconfirmed transactions.
 type TxHistory struct {
-	// maximum sequence number of the tx list
+	// Maximum sequence number of the tx list.
 	MaxSeqNum uint64
-	// total fees of the tx list
+	// Total fees of the tx list.
 	TotalFees int64
-	// transaction map
+	// Transaction map.
 	txMap map[string]*ultpb.Tx
 }
 
@@ -25,7 +25,7 @@ func NewTxHistory() *TxHistory {
 	return h
 }
 
-// Add transaction to pending list, note that before
+// AddTx adds a transaction to pending list, note that before
 // adding any transaction, it should be checked against
 // signature correctness, sufficient balance of account, etc.
 func (th *TxHistory) AddTx(txKey string, tx *ultpb.Tx) error {
@@ -49,7 +49,7 @@ func (th *TxHistory) DeleteTxList(txKeys []string) {
 		delete(th.txMap, txKey)
 	}
 
-	// recalculate total fees and max seq
+	// Recalculate total fees and max sequence.
 	maxseq := uint64(0)
 	totalFees := int64(0)
 	for _, tx := range th.txMap {
