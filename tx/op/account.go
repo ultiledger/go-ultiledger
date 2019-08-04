@@ -8,6 +8,10 @@ import (
 	"github.com/ultiledger/go-ultiledger/db"
 )
 
+var (
+	ErrAccountNotExist = errors.New("account not exist")
+)
+
 // Operation for creating a new account.
 type CreateAccount struct {
 	AM           *account.Manager
@@ -19,7 +23,7 @@ type CreateAccount struct {
 }
 
 func (c *CreateAccount) Apply(dt db.Tx) error {
-	// validate parameters
+	// Sanity checks.
 	if c.SrcAccountID == c.DstAccountID {
 		return errors.New("src and dst account is the same")
 	}
@@ -27,7 +31,7 @@ func (c *CreateAccount) Apply(dt db.Tx) error {
 		return errors.New("init balance for dst account is zero")
 	}
 
-	// check whether the dst account exists
+	// Check whether the destination account exists.
 	dstAcc, err := c.AM.GetAccount(dt, c.DstAccountID)
 	if err != nil {
 		return fmt.Errorf("get dst account %s failed: %v", c.DstAccountID, err)
@@ -36,13 +40,16 @@ func (c *CreateAccount) Apply(dt db.Tx) error {
 		return errors.New("dst account already exists")
 	}
 
-	// get src account
+	// Get source account.
 	srcAcc, err := c.AM.GetAccount(dt, c.SrcAccountID)
 	if err != nil {
 		return fmt.Errorf("get src account %s failed: %v", c.SrcAccountID, err)
 	}
+	if srcAcc == nil {
+		return ErrAccountNotExist
+	}
 
-	// check src account has enough ULUs
+	// Check source account has enough ULU.
 	if srcAcc.Balance < c.Balance {
 		return errors.New("src account is underfund")
 	}
@@ -51,14 +58,14 @@ func (c *CreateAccount) Apply(dt db.Tx) error {
 		return errors.New("init balance is smaller than base reserve")
 	}
 
-	// update the src account
+	// Update the source account.
 	srcAcc.Balance -= c.Balance
 	err = c.AM.SaveAccount(dt, srcAcc)
 	if err != nil {
 		return fmt.Errorf("update account %s failed: %v", c.SrcAccountID, err)
 	}
 
-	// create the dst account
+	// Create the destination account.
 	err = c.AM.CreateAccount(dt, c.DstAccountID, c.Balance, c.SrcAccountID, c.LedgerSeqNum)
 	if err != nil {
 		return fmt.Errorf("create account %s failed: %v", c.DstAccountID, err)

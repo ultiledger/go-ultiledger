@@ -37,6 +37,9 @@ func (of *Offer) Apply(dt db.Tx) error {
 	if err != nil {
 		return fmt.Errorf("get account failed: %v", err)
 	}
+	if acc == nil {
+		return ErrAccountNotExist
+	}
 
 	sellTrust, buyTrust, err := of.loadTrust(dt)
 	if err != nil {

@@ -116,6 +116,9 @@ func (pp *PathPayment) Apply(dt db.Tx) error {
 	if err != nil {
 		return fmt.Errorf("get dst account failed: %v", err)
 	}
+	if dstAccount == nil {
+		return ErrAccountNotExist
+	}
 
 	if asset.AssetType == ultpb.AssetType_NATIVE {
 		if err := pp.AM.UpdateBalance(dstAccount, amount); err != nil {
@@ -125,9 +128,12 @@ func (pp *PathPayment) Apply(dt db.Tx) error {
 			return fmt.Errorf("save account failed: %v", err)
 		}
 	} else {
-		_, err := pp.AM.GetAccount(dt, asset.Issuer)
+		issuer, err := pp.AM.GetAccount(dt, asset.Issuer)
 		if err != nil {
 			return fmt.Errorf("get asset issuer failed: %v", err)
+		}
+		if issuer == nil {
+			return ErrAccountNotExist
 		}
 
 		trust, err := pp.AM.GetTrust(dt, pp.DstAccountID, asset)
@@ -155,9 +161,12 @@ func (pp *PathPayment) Apply(dt db.Tx) error {
 		}
 		// Check whether asset issuer exists.
 		if path[i].AssetType != ultpb.AssetType_NATIVE {
-			_, err := pp.AM.GetAccount(dt, path[i].Issuer)
+			issuer, err := pp.AM.GetAccount(dt, path[i].Issuer)
 			if err != nil {
 				return fmt.Errorf("get issuer account failed: %v", err)
+			}
+			if issuer == nil {
+				return ErrAccountNotExist
 			}
 		}
 		// Exchange assets.
@@ -185,6 +194,9 @@ func (pp *PathPayment) Apply(dt db.Tx) error {
 		if err != nil {
 			return fmt.Errorf("load source account failed: %v", err)
 		}
+		if srcAccount == nil {
+			return ErrAccountNotExist
+		}
 		if err := pp.AM.UpdateBalance(srcAccount, -amount); err != nil {
 			return err
 		}
@@ -192,9 +204,12 @@ func (pp *PathPayment) Apply(dt db.Tx) error {
 			return err
 		}
 	} else {
-		_, err := pp.AM.GetAccount(dt, asset.Issuer)
+		issuer, err := pp.AM.GetAccount(dt, asset.Issuer)
 		if err != nil {
 			return fmt.Errorf("get asset issuer failed: %v", err)
+		}
+		if issuer == nil {
+			return ErrAccountNotExist
 		}
 		trust, err := pp.AM.GetTrust(dt, pp.SrcAccountID, asset)
 		if err != nil {

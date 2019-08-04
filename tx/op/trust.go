@@ -35,7 +35,7 @@ func (t *Trust) Apply(dt db.Tx) error {
 		return fmt.Errorf("get src account %s failed: %v", t.SrcAccountID, err)
 	}
 	if srcAcc == nil {
-		return fmt.Errorf("src account %s not exist", t.SrcAccountID)
+		return ErrAccountNotExist
 	}
 
 	if trust == nil { // New trust.
@@ -48,7 +48,7 @@ func (t *Trust) Apply(dt db.Tx) error {
 			return fmt.Errorf("get issuer %s account failed: %v", t.Asset.Issuer, err)
 		}
 		if issuerAcc == nil {
-			return fmt.Errorf("issuer %s account not exists", t.Asset.Issuer)
+			return ErrAccountNotExist
 		}
 		// Increase entry count of source account.
 		err = t.AM.UpdateEntryCount(srcAcc, int32(1))
