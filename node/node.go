@@ -2,7 +2,6 @@ package node
 
 import (
 	"net"
-	"strings"
 	"time"
 
 	b58 "github.com/mr-tron/base58/base58"
@@ -59,17 +58,7 @@ type Node struct {
 
 // NewNode creates a Node which controls all the sub components.
 func NewNode(conf *Config) *Node {
-	// get outbound IP
-	conn, err := net.Dial("udp", "8.8.8.8:80")
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer conn.Close()
-	netAddr := conn.LocalAddr().(*net.UDPAddr)
-
-	log.Infof("local IP is: %s", netAddr.String())
-
-	addr := strings.Split(netAddr.String(), ":")[0] + ":" + conf.Port
+	addr := conf.NetworkAddr
 	nodeID := conf.NodeID
 	role := conf.Role
 	seed := conf.Seed
@@ -277,7 +266,7 @@ func (n *Node) eventLoop() {
 // ServeNode starts a listener on the port and starts to accept external requests.
 func (n *Node) serveNode() {
 	// Register rpc service and start the ULTNode server.
-	listener, err := net.Listen("tcp", n.config.Port)
+	listener, err := net.Listen("tcp", n.config.NetworkAddr)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -285,7 +274,7 @@ func (n *Node) serveNode() {
 	s := grpc.NewServer()
 	rpcpb.RegisterNodeServer(s, n.server)
 
-	log.Infof("start to serve gRPC server on %s", n.config.Port)
+	log.Infof("start to serve gRPC server on %s", n.config.NetworkAddr)
 	go s.Serve(listener)
 
 	for {

@@ -17,8 +17,8 @@ type Config struct {
 	Role string
 	// Network ID hash in base58 encoded format.
 	NetworkID string
-	// Listen port of server.
-	Port string
+	// Listen address of the server.
+	NetworkAddr string
 	// Addresses of initial peers.
 	Peers []string
 	// Maximum number of peers to connect.
@@ -44,7 +44,7 @@ func NewConfig(v *viper.Viper) (*Config, error) {
 	if v.GetString("network_id") == "" {
 		return nil, errors.New("network ID is missing")
 	}
-	if v.GetString("port") == "" {
+	if v.GetString("network_addr") == "" {
 		return nil, errors.New("network port is missing")
 	}
 	if v.GetString("node_id") == "" {
@@ -83,7 +83,7 @@ func NewConfig(v *viper.Viper) (*Config, error) {
 	config := Config{
 		Role:            v.GetString("role"),
 		NetworkID:       netIDStr,
-		Port:            v.GetString("port"),
+		NetworkAddr:     v.GetString("network_addr"),
 		Peers:           v.GetStringSlice("peers"),
 		NodeID:          v.GetString("node_id"),
 		Seed:            v.GetString("seed"),
