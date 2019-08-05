@@ -31,6 +31,8 @@ enum TxStatusCode {
 message TxStatus {
   TxStatusCode StatusCode = 1;
   string ErrorMessage = 2;
+  // The full information of the tx in pb format.
+  bytes Data = 3;
 }
 
 message HelloRequest {

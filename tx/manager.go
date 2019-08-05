@@ -451,27 +451,17 @@ func (tm *Manager) GetTxStatus(txKey string) (*rpcpb.TxStatus, error) {
 		return nil, err
 	}
 
-	return status, nil
-}
-
-// Get the tx.
-func (tm *Manager) GetTx(txKey string) (*ultpb.Tx, error) {
-	tx := &ultpb.Tx{}
-
-	b, err := tm.database.Get(tm.txBucket, []byte(txKey))
+	// Get the tx.
+	b, err = tm.database.Get(tm.txBucket, []byte(txKey))
 	if err != nil {
 		return nil, fmt.Errorf("get tx %s failed: %v", txKey, err)
 	}
 	if b == nil {
-		return nil, nil
+		log.Fatalf("tx is missing while tx status is present")
 	}
+	status.Data = b
 
-	err = pb.Unmarshal(b, tx)
-	if err != nil {
-		return nil, err
-	}
-
-	return tx, nil
+	return status, nil
 }
 
 // Update the status of tx.
