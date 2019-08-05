@@ -12,12 +12,6 @@ import (
 	"github.com/ultiledger/go-ultiledger/ultpb"
 )
 
-// TxStatus represents the status of current tx in node.
-type TxStatus struct {
-	StatusCode   types.TxStatusCode
-	ErrorMessage string
-}
-
 // GrpcClient manages the gRPC connections to ult servers and
 // works as a load balancer to the backend ult servers.
 type GrpcClient struct {
@@ -68,7 +62,7 @@ func (c *GrpcClient) SubmitTx(txKey string, signature string, data []byte) error
 
 // QueryTx queries the tx status from ult servers and return current
 // tx status.
-func (c *GrpcClient) QueryTx(txKey string) (*TxStatus, error) {
+func (c *GrpcClient) QueryTx(txKey string) (*types.TxStatus, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(time.Second))
 	defer cancel()
 
@@ -81,7 +75,7 @@ func (c *GrpcClient) QueryTx(txKey string) (*TxStatus, error) {
 		return nil, err
 	}
 
-	status := &TxStatus{
+	status := &types.TxStatus{
 		ErrorMessage: resp.TxStatus.ErrorMessage,
 	}
 	switch resp.TxStatus.StatusCode {
@@ -97,6 +91,14 @@ func (c *GrpcClient) QueryTx(txKey string) (*TxStatus, error) {
 		status.StatusCode = types.Failed
 	default:
 		status.StatusCode = types.Unknown
+	}
+
+	if len(resp.TxStatus.Data) > 0 {
+		tx, err := ultpb.DecodeTx(resp.TxStatus.Data)
+		if err != nil {
+			return nil, fmt.Errorf("decode tx failed: %v", err)
+		}
+		status.Tx = tx
 	}
 
 	return status, nil

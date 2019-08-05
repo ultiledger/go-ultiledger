@@ -1,5 +1,9 @@
 package types
 
+import (
+	"github.com/ultiledger/go-ultiledger/ultpb"
+)
+
 // TxStatusCode represents the status of a tx in node.
 // Each tx will first go through some preliminary checks
 // which we call them admission checks. Only after the tx
@@ -39,4 +43,11 @@ func (ts TxStatusCode) String() string {
 		return "unknown"
 	}
 	return ""
+}
+
+// TxStatus represents the status of current tx in node.
+type TxStatus struct {
+	StatusCode   TxStatusCode
+	ErrorMessage string
+	Tx           *ultpb.Tx
 }
