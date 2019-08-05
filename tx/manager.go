@@ -78,6 +78,7 @@ type Manager struct {
 
 	database db.Database
 	bucket   string
+	txBucket string
 
 	seed string
 
@@ -112,6 +113,7 @@ func NewManager(ctx *ManagerContext) *Manager {
 		networkID:   ctx.NetworkID,
 		database:    ctx.Database,
 		bucket:      "TXSTATUS",
+		txBucket:    "TX",
 		seed:        ctx.Seed,
 		baseReserve: ctx.BaseReserve,
 		am:          ctx.AM,
@@ -123,9 +125,13 @@ func NewManager(ctx *ManagerContext) *Manager {
 	}
 	err := tm.database.NewBucket(tm.bucket)
 	if err != nil {
+		log.Fatalf("create tx status bucket failed: %v", err)
+	}
+	err = tm.database.NewBucket(tm.txBucket)
+	if err != nil {
 		log.Fatalf("create tx bucket failed: %v", err)
 	}
-	cache, err := lru.New(1000)
+	cache, err := lru.New(100)
 	if err != nil {
 		log.Fatalf("create tx status LRU cache failed: %v", err)
 	}
@@ -206,6 +212,17 @@ func (tm *Manager) AddTx(txKey string, tx *ultpb.Tx) error {
 	tm.rwm.Unlock()
 
 	tm.txSet.Add(txKey)
+
+	// Save the tx in db.
+	b, err := ultpb.Encode(tx)
+	if err != nil {
+		return fmt.Errorf("encode tx failed: %v", err)
+	}
+
+	err = tm.database.Put(tm.txBucket, []byte(txKey), b)
+	if err != nil {
+		return fmt.Errorf("save tx in db failed: %v", err)
+	}
 
 	// Update tx status.
 	status := &rpcpb.TxStatus{
@@ -435,6 +452,26 @@ func (tm *Manager) GetTxStatus(txKey string) (*rpcpb.TxStatus, error) {
 	}
 
 	return status, nil
+}
+
+// Get the tx.
+func (tm *Manager) GetTx(txKey string) (*ultpb.Tx, error) {
+	tx := &ultpb.Tx{}
+
+	b, err := tm.database.Get(tm.txBucket, []byte(txKey))
+	if err != nil {
+		return nil, fmt.Errorf("get tx %s failed: %v", txKey, err)
+	}
+	if b == nil {
+		return nil, nil
+	}
+
+	err = pb.Unmarshal(b, tx)
+	if err != nil {
+		return nil, err
+	}
+
+	return tx, nil
 }
 
 // Update the status of tx.
