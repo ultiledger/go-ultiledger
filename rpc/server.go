@@ -198,7 +198,7 @@ func (s *NodeServer) Hello(ctx context.Context, req *rpcpb.HelloRequest) (*rpcpb
 		log.Errorf("add peer to peer manager failed: %v", err)
 	}
 
-	grpc.SendHeader(ctx, metadata.Pairs("Addr", s.addr, "NodeID", s.nodeID))
+	grpc.SendHeader(ctx, metadata.Pairs("addr", s.addr, "nodeid", s.nodeID))
 
 	return resp, nil
 }
