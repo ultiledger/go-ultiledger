@@ -62,7 +62,7 @@ func NewManager(ps []string, networkID string, addr string, nodeID string, maxPe
 		networkID:    networkID,
 		addr:         addr,
 		nodeID:       nodeID,
-		metadata:     metadata.Pairs(addr, nodeID),
+		metadata:     metadata.Pairs("addr", addr, "nodeid", nodeID),
 		maxPeers:     maxPeers,
 		initPeers:    ps,
 		pendingPeers: make(map[string]struct{}),

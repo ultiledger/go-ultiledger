@@ -39,5 +39,5 @@ func Hello(client rpcpb.NodeClient, md metadata.MD, networkID string) (string, s
 		return "", "", errors.New("empty peerip or nodeid")
 	}
 
-	return header.Get("Addr")[0], header.Get("NodeID")[0], nil
+	return header.Get("addr")[0], header.Get("nodeid")[0], nil
 }
