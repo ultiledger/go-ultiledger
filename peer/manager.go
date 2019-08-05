@@ -150,7 +150,7 @@ func (pm *Manager) AddPeerAddr(addr string) error {
 
 // Connects the remote peer with provided network address.
 func (pm *Manager) connectPeer(addr string) (*Peer, error) {
-	conn, err := grpc.Dial(addr, grpc.WithInsecure(), grpc.WithBlock(), grpc.WithTimeout(1*time.Second))
+	conn, err := grpc.Dial(addr, grpc.WithInsecure(), grpc.WithBlock(), grpc.WithTimeout(3*time.Second))
 	if err != nil {
 		return nil, err
 	}
@@ -162,6 +162,14 @@ func (pm *Manager) connectPeer(addr string) (*Peer, error) {
 		client:   client,
 		conn:     conn,
 	}
+	// Healthcheck the peer and save the node id.
+	remoteAddr, nodeID, err := rpc.Hello(p.client, p.metadata, pm.networkID)
+	if err != nil {
+		p.Close()
+		return nil, err
+	}
+	p.Addr = remoteAddr
+	p.NodeID = nodeID
 	return p, nil
 }
 
@@ -183,17 +191,7 @@ func (pm *Manager) connect() {
 					log.Errorf("connect to peer %s failed: %v", addr, err)
 					continue
 				}
-				// Healthcheck the peer and save the node id.
-				remoteAddr, nodeID, err := rpc.Hello(p.client, p.metadata, pm.networkID)
-				if err != nil {
-					log.Errorf("say hello to peer %s failed: %v", addr, err)
-					// Save unhealthy peers for later reconnect.
-					pm.unhealthyPeers = append(pm.unhealthyPeers, addr)
-					p.Close()
-					continue
-				}
-				p.Addr = remoteAddr // TODO(bobonovski) check whether the dial IP is the same as the response IP?
-				p.NodeID = nodeID
+				log.Infow("connected to peer", "addr", p.Addr)
 
 				delete(pm.pendingPeers, addr)
 

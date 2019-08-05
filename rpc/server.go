@@ -119,6 +119,7 @@ func NewNodeServer(ctx *ServerContext) *NodeServer {
 		networkID:     ctx.NetworkID,
 		addr:          ctx.Addr,
 		nodeID:        ctx.NodeID,
+		nodeKey:       make(map[string]*crypto.ULTKey),
 		seed:          ctx.Seed,
 		peerFuture:    ctx.PeerFuture,
 		txFuture:      ctx.TxFuture,
@@ -185,7 +186,6 @@ func (s *NodeServer) Hello(ctx context.Context, req *rpcpb.HelloRequest) (*rpcpb
 	if err != nil {
 		return resp, status.Error(codes.InvalidArgument, "decode nodeid to crypto key failed")
 	}
-	log.Infof("%+v", k)
 	if k.Code != crypto.KeyTypeNodeID {
 		return resp, status.Error(codes.InvalidArgument, "invalid nodeid key type")
 	}

@@ -662,7 +662,7 @@ func (d *Decree) recvBallot(stmt *Statement) error {
 		return errors.New("ballot indices are incompatible")
 	}
 
-	log.Infow("recv ballot", "nodeID", stmt.NodeID, "decreeIdx", stmt.Index)
+	log.Debugw("recv ballot", "nodeID", stmt.NodeID, "decreeIdx", stmt.Index)
 
 	// Skip the statement if it is old.
 	if s, ok := d.ballots[stmt.NodeID]; ok {

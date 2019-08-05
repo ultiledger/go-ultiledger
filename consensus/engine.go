@@ -333,11 +333,11 @@ func (e *Engine) broadcastStatement(stmt *ultpb.Statement) error {
 	metadata := e.pm.GetMetadata()
 
 	if len(clients) == 0 {
-		log.Warn("there are no live clients for broadcast")
+		log.Debug("there are no live clients for broadcast")
 		return nil
 	}
 
-	log.Infof("get %d live clients for broadcast statement", len(clients))
+	log.Infof("get %d live clients for broadcasting", len(clients))
 
 	payload, err := ultpb.Encode(stmt)
 	if err != nil {
