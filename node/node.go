@@ -21,7 +21,7 @@ import (
 	"github.com/ultiledger/go-ultiledger/tx"
 )
 
-// Node is the central controller for ultiledger.
+// Node is the central controller for Ultiledger network.
 type Node struct {
 	database db.Database
 
@@ -140,18 +140,25 @@ func NewNode(conf *Config) *Node {
 
 	// Create the local node.
 	node := &Node{
-		config:    conf,
-		database:  database,
-		server:    nodeServer,
-		pm:        pm,
-		lm:        lm,
-		am:        am,
-		tm:        tm,
-		engine:    engine,
-		addr:      addr,
-		nodeID:    nodeID,
-		startTime: time.Now().Unix(),
-		stopChan:  stopChan,
+		config:       conf,
+		database:     database,
+		server:       nodeServer,
+		pm:           pm,
+		lm:           lm,
+		am:           am,
+		tm:           tm,
+		engine:       engine,
+		addr:         addr,
+		nodeID:       nodeID,
+		startTime:    time.Now().Unix(),
+		txFuture:     txFuture,
+		peerFuture:   peerFuture,
+		stmtFuture:   stmtFuture,
+		ledgerFuture: ledgerFuture,
+		quorumFuture: quorumFuture,
+		txsetFuture:  txsetFuture,
+		txsFuture:    txsFuture,
+		stopChan:     stopChan,
 	}
 
 	return node
@@ -159,22 +166,22 @@ func NewNode(conf *Config) *Node {
 
 // Start triggers sub goroutines to do the sub tasks.
 func (n *Node) Start(newnode bool) {
-	// start node server
+	// Start node server.
 	go n.serveNode()
 
-	// start node server event loop
+	// Start event loop.
 	go n.eventLoop()
 
-	// start peer manager
+	// Start the peer manager.
 	n.pm.Start()
 
-	// start consensus engine
+	// Start the consensus engine.
 	n.engine.Start()
 
-	// start ledger manager
+	// Start the ledger manager.
 	n.lm.Start()
 
-	// start tx manager
+	// Start the tx manager.
 	n.tm.Start()
 
 	if newnode {

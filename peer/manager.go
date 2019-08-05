@@ -77,6 +77,29 @@ func NewManager(ps []string, networkID string, addr string, nodeID string, maxPe
 
 func (pm *Manager) Start() {
 	go func() {
+		go pm.connect()
+
+		go func() {
+			for {
+				select {
+				case p := <-pm.addChan:
+					pm.peerLock.Lock()
+					pm.livePeers[p.Addr] = p
+					pm.nodeIDs.Add(p.NodeID)
+					pm.peerLock.Unlock()
+				case p := <-pm.deleteChan: // Only delete connected peers.
+					pm.peerLock.Lock()
+					if _, ok := pm.livePeers[p.Addr]; ok {
+						delete(pm.livePeers, p.Addr)
+						pm.nodeIDs.Remove(p.NodeID)
+					}
+					pm.peerLock.Unlock()
+				case <-pm.stopChan:
+					break
+				}
+			}
+		}()
+
 		// Connect to inital peers.
 		for _, addr := range pm.initPeers {
 			p, err := pm.connectPeer(addr)
@@ -86,27 +109,6 @@ func (pm *Manager) Start() {
 				continue
 			}
 			pm.livePeers[addr] = p
-		}
-
-		go pm.connect()
-
-		for {
-			select {
-			case p := <-pm.addChan:
-				pm.peerLock.Lock()
-				pm.livePeers[p.Addr] = p
-				pm.nodeIDs.Add(p.NodeID)
-				pm.peerLock.Unlock()
-			case p := <-pm.deleteChan: // Only delete connected peers.
-				pm.peerLock.Lock()
-				if _, ok := pm.livePeers[p.Addr]; ok {
-					delete(pm.livePeers, p.Addr)
-					pm.nodeIDs.Remove(p.NodeID)
-				}
-				pm.peerLock.Unlock()
-			case <-pm.stopChan:
-				break
-			}
 		}
 	}()
 }
@@ -175,7 +177,7 @@ func (pm *Manager) connectPeer(addr string) (*Peer, error) {
 
 // Connect to new peers periodically.
 func (pm *Manager) connect() {
-	ticker := time.NewTicker(3 * time.Second)
+	ticker := time.NewTicker(1 * time.Second)
 	for {
 		select {
 		case <-ticker.C:
