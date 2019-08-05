@@ -176,22 +176,23 @@ func (s *NodeServer) Hello(ctx context.Context, req *rpcpb.HelloRequest) (*rpcpb
 	if !ok {
 		return resp, status.Error(codes.NotFound, "retrieve incoming context failed")
 	}
-	if len(md.Get("Addr")) == 0 || len(md.Get("NodeID")) == 0 {
+	if len(md.Get("addr")) == 0 || len(md.Get("nodeid")) == 0 {
 		return resp, status.Error(codes.NotFound, "network address or nodeid is missing")
 	}
 
 	// Validate node id of the peer.
-	k, err := crypto.DecodeKey(md.Get("NodeID")[0])
+	k, err := crypto.DecodeKey(md.Get("nodeid")[0])
 	if err != nil {
 		return resp, status.Error(codes.InvalidArgument, "decode nodeid to crypto key failed")
 	}
+	log.Infof("%+v", k)
 	if k.Code != crypto.KeyTypeNodeID {
 		return resp, status.Error(codes.InvalidArgument, "invalid nodeid key type")
 	}
-	s.nodeKey[md.Get("Addr")[0]] = k
+	s.nodeKey[md.Get("addr")[0]] = k
 
 	// Add the peer address.
-	f := &future.Peer{Addr: md.Get("Addr")[0]}
+	f := &future.Peer{Addr: md.Get("addr")[0]}
 	f.Init()
 	s.peerFuture <- f
 	if err := f.Error(); err != nil {

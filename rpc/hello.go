@@ -35,7 +35,7 @@ func Hello(client rpcpb.NodeClient, md metadata.MD, networkID string) (string, s
 		}
 		return "", "", err
 	}
-	if len(header.Get("Addr")) == 0 || len(header.Get("NodeID")) == 0 {
+	if len(header.Get("addr")) == 0 || len(header.Get("nodeid")) == 0 {
 		return "", "", errors.New("empty peerip or nodeid")
 	}
 
