@@ -45,7 +45,7 @@ func NewConfig(v *viper.Viper) (*Config, error) {
 		return nil, errors.New("network ID is missing")
 	}
 	if v.GetString("network_addr") == "" {
-		return nil, errors.New("network port is missing")
+		return nil, errors.New("network address is missing")
 	}
 	if v.GetString("node_id") == "" {
 		return nil, errors.New("node ID is empty")
