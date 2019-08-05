@@ -406,8 +406,14 @@ func (lm *Manager) RecoverFromCheckpoint() error {
 	if err != nil {
 		return fmt.Errorf("get ledger checkpoint failed: %v", err)
 	}
+
+	// Set the ledger to the state of NotSynced as we do not
+	// know the current states of the consensus yet.
+	lm.ledgerState = LedgerStateNotSynced
+
+	// Ledger checkpoint could be empty for a joining node.
 	if b == nil {
-		return errors.New("ledger checkpoint not exist")
+		return nil
 	}
 	checkpoint, err := ultpb.DecodeLedgerCheckpoint(b)
 	if err != nil {
@@ -457,10 +463,6 @@ func (lm *Manager) RecoverFromCheckpoint() error {
 	lm.prevLedgerHeaderHash = checkpoint.PrevLedgerHeaderHash
 	lm.currLedgerHeader = checkpoint.CurrLedgerHeader
 	lm.currLedgerHeaderHash = checkpoint.CurrLedgerHeaderHash
-
-	// Set the ledger to the state of NotSynced as we do not
-	// know the current states of the consensus yet.
-	lm.ledgerState = LedgerStateNotSynced
 
 	return nil
 }

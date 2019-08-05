@@ -262,6 +262,10 @@ func (e *Engine) Start() {
 				if e.role != "validator" {
 					continue
 				}
+				// Only node with synced ledger could propose new values.
+				if !e.lm.LedgerSynced() {
+					continue
+				}
 				err := e.Propose()
 				if err != nil {
 					log.Errorf("propose new consensus value failed: %v", err)
