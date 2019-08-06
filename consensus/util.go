@@ -359,6 +359,7 @@ func simplifyQuorum(quorum *Quorum, nodeID string) *Quorum {
 		validators = append(validators, v)
 	}
 	q.Validators = validators
+	q.Threshold = quorum.Threshold
 	// Remove input node from the nested quorums.
 	for i, _ := range quorum.NestQuorums {
 		q.NestQuorums = append(q.NestQuorums, simplifyQuorum(quorum.NestQuorums[i], nodeID))
