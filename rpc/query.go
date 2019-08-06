@@ -111,6 +111,10 @@ func QueryLedger(clients []rpcpb.NodeClient, md metadata.MD, payload []byte, sig
 // Query needed information from peers iteratively
 // and return immediately after receiving the info.
 func query(clients []rpcpb.NodeClient, md metadata.MD, req *rpcpb.QueryRequest) (pb.Message, error) {
+	if len(clients) == 0 {
+		return nil, errors.New("no live clients")
+	}
+
 	var message pb.Message
 	var err error
 	var b []byte
@@ -150,7 +154,7 @@ func query(clients []rpcpb.NodeClient, md metadata.MD, req *rpcpb.QueryRequest) 
 		return message, nil
 	}
 
-	return nil, errors.New("requested information not found")
+	return nil, errors.New("resource not found")
 }
 
 func queryPeer(client rpcpb.NodeClient, md metadata.MD, req *rpcpb.QueryRequest) ([]byte, error) {
