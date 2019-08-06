@@ -2,7 +2,6 @@ package crypto
 
 import (
 	"crypto/sha256"
-	"encoding/binary"
 
 	b58 "github.com/mr-tron/base58/base58"
 )
@@ -18,10 +17,12 @@ func SHA256HashBytes(b []byte) [32]byte {
 	return sha256.Sum256(b)
 }
 
-// Compute sha256 checksum and generate a uint64 number using
-// the first 8 bytes of the byte array.
+// Compute sha256 checksum and generate a uint64 number.
 func SHA256HashUint64(b []byte) uint64 {
 	bytes := sha256.Sum256(b)
-	num := binary.BigEndian.Uint64(bytes[0:8])
-	return num
+	result := uint64(0)
+	for i := 0; i < len(bytes); i++ {
+		result = (result << 8) | uint64(bytes[i])
+	}
+	return result
 }

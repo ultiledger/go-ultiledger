@@ -320,7 +320,7 @@ func (d *Decree) getNodeHash(nodeID string, isPriority bool) uint64 {
 	}
 	binary.PutUvarint(buf, uint64(d.nominationRound))
 	buf = append(buf, []byte(nodeID)...)
-	// Compute the SHA256 hash and use the first 8 bytes as the result.
+
 	result := crypto.SHA256HashUint64(buf)
 	return result
 }
