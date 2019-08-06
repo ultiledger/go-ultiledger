@@ -77,6 +77,17 @@ func NewManager(ps []string, networkID string, addr string, nodeID string, maxPe
 
 func (pm *Manager) Start() {
 	go func() {
+		// Connect to inital peers.
+		for _, addr := range pm.initPeers {
+			p, err := pm.connectPeer(addr)
+			if err != nil {
+				log.Errorf("connect to peer %s failed: %v", addr, err)
+				pm.pendingPeers[addr] = struct{}{}
+				continue
+			}
+			pm.livePeers[addr] = p
+		}
+
 		go pm.connect()
 
 		go func() {
@@ -99,17 +110,6 @@ func (pm *Manager) Start() {
 				}
 			}
 		}()
-
-		// Connect to inital peers.
-		for _, addr := range pm.initPeers {
-			p, err := pm.connectPeer(addr)
-			if err != nil {
-				log.Errorf("connect to peer %s failed: %v", addr, err)
-				pm.pendingPeers[addr] = struct{}{}
-				continue
-			}
-			pm.livePeers[addr] = p
-		}
 	}()
 }
 
