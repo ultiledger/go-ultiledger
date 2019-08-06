@@ -404,12 +404,12 @@ func (e *Engine) queryTxSet(txsetHash string) (*TxSet, error) {
 	}
 
 	// Check the compatibility of txset and its hash.
-	hash, err := ultpb.SHA256Hash(txset)
+	hash, err := ultpb.GetTxSetKey(txset)
 	if err != nil {
 		return nil, fmt.Errorf("compute txset hash failed: %v", err)
 	}
 	if hash != txsetHash {
-		return nil, fmt.Errorf("hash of txset is incompatible to quorumhash")
+		return nil, fmt.Errorf("hash of txset is incompatible")
 	}
 
 	return txset, nil
