@@ -434,12 +434,14 @@ func (lm *Manager) RecoverFromCheckpoint() error {
 	if checkpoint.PrevLedgerHeader == nil && checkpoint.LedgerHeaderCount != 1 {
 		return errors.New("PrevLedgerHeader is missing")
 	}
-	prevHash, err := ultpb.GetLedgerHeaderKey(checkpoint.PrevLedgerHeader)
-	if err != nil {
-		return fmt.Errorf("get prev ledger header key failed: %v", err)
-	}
-	if prevHash != checkpoint.PrevLedgerHeaderHash {
-		return errors.New("incompatible prev ledger hash")
+	if checkpoint.LargestConsensusIndex > 1 {
+		prevHash, err := ultpb.GetLedgerHeaderKey(checkpoint.PrevLedgerHeader)
+		if err != nil {
+			return fmt.Errorf("get prev ledger header key failed: %v", err)
+		}
+		if prevHash != checkpoint.PrevLedgerHeaderHash {
+			return errors.New("incompatible prev ledger hash")
+		}
 	}
 	currHash, err := ultpb.GetLedgerHeaderKey(checkpoint.CurrLedgerHeader)
 	if err != nil {
