@@ -193,7 +193,7 @@ func (v *Validator) RecvTxSet(txsetHash string, txset *TxSet) error {
 	return nil
 }
 
-// Get the txset from ledger manager.
+// Get the txset from the ledger manager.
 func (v *Validator) GetTxSet(txsetHash string) (*TxSet, error) {
 	txset, err := v.lm.GetTxSet(txsetHash)
 	if err != nil {

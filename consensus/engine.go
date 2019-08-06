@@ -239,7 +239,7 @@ func (e *Engine) Start() {
 					continue
 				}
 			case ext := <-e.externalizeChan:
-				log.Infow("received ext value", "index", ext.Index, "value", ext.Value)
+				log.Infow("recv ext value", "index", ext.Index, "value", ext.Value)
 				err := e.Externalize(ext.Index, ext.Value)
 				if err != nil {
 					log.Errorf("externalize value failed: %v", err, "index", ext.Index, "value", ext.Value)
