@@ -320,6 +320,8 @@ func (s *NodeServer) Query(ctx context.Context, req *rpcpb.QueryRequest) (*rpcpb
 		return resp, status.Errorf(codes.InvalidArgument, "input validation failed: %v", err)
 	}
 
+	log.Debugf("recv query request: %+v", req)
+
 	switch req.MsgType {
 	case rpcpb.QueryMsgType_QUORUM:
 		qf := &future.Quorum{QuorumHash: string(req.Data)}
@@ -379,6 +381,8 @@ func (s *NodeServer) Notify(ctx context.Context, req *rpcpb.NotifyRequest) (*rpc
 	if err := s.validate(ctx, req.Data, req.Signature, req.NetworkID); err != nil {
 		return resp, status.Errorf(codes.InvalidArgument, "input validation failed: %v", err)
 	}
+
+	log.Debugf("recv notify request: %+v", req)
 
 	switch req.MsgType {
 	case rpcpb.NotifyMsgType_TX:

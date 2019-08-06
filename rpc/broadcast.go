@@ -100,7 +100,7 @@ type task struct {
 	req      *rpcpb.NotifyRequest
 }
 
-// Prepare broadcast task for concurrent processing
+// Prepare broadcast tasks for concurrent processing.
 func prepareTask(done <-chan bool, clients []rpcpb.NodeClient, md metadata.MD, req *rpcpb.NotifyRequest) <-chan *task {
 	taskChan := make(chan *task)
 	go func() {
@@ -115,6 +115,7 @@ func prepareTask(done <-chan bool, clients []rpcpb.NodeClient, md metadata.MD, r
 			case taskChan <- t:
 			}
 		}
+		close(taskChan)
 	}()
 	return taskChan
 }
@@ -147,6 +148,7 @@ func runTask(done <-chan bool, taskChan <-chan *task) <-chan *rpcpb.NotifyRespon
 				taskPool.Put(t)
 			}
 		}
+		close(responseChan)
 	}()
 	return responseChan
 }
