@@ -64,6 +64,7 @@ func QueryTxSet(clients []rpcpb.NodeClient, md metadata.MD, payload []byte, sign
 	}
 
 	req := &rpcpb.QueryRequest{
+		NetworkID: networkID,
 		MsgType:   rpcpb.QueryMsgType_TXSET,
 		Data:      payload,
 		Signature: signature,
