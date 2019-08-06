@@ -6,6 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/ultiledger/go-ultiledger/crypto"
+	"github.com/ultiledger/go-ultiledger/log"
 	"github.com/ultiledger/go-ultiledger/ultpb"
 )
 
@@ -47,4 +48,13 @@ func TestLeaderUpdate(t *testing.T) {
 	// Test leader update.
 	d.updateRoundLeaders()
 	assert.Equal(t, 3, len(quorum.Validators))
+
+	// Get the histrogram of the leaders.
+	hist := make(map[string]int)
+	for i := 0; i < 100; i++ {
+		d.nominationRound = i
+		d.updateRoundLeaders()
+		hist[d.nominationLeaders[0]] += 1
+	}
+	log.Info(hist)
 }
