@@ -27,7 +27,7 @@ func GetTxKey(tx *Tx) (string, error) {
 
 // Hash txset and encode to txset ULTKey
 func GetTxSetKey(ts *TxSet) (string, error) {
-	// compute tx hashes
+	// Compute tx hashes.
 	var hashes []string
 	for _, tx := range ts.TxList {
 		txhash, err := SHA256Hash(tx)
@@ -37,11 +37,11 @@ func GetTxSetKey(ts *TxSet) (string, error) {
 		hashes = append(hashes, txhash)
 	}
 
-	// argsort by hash
+	// Argsort by hash.
 	hashSlice := util.NewStringSlice(false, hashes...)
 	sort.Sort(hashSlice)
 
-	// append all the hash to buffer
+	// Append all the hashes to the buffer.
 	buf := bytes.NewBuffer(nil)
 	b, err := b58.Decode(ts.PrevLedgerHash)
 	if err != nil {
@@ -58,7 +58,7 @@ func GetTxSetKey(ts *TxSet) (string, error) {
 		buf.Write(txb)
 	}
 
-	// encode to txset ULTKey
+	// Encode to txset ULTKey.
 	hash := crypto.SHA256HashBytes(buf.Bytes())
 	key := &crypto.ULTKey{
 		Hash: hash,
