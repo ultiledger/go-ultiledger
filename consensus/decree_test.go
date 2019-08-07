@@ -1,12 +1,12 @@
 package consensus
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 
 	"github.com/ultiledger/go-ultiledger/crypto"
-	"github.com/ultiledger/go-ultiledger/log"
 	"github.com/ultiledger/go-ultiledger/ultpb"
 )
 
@@ -27,9 +27,6 @@ func TestLeaderUpdate(t *testing.T) {
 		nodes = append(nodes, pk)
 	}
 
-	// Use the first node as the local node.
-	localNode := nodes[0]
-
 	// Create a quorum.
 	quorum := getTestFlatQuorum(nodes, 0.5)
 	assert.Equal(t, 3, len(quorum.Validators))
@@ -37,24 +34,34 @@ func TestLeaderUpdate(t *testing.T) {
 	// Get the quorum hash.
 	quorumHash, _ := ultpb.SHA256Hash(quorum)
 
-	// Create a decree.
-	d := &Decree{
-		index:      1,
-		nodeID:     localNode,
-		quorum:     quorum,
-		quorumHash: quorumHash,
+	// Create multiple decrees to simulate the decree of each node.
+	var decrees []*Decree
+	for i := 0; i < 3; i++ {
+		d := &Decree{
+			index:      1,
+			nodeID:     nodes[i],
+			quorum:     quorum,
+			quorumHash: quorumHash,
+		}
+		decrees = append(decrees, d)
 	}
 
-	// Test leader update.
-	d.updateRoundLeaders()
-	assert.Equal(t, 3, len(quorum.Validators))
-
-	// Get the histrogram of the leaders.
-	hist := make(map[string]int)
-	for i := 0; i < 100; i++ {
-		d.nominationRound = i
-		d.updateRoundLeaders()
-		hist[d.nominationLeaders[0]] += 1
+	// Get the histograms of the leaders.
+	var hists []map[string]int
+	for i := 0; i < 3; i++ {
+		hists = append(hists, make(map[string]int))
 	}
-	log.Info(hist)
+	for k := 0; k < 100; k++ {
+		for i := 0; i < 3; i++ {
+			decrees[i].nominationRound = k
+			decrees[i].updateRoundLeaders()
+			hists[i][decrees[i].nominationLeaders[0]] += 1
+		}
+	}
+	for i := 0; i < 3; i++ {
+		fmt.Printf("Leader histograms of node %s: \n", nodes[i])
+		for n, c := range hists[i] {
+			fmt.Printf("  %s %d\n", n, c)
+		}
+	}
 }

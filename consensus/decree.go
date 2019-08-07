@@ -270,7 +270,7 @@ func (d *Decree) updateRoundLeaders() {
 	// Update the leaders of current round.
 	d.nominationLeaders = leaders
 
-	log.Infof("updated round leaders: %v", d.nominationLeaders)
+	log.Debugf("updated round leaders: %v", d.nominationLeaders)
 }
 
 // Compute the priority of the node.
