@@ -565,7 +565,6 @@ func (lm *Manager) advanceLedger(seq uint64, prevHeaderHash string, txHash strin
 		TotalTokens:    GenesisTotalTokens,
 		BaseFee:        GenesisBaseFee,
 		BaseReserve:    GenesisBaseReserve,
-		CloseTime:      time.Now().Unix(),
 	}
 	b, err := ultpb.Encode(header)
 	if err != nil {
