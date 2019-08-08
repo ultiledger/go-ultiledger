@@ -158,7 +158,7 @@ func query(clients []rpcpb.NodeClient, md metadata.MD, req *rpcpb.QueryRequest) 
 
 func queryPeer(client rpcpb.NodeClient, md metadata.MD, req *rpcpb.QueryRequest) ([]byte, error) {
 	ctx := metadata.NewOutgoingContext(context.Background(), md)
-	ctx, cancel := context.WithTimeout(ctx, time.Duration(1*time.Second))
+	ctx, cancel := context.WithTimeout(ctx, time.Duration(time.Second))
 	defer cancel()
 
 	resp, err := client.Query(ctx, req)

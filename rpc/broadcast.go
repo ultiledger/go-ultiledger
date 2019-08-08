@@ -83,8 +83,8 @@ func BroadcastTx(clients []rpcpb.NodeClient, md metadata.MD, payload []byte, sig
 func broadcast(clients []rpcpb.NodeClient, md metadata.MD, req *rpcpb.NotifyRequest) error {
 	done := make(chan bool)
 	tasks := prepareTask(done, clients, md, req)
-	workers := make([]<-chan *rpcpb.NotifyResponse, 10) // hard code for now
-	for i := 0; i < 10; i++ {
+	workers := make([]<-chan *rpcpb.NotifyResponse, len(clients))
+	for i := 0; i < len(clients); i++ {
 		workers[i] = runTask(done, tasks)
 	}
 	for _ = range mergeResponse(done, workers...) {
@@ -127,8 +127,8 @@ func runTask(done <-chan bool, taskChan <-chan *task) <-chan *rpcpb.NotifyRespon
 		ctx := metadata.NewOutgoingContext(context.Background(), t.metadata)
 		ctx, cancel := context.WithTimeout(ctx, time.Duration(1*time.Second))
 		defer cancel()
-		// we still have to return the response even if
-		// error happend and in this case response is nil
+		// We still have to return the response even if
+		// error happend and in this case response is nil.
 		resp, err := t.client.Notify(ctx, t.req)
 		if err != nil {
 			st, ok := status.FromError(err)
@@ -144,7 +144,7 @@ func runTask(done <-chan bool, taskChan <-chan *task) <-chan *rpcpb.NotifyRespon
 			case <-done:
 				return
 			case responseChan <- notify(t):
-				// return task to pool after using
+				// Return task to pool for reusing.
 				taskPool.Put(t)
 			}
 		}

@@ -21,7 +21,7 @@ func Hello(client rpcpb.NodeClient, md metadata.MD, networkID string) (string, s
 	}
 
 	ctx := metadata.NewOutgoingContext(context.Background(), md)
-	ctx, cancel := context.WithTimeout(ctx, time.Duration(3*time.Second))
+	ctx, cancel := context.WithTimeout(ctx, time.Duration(time.Second))
 	defer cancel()
 
 	var header metadata.MD
