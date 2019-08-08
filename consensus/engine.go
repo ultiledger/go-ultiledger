@@ -191,6 +191,7 @@ func (e *Engine) Start() {
 					log.Errorf("broadcast statement failed: %v", err)
 					continue
 				}
+				log.Debugw("broadcast statement succeeded", "index", stmt.Index, "type", stmt.StatementType)
 			case txsetHash := <-e.txsetDownloadChan:
 				txset, err := e.queryTxSet(txsetHash)
 				if err != nil {
@@ -223,6 +224,7 @@ func (e *Engine) Start() {
 		for {
 			select {
 			case stmt := <-e.validator.Ready():
+				log.Debugw("recv ready statement", "nodeID", stmt.NodeID, "index", stmt.Index, "type", stmt.StatementType)
 				seq := e.lm.NextLedgerHeaderSeq()
 				// Skip old statement.
 				if stmt.Index < seq-e.maxDecrees {
@@ -237,6 +239,20 @@ func (e *Engine) Start() {
 					log.Errorf("received statement from validator failed: %v", err)
 					continue
 				}
+			case <-e.proposeTicker.C:
+				log.Debug("start to propose new value")
+				e.proposeChan <- struct{}{}
+			case <-e.stopChan:
+				log.Debug("stop internal events goroutine")
+				return
+			}
+		}
+	}()
+	// Goroutine for proposing a new consensus value and
+	// processing externalizd value.
+	go func() {
+		for {
+			select {
 			case ext := <-e.externalizeChan:
 				log.Infow("recv ext value", "index", ext.Index, "value", ext.Value)
 				err := e.Externalize(ext.Index, ext.Value)
@@ -244,17 +260,6 @@ func (e *Engine) Start() {
 					log.Errorf("externalize value failed: %v", err, "index", ext.Index, "value", ext.Value)
 					continue
 				}
-			case <-e.proposeTicker.C:
-				e.proposeChan <- struct{}{}
-			case <-e.stopChan:
-				return
-			}
-		}
-	}()
-	// Goroutine for proposing a new consensus value
-	go func() {
-		for {
-			select {
 			case <-e.proposeChan:
 				// Node without the role of "validator" cannot propose
 				// value for consensus.
@@ -332,11 +337,10 @@ func (e *Engine) broadcastStatement(stmt *ultpb.Statement) error {
 	metadata := e.pm.GetMetadata()
 
 	if len(clients) == 0 {
-		log.Debug("there are no live clients for broadcast")
-		return nil
+		return errors.New("there are no live clients")
 	}
 
-	log.Infof("get %d live clients for broadcasting", len(clients))
+	log.Debugf("get %d live clients for broadcasting", len(clients))
 
 	payload, err := ultpb.Encode(stmt)
 	if err != nil {

@@ -270,7 +270,7 @@ func (d *Decree) updateRoundLeaders() {
 	// Update the leaders of current round.
 	d.nominationLeaders = leaders
 
-	log.Debugf("updated round leaders: %v", d.nominationLeaders)
+	log.Debugw("round leaders updated", "index", d.index, "round", d.nominationRound, "leaders", d.nominationLeaders)
 }
 
 // Compute the priority of the node.
@@ -281,7 +281,7 @@ func (d *Decree) getNodePriority(quorum *Quorum, nodeID string) uint64 {
 	} else {
 		weight = d.getNodeWeight(quorum, nodeID)
 	}
-	if weight > 0 && d.getNodeHash(nodeID, false) <= weight {
+	if weight > 0 { //&& d.getNodeHash(nodeID, false) <= weight {
 		priority = d.getNodeHash(nodeID, true)
 		return priority
 	}
@@ -293,7 +293,7 @@ func (d *Decree) getNodeWeight(quorum *Quorum, nodeID string) uint64 {
 	var weight uint64
 	for _, v := range quorum.Validators {
 		if v == nodeID {
-			weight = uint64(float64(math.MaxInt64) * quorum.Threshold)
+			weight = uint64(math.Ceil(float64(math.MaxInt64) * quorum.Threshold))
 			return weight
 		}
 	}
@@ -621,6 +621,7 @@ func (d *Decree) combineCandidates() (string, error) {
 			continue
 		}
 		if ts.PrevLedgerHash != headerHash {
+			log.Info(ts.PrevLedgerHash, headerHash)
 			continue
 		}
 		if txset == nil || compareTxSet(txsetHash, txset, cv.TxSetHash, ts, ledger.GenesisBaseFee, hash) {
@@ -629,10 +630,14 @@ func (d *Decree) combineCandidates() (string, error) {
 		}
 	}
 
-	// Deep copy a new txset.
-	newTxSet := (pb.Clone(txset)).(*TxSet)
+	if txset == nil {
+		log.Fatal("txset is nil after candidate combination.")
+	}
 
 	// TODO(bobonovski) trim invalid tx
+
+	// Create a new tx set from the old one.
+	newTxSet := (pb.Clone(txset)).(*TxSet)
 
 	newTxSetHash, err := ultpb.GetTxSetKey(newTxSet)
 	if err != nil {
@@ -664,7 +669,7 @@ func (d *Decree) recvBallot(stmt *Statement) error {
 		return errors.New("ballot indices are incompatible")
 	}
 
-	log.Infow("recv ballot", "nodeID", stmt.NodeID, "decreeIdx", stmt.Index)
+	log.Infow("recv ballot", "nodeID", stmt.NodeID, "index", stmt.Index, "type", stmt.StatementType, "curr_phase", d.currentPhase)
 
 	// Skip the statement if it is old.
 	if s, ok := d.ballots[stmt.NodeID]; ok {
@@ -816,7 +821,7 @@ func (d *Decree) update() bool {
 			confirm := s.GetConfirm()
 			counters.Add(confirm.B.Counter)
 		case ultpb.StatementType_EXTERNALIZE:
-			counters.Add(math.MaxUint32)
+			counters.Add(uint32(math.MaxUint32))
 		default:
 			log.Fatal(ErrUnknownStmtType)
 		}
@@ -1151,6 +1156,7 @@ func (d *Decree) setConfirmPrepared(cb *Ballot, hb *Ballot) bool {
 
 	updated = d.updateBallotIfNeeded(hb) || updated
 	if updated {
+		log.Debug("confirm prepared ballot updated")
 		d.sendBallot()
 	}
 
@@ -1238,6 +1244,7 @@ func (d *Decree) setAcceptCommit(cb *Ballot, hb *Ballot) bool {
 	}
 
 	if updated {
+		log.Debug("accept commit ballot updated")
 		d.updateBallotIfNeeded(d.hBallot)
 		d.sendBallot()
 	}
@@ -1292,7 +1299,7 @@ func (d *Decree) getCommitCounters(b *Ballot) []uint32 {
 			if compatibleBallots(b, ext.B) {
 				counters.Add(ext.B.Counter)
 				counters.Add(ext.HC)
-				counters.Add(math.MaxUint32)
+				counters.Add(uint32(math.MaxUint32))
 			}
 		default:
 			log.Fatal(ErrUnknownStmtType)
@@ -1379,10 +1386,12 @@ func (d *Decree) setConfirmCommit(cb *Ballot, hb *Ballot) bool {
 	d.nominationStart = false
 
 	// Trigger externalization.
+	log.Debug("trigger externalization")
 	d.externalizeChan <- &ExternalizeValue{
 		Index: d.index,
 		Value: d.cBallot.Value,
 	}
+	log.Debug("confirm commit ballot updated")
 
 	return true
 }
@@ -1462,6 +1471,9 @@ func (d *Decree) updateBallotValue(b *Ballot) bool {
 
 // Update the current ballot.
 func (d *Decree) updateBallot(b *Ballot) {
+	if b == nil {
+		log.Fatal("cannot update ballot with nil ballot")
+	}
 	if d.currentPhase == BallotPhaseExternalize {
 		log.Fatal("should not update ballot in externalize phase")
 	}
@@ -1547,10 +1559,10 @@ func (d *Decree) validateBallot(stmt *Statement) error {
 
 	fromSelf := d.nodeID == stmt.NodeID
 
-	// Value set for checking validity of ballot value.
+	// Value set for checking validity of ballot values.
 	values := mapset.NewSet()
 
-	// Validate quorum from the statement.
+	// Validate the quorum from the statement.
 	quorum := d.getStatementQuorum(stmt)
 	if err := ValidateQuorum(quorum, 0, false); err != nil {
 		return fmt.Errorf("validate quorum failed: %v", err)
@@ -1575,7 +1587,7 @@ func (d *Decree) validateBallot(stmt *Statement) error {
 		if !cond {
 			return errors.New("prepare ballot counters are not in expected states")
 		}
-		if prepare.B.Counter > 0 {
+		if prepare.B != nil && prepare.B.Counter > 0 {
 			values.Add(prepare.B.Value)
 		}
 		if prepare.P != nil {
