@@ -1,7 +1,6 @@
 package peer
 
 import (
-	"errors"
 	"sync"
 	"time"
 
@@ -49,11 +48,7 @@ type Manager struct {
 	// Channel for stopping pending peers connection.
 	stopChan chan struct{}
 
-	// Channel for adding peer addr.
-	peerAddrChan chan string
-
 	// Channel for managing live peers.
-	addChan    chan *Peer
 	deleteChan chan *Peer
 }
 
@@ -69,8 +64,6 @@ func NewManager(ps []string, networkID string, addr string, nodeID string, maxPe
 		livePeers:    make(map[string]*Peer),
 		nodeIDs:      mapset.NewSet(),
 		stopChan:     make(chan struct{}),
-		peerAddrChan: make(chan string, 100),
-		addChan:      make(chan *Peer),
 		deleteChan:   make(chan *Peer),
 	}
 }
@@ -81,11 +74,6 @@ func (pm *Manager) Start() {
 	go func() {
 		for {
 			select {
-			case p := <-pm.addChan:
-				pm.peerLock.Lock()
-				pm.livePeers[p.Addr] = p
-				pm.nodeIDs.Add(p.NodeID)
-				pm.peerLock.Unlock()
 			case p := <-pm.deleteChan: // Only delete connected peers.
 				pm.peerLock.Lock()
 				if _, ok := pm.livePeers[p.Addr]; ok {
@@ -142,13 +130,15 @@ func (pm *Manager) GetMetadata() metadata.MD {
 }
 
 // Add new peer with network addr.
-func (pm *Manager) AddPeerAddr(addr string) error {
-	select {
-	case pm.peerAddrChan <- addr:
-	case <-pm.stopChan:
-		return errors.New("peer manager stopped")
+func (pm *Manager) AddPeerAddr(addr string) {
+	if _, ok := pm.pendingPeers[addr]; ok {
+		return
 	}
-	return nil
+	if _, ok := pm.livePeers[addr]; ok {
+		return
+	}
+	pm.pendingPeers[addr] = struct{}{}
+	return
 }
 
 // Connects the remote peer with provided network address.
@@ -188,7 +178,9 @@ func (pm *Manager) connect() {
 			if len(pm.livePeers) > pm.maxPeers {
 				continue
 			}
+			var connected []string
 			for addr, _ := range pm.pendingPeers {
+				log.Debugw("retry to connect to peer", "addr", addr)
 				p, err := pm.connectPeer(addr)
 				if err != nil {
 					log.Errorf("connect to peer %s failed: %v", addr, err)
@@ -196,26 +188,20 @@ func (pm *Manager) connect() {
 				}
 				log.Infow("connected to peer", "addr", p.Addr)
 
-				delete(pm.pendingPeers, addr)
+				pm.peerLock.Lock()
+				pm.livePeers[p.Addr] = p
+				pm.nodeIDs.Add(p.NodeID)
+				pm.peerLock.Unlock()
 
-				select {
-				case pm.addChan <- p:
-				case <-pm.stopChan:
-					return
-				}
+				connected = append(connected, addr)
 
 				if len(pm.livePeers) > pm.maxPeers {
 					break
 				}
 			}
-		case addr := <-pm.peerAddrChan:
-			if _, ok := pm.pendingPeers[addr]; ok {
-				continue
+			for _, addr := range connected {
+				delete(pm.pendingPeers, addr)
 			}
-			if _, ok := pm.livePeers[addr]; ok {
-				continue
-			}
-			pm.pendingPeers[addr] = struct{}{}
 		case <-pm.stopChan:
 			return
 		}
