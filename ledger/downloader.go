@@ -164,6 +164,7 @@ func (d *Downloader) prepareTask(done <-chan bool, tr *DownloadRange) <-chan uin
 		for i := tr.StartIndex; i <= tr.EndIndex; i++ {
 			taskChan <- i
 		}
+		close(taskChan)
 	}()
 
 	return taskChan
@@ -240,6 +241,7 @@ func (d *Downloader) runTask(done <-chan bool, taskChan <-chan uint64) <-chan *C
 			case infoChan <- query(t):
 			}
 		}
+		close(infoChan)
 	}()
 
 	return infoChan
