@@ -52,11 +52,14 @@ func TestLeaderUpdate(t *testing.T) {
 		hists = append(hists, make(map[string]int))
 	}
 	for k := 0; k < 100; k++ {
+		var leaders []string
 		for i := 0; i < 3; i++ {
 			decrees[i].nominationRound = k
 			decrees[i].updateRoundLeaders()
 			hists[i][decrees[i].nominationLeaders[0]] += 1
+			leaders = append(leaders, decrees[i].nominationLeaders[0])
 		}
+		fmt.Println(leaders)
 	}
 	for i := 0; i < 3; i++ {
 		fmt.Printf("Leader histograms of node %s: \n", nodes[i])
