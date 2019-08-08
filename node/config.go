@@ -85,6 +85,7 @@ func NewConfig(v *viper.Viper) (*Config, error) {
 		NetworkID:       netIDStr,
 		NetworkAddr:     v.GetString("network_addr"),
 		Peers:           v.GetStringSlice("peers"),
+		MaxPeers:        v.GetInt("max_peers"),
 		NodeID:          v.GetString("node_id"),
 		Seed:            v.GetString("seed"),
 		DBBackend:       v.GetString("db_backend"),

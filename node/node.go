@@ -231,11 +231,9 @@ func (n *Node) eventLoop() {
 	for {
 		select {
 		case pf := <-n.peerFuture:
-			err := n.pm.AddPeerAddr(pf.Addr)
-			if err != nil {
-				log.Errorf("add peer addr failed: %v", err)
-			}
-			pf.Respond(err)
+			// TODO(bobonovski) add to some pending set?
+			n.pm.AddPeerAddr(pf.Addr)
+			pf.Respond(nil)
 		case sf := <-n.stmtFuture:
 			err := n.engine.RecvStatement(sf.Stmt)
 			if err != nil {
