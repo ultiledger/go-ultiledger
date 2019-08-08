@@ -621,7 +621,7 @@ func (d *Decree) combineCandidates() (string, error) {
 			continue
 		}
 		if ts.PrevLedgerHash != headerHash {
-			log.Info(ts.PrevLedgerHash, headerHash)
+			log.Errorw("header hash mismatch in txset", "prevHash", ts.PrevLedgerHash, "currHash", headerHash)
 			continue
 		}
 		if txset == nil || compareTxSet(txsetHash, txset, cv.TxSetHash, ts, ledger.GenesisBaseFee, hash) {
@@ -1002,7 +1002,9 @@ func (d *Decree) getPreparedCandidates(stmt *Statement) []*Ballot {
 	switch stmt.StatementType {
 	case ultpb.StatementType_PREPARE:
 		prepare := stmt.GetPrepare()
-		ballots.Add(*prepare.B)
+		if prepare.B != nil {
+			ballots.Add(*prepare.B)
+		}
 		if prepare.P != nil {
 			ballots.Add(*prepare.P)
 		}
