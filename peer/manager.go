@@ -76,6 +76,29 @@ func NewManager(ps []string, networkID string, addr string, nodeID string, maxPe
 }
 
 func (pm *Manager) Start() {
+	go pm.connect()
+
+	go func() {
+		for {
+			select {
+			case p := <-pm.addChan:
+				pm.peerLock.Lock()
+				pm.livePeers[p.Addr] = p
+				pm.nodeIDs.Add(p.NodeID)
+				pm.peerLock.Unlock()
+			case p := <-pm.deleteChan: // Only delete connected peers.
+				pm.peerLock.Lock()
+				if _, ok := pm.livePeers[p.Addr]; ok {
+					delete(pm.livePeers, p.Addr)
+					pm.nodeIDs.Remove(p.NodeID)
+				}
+				pm.peerLock.Unlock()
+			case <-pm.stopChan:
+				break
+			}
+		}
+	}()
+
 	go func() {
 		// Connect to inital peers.
 		for _, addr := range pm.initPeers {
@@ -85,31 +108,9 @@ func (pm *Manager) Start() {
 				pm.pendingPeers[addr] = struct{}{}
 				continue
 			}
+			log.Infof("connected to peer %s", addr)
 			pm.livePeers[addr] = p
 		}
-
-		go pm.connect()
-
-		go func() {
-			for {
-				select {
-				case p := <-pm.addChan:
-					pm.peerLock.Lock()
-					pm.livePeers[p.Addr] = p
-					pm.nodeIDs.Add(p.NodeID)
-					pm.peerLock.Unlock()
-				case p := <-pm.deleteChan: // Only delete connected peers.
-					pm.peerLock.Lock()
-					if _, ok := pm.livePeers[p.Addr]; ok {
-						delete(pm.livePeers, p.Addr)
-						pm.nodeIDs.Remove(p.NodeID)
-					}
-					pm.peerLock.Unlock()
-				case <-pm.stopChan:
-					break
-				}
-			}
-		}()
 	}()
 }
 
@@ -152,7 +153,7 @@ func (pm *Manager) AddPeerAddr(addr string) error {
 
 // Connects the remote peer with provided network address.
 func (pm *Manager) connectPeer(addr string) (*Peer, error) {
-	conn, err := grpc.Dial(addr, grpc.WithInsecure(), grpc.WithBlock(), grpc.WithTimeout(3*time.Second))
+	conn, err := grpc.Dial(addr, grpc.WithInsecure(), grpc.WithBlock(), grpc.WithTimeout(time.Second))
 	if err != nil {
 		return nil, err
 	}
@@ -177,7 +178,7 @@ func (pm *Manager) connectPeer(addr string) (*Peer, error) {
 
 // Connect to new peers periodically.
 func (pm *Manager) connect() {
-	ticker := time.NewTicker(1 * time.Second)
+	ticker := time.NewTicker(100 * time.Millisecond)
 	for {
 		select {
 		case <-ticker.C:
