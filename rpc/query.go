@@ -119,7 +119,7 @@ func query(clients []rpcpb.NodeClient, md metadata.MD, req *rpcpb.QueryRequest) 
 	var err error
 	var b []byte
 
-	// randomly shuffle clients to amortize query
+	// Randomly shuffle clients to amortize queries.
 	rand.Seed(time.Now().Unix())
 	indices := rand.Perm(len(clients))
 
@@ -134,7 +134,6 @@ func query(clients []rpcpb.NodeClient, md metadata.MD, req *rpcpb.QueryRequest) 
 			continue
 		}
 
-		// decode information
 		switch req.MsgType {
 		case rpcpb.QueryMsgType_QUORUM:
 			message, err = ultpb.DecodeQuorum(b)
