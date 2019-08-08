@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/deckarep/golang-set"
+	pb "github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/ultiledger/go-ultiledger/ultpb"
@@ -42,6 +43,14 @@ func TestCompareBallots(t *testing.T) {
 	assert.Equal(t, 0, compareBallots(lBallot, rBallot))
 	rBallot.Value = "BCD"
 	assert.Equal(t, -1, compareBallots(lBallot, rBallot))
+}
+
+func TestCloneBallots(t *testing.T) {
+	ballot := &Ballot{Value: "ABC", Counter: uint32(1)}
+	clonedBallot := pb.Clone(ballot).(*Ballot)
+	assert.Equal(t, ballot.Value, clonedBallot.Value)
+	assert.Equal(t, ballot.Counter, clonedBallot.Counter)
+	assert.True(t, pb.Equal(ballot, clonedBallot))
 }
 
 func TestCompatibleBallots(t *testing.T) {
