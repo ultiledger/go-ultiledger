@@ -167,13 +167,13 @@ func (v *Validator) RecvQuorum(quorumHash string, quorum *Quorum) error {
 	if err := ValidateQuorum(quorum, 0, false); err != nil {
 		return err
 	}
-	// encode quorum to pb format
+
+	// Encode the quorum to pb format.
 	qb, err := ultpb.Encode(quorum)
 	if err != nil {
 		return fmt.Errorf("encode quorum failed: %v", err)
 	}
 
-	// save the quorum in db first
 	err = v.database.Put(v.bucket, []byte(quorumHash), qb)
 	if err != nil {
 		return fmt.Errorf("save quorum to db failed: %v", err)
