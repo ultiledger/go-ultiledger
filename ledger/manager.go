@@ -255,9 +255,10 @@ func (lm *Manager) CurrLedgerHeaderHash() string {
 
 // Get the sequence number of next ledger header.
 func (lm *Manager) NextLedgerHeaderSeq() uint64 {
-	// Current ledger header should always exist.
+	// The current ledger header will be nil until the
+	// first ledger header close.
 	if lm.currLedgerHeader == nil {
-		log.Fatal("current ledger header is nil")
+		return uint64(1)
 	}
 	return lm.currLedgerHeader.SeqNum + 1
 }

@@ -103,6 +103,7 @@ func NewNode(conf *Config) *Node {
 		Database:        database,
 		Seed:            seed,
 		NodeID:          nodeID,
+		MaxDecrees:      uint64(20),
 		PM:              pm,
 		AM:              am,
 		LM:              lm,

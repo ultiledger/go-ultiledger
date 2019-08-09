@@ -26,15 +26,16 @@ var (
 
 // EngineContext represents contextual information Engine needs.
 type EngineContext struct {
-	NetworkID string
-	Database  db.Database
-	Seed      string
-	NodeID    string
-	Role      string
-	PM        *peer.Manager
-	AM        *account.Manager
-	LM        *ledger.Manager
-	TM        *tx.Manager
+	NetworkID  string
+	Database   db.Database
+	Seed       string
+	NodeID     string
+	Role       string
+	MaxDecrees uint64
+	PM         *peer.Manager
+	AM         *account.Manager
+	LM         *ledger.Manager
+	TM         *tx.Manager
 	// Initial quorum parsed from config file.
 	Quorum *ultpb.Quorum
 	// Interval of consensus proposition in seconds.
@@ -56,6 +57,9 @@ func ValidateEngineContext(ec *EngineContext) error {
 	}
 	if ec.Role == "" {
 		return errors.New("empty node role")
+	}
+	if ec.MaxDecrees == 0 {
+		return errors.New("max decrees is zero")
 	}
 	if ec.PM == nil {
 		return errors.New("peer manager is nil")
@@ -150,6 +154,7 @@ func NewEngine(ctx *EngineContext) *Engine {
 		am:                 ctx.AM,
 		lm:                 ctx.LM,
 		tm:                 ctx.TM,
+		maxDecrees:         ctx.MaxDecrees,
 		quorum:             ctx.Quorum,
 		quorumHash:         quorumHash,
 		decrees:            make(map[uint64]*Decree),
