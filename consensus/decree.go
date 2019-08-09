@@ -281,7 +281,7 @@ func (d *Decree) getNodePriority(quorum *Quorum, nodeID string) uint64 {
 	} else {
 		weight = d.getNodeWeight(quorum, nodeID)
 	}
-	if weight > 0 { //&& d.getNodeHash(nodeID, false) <= weight {
+	if weight > 0 && d.getNodeHash(nodeID, false) <= weight {
 		priority = d.getNodeHash(nodeID, true)
 		return priority
 	}

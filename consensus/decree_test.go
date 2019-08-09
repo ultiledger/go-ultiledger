@@ -28,7 +28,7 @@ func TestLeaderUpdate(t *testing.T) {
 	}
 
 	// Create a quorum.
-	quorum := getTestFlatQuorum(nodes, 0.5)
+	quorum := getTestFlatQuorum(nodes, 0.6)
 	assert.Equal(t, 3, len(quorum.Validators))
 
 	// Get the quorum hash.
