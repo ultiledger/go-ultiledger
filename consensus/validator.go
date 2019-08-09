@@ -20,25 +20,29 @@ import (
 type ValidatorContext struct {
 	Database           db.Database // database instance
 	LM                 *ledger.Manager
+	MaxDecrees         uint64
 	QuorumDownloadChan chan<- string
 	TxSetDownloadChan  chan<- string
 }
 
 func ValidateValidatorContext(vc *ValidatorContext) error {
 	if vc == nil {
-		return fmt.Errorf("validator context is nil")
+		return errors.New("validator context is nil")
 	}
 	if vc.Database == nil {
-		return fmt.Errorf("db instance is nil")
+		return errors.New("db instance is nil")
 	}
 	if vc.LM == nil {
-		return fmt.Errorf("ledger manager is nil")
+		return errors.New("ledger manager is nil")
+	}
+	if vc.MaxDecrees == 0 {
+		return errors.New("max decrees is zero")
 	}
 	if vc.QuorumDownloadChan == nil {
-		return fmt.Errorf("quorum download chan is nil")
+		return errors.New("quorum download chan is nil")
 	}
 	if vc.TxSetDownloadChan == nil {
-		return fmt.Errorf("txset download chan is nil")
+		return errors.New("txset download chan is nil")
 	}
 	return nil
 }
@@ -52,9 +56,18 @@ type Validator struct {
 
 	lm *ledger.Manager
 
+	// Maximum decrees to cache.
+	maxDecrees uint64
+
 	// Statements which are downloading.
 	rwm       sync.RWMutex
 	downloads map[string]*Statement
+
+	// Statements of each decree index.
+	decreeStmts map[uint64][]*Statement
+
+	// Expected next sequence number of the ledger.
+	nextSeqNum uint64
 
 	// Set of received statements.
 	statements mapset.Set
@@ -71,6 +84,8 @@ type Validator struct {
 
 	// Channel for notifying consensus engine that the statement is ready.
 	readyChan chan *Statement
+	// Channel for dispatching statements with the next ledger sequence.
+	dispatchChan chan *Statement
 	// Channel for downloding missing information of the statement.
 	downloadChan chan *Statement
 }
@@ -84,13 +99,16 @@ func NewValidator(ctx *ValidatorContext) *Validator {
 		database:           ctx.Database,
 		bucket:             "VALIDATOR",
 		lm:                 ctx.LM,
+		maxDecrees:         ctx.MaxDecrees,
 		downloads:          make(map[string]*Statement),
+		decreeStmts:        make(map[uint64][]*Statement),
 		statements:         mapset.NewSet(),
 		quorumDownloadChan: ctx.QuorumDownloadChan,
 		txsetDownloadChan:  ctx.TxSetDownloadChan,
 		stopChan:           make(chan struct{}),
 		readyChan:          make(chan *Statement, 100),
 		downloadChan:       make(chan *Statement, 100),
+		dispatchChan:       make(chan *Statement, 100),
 	}
 
 	err := v.database.NewBucket(v.bucket)
@@ -108,11 +126,13 @@ func NewValidator(ctx *ValidatorContext) *Validator {
 	go v.download()
 	// Monitor for downloaded statements.
 	go v.monitor()
+	// Dispatch ready statments.
+	go v.dispatch()
 
 	return v
 }
 
-// Stop the validator
+// Stop the validator.
 func (v *Validator) Stop() {
 	close(v.stopChan)
 }
@@ -150,7 +170,7 @@ func (v *Validator) Recv(stmt *Statement) error {
 	}
 
 	if valid {
-		v.readyChan <- stmt
+		v.dispatchChan <- stmt
 	} else {
 		v.downloadChan <- stmt
 		// Save the ongoing downloading statement.
@@ -227,7 +247,7 @@ func (v *Validator) GetQuorum(quorumHash string) (*Quorum, error) {
 	return quorum, nil
 }
 
-// Monitor downloaded statements and dispatch them to ready channel.
+// Monitor downloaded statements and send them to dispatch channel.
 func (v *Validator) monitor() {
 	ticker := time.NewTicker(100 * time.Millisecond)
 	for {
@@ -238,11 +258,47 @@ func (v *Validator) monitor() {
 				valid, _ := v.validate(stmt)
 				if valid {
 					log.Debugf("statement %s is ready with full info", h)
-					v.readyChan <- stmt
+					v.dispatchChan <- stmt
 					delete(v.downloads, h)
 				}
 			}
 			v.rwm.RUnlock()
+		case <-v.stopChan:
+			return
+		}
+	}
+}
+
+// Dispatch the statements with the next ledger sequence to the ready channel.
+func (v *Validator) dispatch() {
+	ticker := time.NewTicker(10 * time.Millisecond)
+	for {
+		select {
+		case <-ticker.C:
+			nextSeqNum := v.lm.NextLedgerHeaderSeq()
+			// First dispatch cached statments.
+			for _, stmt := range v.decreeStmts[nextSeqNum] {
+				v.readyChan <- stmt
+			}
+			// Clear dispatched statements
+			v.decreeStmts[nextSeqNum] = v.decreeStmts[nextSeqNum][:0]
+			for stmt := range v.dispatchChan {
+				if stmt.Index == nextSeqNum {
+					v.readyChan <- stmt
+				} else {
+					v.decreeStmts[stmt.Index] = append(v.decreeStmts[stmt.Index], stmt)
+				}
+			}
+			// Remove old statements.
+			for {
+				index := nextSeqNum - v.maxDecrees
+				if _, ok := v.decreeStmts[index]; ok {
+					delete(v.decreeStmts, index)
+					index -= 1
+				} else {
+					break
+				}
+			}
 		case <-v.stopChan:
 			return
 		}

@@ -167,6 +167,7 @@ func NewEngine(ctx *EngineContext) *Engine {
 	vctx := &ValidatorContext{
 		Database:           e.database,
 		LM:                 e.lm,
+		MaxDecrees:         e.maxDecrees,
 		TxSetDownloadChan:  e.txsetDownloadChan,
 		QuorumDownloadChan: e.quorumDownloadChan,
 	}
