@@ -98,18 +98,17 @@ func NewNode(conf *Config) *Node {
 
 	// Construct consensus engine context and create the consensus engine.
 	engineCtx := &consensus.EngineContext{
-		NetworkID:       networkID,
-		Role:            role,
-		Database:        database,
-		Seed:            seed,
-		NodeID:          nodeID,
-		MaxDecrees:      uint64(20),
-		PM:              pm,
-		AM:              am,
-		LM:              lm,
-		TM:              tm,
-		Quorum:          conf.Quorum,
-		ProposeInterval: conf.ProposeInterval,
+		NetworkID:  networkID,
+		Role:       role,
+		Database:   database,
+		Seed:       seed,
+		NodeID:     nodeID,
+		MaxDecrees: uint64(20),
+		PM:         pm,
+		AM:         am,
+		LM:         lm,
+		TM:         tm,
+		Quorum:     conf.Quorum,
 	}
 	engine := consensus.NewEngine(engineCtx)
 

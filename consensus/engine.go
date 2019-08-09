@@ -38,8 +38,6 @@ type EngineContext struct {
 	TM         *tx.Manager
 	// Initial quorum parsed from config file.
 	Quorum *ultpb.Quorum
-	// Interval of consensus proposition in seconds.
-	ProposeInterval int
 }
 
 func ValidateEngineContext(ec *EngineContext) error {
@@ -75,9 +73,6 @@ func ValidateEngineContext(ec *EngineContext) error {
 	}
 	if ec.Quorum == nil {
 		return errors.New("initial quorum is nil")
-	}
-	if ec.ProposeInterval <= 0 {
-		return errors.New("propose interval is invalid")
 	}
 	return nil
 }
@@ -124,10 +119,6 @@ type Engine struct {
 	// Channel for listening externalized consensus value.
 	externalizeChan chan *ExternalizeValue
 
-	// Channel for listening propose signal.
-	proposeChan   chan struct{}
-	proposeTicker *time.Ticker
-
 	// Channel for stopping goroutines.
 	stopChan chan struct{}
 }
@@ -163,8 +154,6 @@ func NewEngine(ctx *EngineContext) *Engine {
 		txsetDownloadChan:  make(chan string),
 		quorumDownloadChan: make(chan string),
 		externalizeChan:    make(chan *ExternalizeValue),
-		proposeChan:        make(chan struct{}),
-		proposeTicker:      time.NewTicker(time.Second * time.Duration(ctx.ProposeInterval)),
 		stopChan:           make(chan struct{}),
 	}
 
@@ -245,9 +234,6 @@ func (e *Engine) Start() {
 					log.Errorf("received statement from validator failed: %v", err)
 					continue
 				}
-			case <-e.proposeTicker.C:
-				log.Debug("start to propose new value")
-				e.proposeChan <- struct{}{}
 			case <-e.stopChan:
 				log.Debug("stop internal events goroutine")
 				return
@@ -266,17 +252,8 @@ func (e *Engine) Start() {
 					log.Errorf("externalize value failed: %v", err, "index", ext.Index, "value", ext.Value)
 					continue
 				}
-			case <-e.proposeChan:
-				// Node without the role of "validator" cannot propose
-				// value for consensus.
-				if e.role != "validator" {
-					continue
-				}
-				// Only node with synced ledger could propose new values.
-				if !e.lm.LedgerSynced() {
-					continue
-				}
-				err := e.Propose()
+				// Propose new consensus value after closing the previous ledger.
+				err = e.Propose()
 				if err != nil {
 					log.Errorf("propose new consensus value failed: %v", err)
 					continue
@@ -426,6 +403,16 @@ func (e *Engine) queryTxSet(txsetHash string) (*TxSet, error) {
 
 // Try to propose current transaction set for consensus.
 func (e *Engine) Propose() error {
+	// Node without the role of "validator" cannot propose
+	// value for consensus.
+	if e.role != "validator" {
+		return errors.New("the node is not a validator")
+	}
+	// Only node with synced ledger could propose new values.
+	if !e.lm.LedgerSynced() {
+		return errors.New("the ledger is not synced")
+	}
+
 	txSet := &TxSet{
 		PrevLedgerHash: e.lm.CurrLedgerHeaderHash(),
 		TxList:         e.tm.GetTxList(),
