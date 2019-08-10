@@ -272,7 +272,7 @@ func (v *Validator) monitor() {
 // Dispatch the statements with the next ledger sequence to the ready channel.
 func (v *Validator) dispatch() {
 	var nextSeqNum uint64
-	ticker := time.NewTicker(10 * time.Millisecond)
+	ticker := time.NewTicker(100 * time.Millisecond)
 	for {
 		select {
 		case <-ticker.C:
@@ -285,14 +285,15 @@ func (v *Validator) dispatch() {
 			v.decreeStmts[nextSeqNum] = v.decreeStmts[nextSeqNum][:0]
 			// Remove old statements.
 			for {
-				if nextSeqNum > v.maxDecrees {
-					index := nextSeqNum - v.maxDecrees
-					if _, ok := v.decreeStmts[index]; ok {
-						delete(v.decreeStmts, index)
-						index -= 1
-					} else {
-						break
-					}
+				if nextSeqNum <= v.maxDecrees {
+					break
+				}
+				index := nextSeqNum - v.maxDecrees
+				if _, ok := v.decreeStmts[index]; ok {
+					delete(v.decreeStmts, index)
+					index -= 1
+				} else {
+					break
 				}
 			}
 		case stmt := <-v.dispatchChan:
