@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"math"
 	"sort"
-	"time"
 
 	"github.com/deckarep/golang-set"
 	pb "github.com/golang/protobuf/proto"
@@ -93,16 +92,15 @@ type Decree struct {
 	prevConsensusValue string
 
 	// States for the nomination protocol.
-	votes                mapset.Set
-	accepts              mapset.Set
-	candidates           mapset.Set
-	nominationLeaders    mapset.Set
-	nominations          map[string]*Statement
-	nominationRound      int
-	nominationMaxTimeout int
-	nominationStart      bool
-	latestNomination     *Nominate
-	latestComposite      string // latest composite candidate value
+	votes             mapset.Set
+	accepts           mapset.Set
+	candidates        mapset.Set
+	nominationLeaders []string
+	nominations       map[string]*Statement
+	nominationRound   int
+	nominationStart   bool
+	latestNomination  *Nominate
+	latestComposite   string // latest composite candidate value
 
 	// States for the ballot protocol.
 	currentPhase     BallotPhase
@@ -131,26 +129,25 @@ func NewDecree(ctx *DecreeContext) *Decree {
 	}
 
 	d := &Decree{
-		index:                ctx.Index,
-		nodeID:               ctx.NodeID,
-		quorum:               ctx.Quorum,
-		quorumHash:           ctx.QuorumHash,
-		nominationRound:      0,
-		nominationStart:      false,
-		nominationMaxTimeout: 60,
-		lm:                   ctx.LM,
-		validator:            ctx.Validator,
-		votes:                mapset.NewSet(),
-		accepts:              mapset.NewSet(),
-		candidates:           mapset.NewSet(),
-		nominationLeaders:    mapset.NewSet(),
-		nominations:          make(map[string]*Statement),
-		currentPhase:         BallotPhasePrepare,
-		ballots:              make(map[string]*Statement),
-		ballotMsgCount:       0,
-		maxRecursions:        10,
-		statementChan:        ctx.StmtChan,
-		externalizeChan:      ctx.ExternalizeChan,
+		index:             ctx.Index,
+		nodeID:            ctx.NodeID,
+		quorum:            ctx.Quorum,
+		quorumHash:        ctx.QuorumHash,
+		nominationRound:   0,
+		nominationStart:   false,
+		lm:                ctx.LM,
+		validator:         ctx.Validator,
+		votes:             mapset.NewSet(),
+		accepts:           mapset.NewSet(),
+		candidates:        mapset.NewSet(),
+		nominationLeaders: make([]string, 0),
+		nominations:       make(map[string]*Statement),
+		currentPhase:      BallotPhasePrepare,
+		ballots:           make(map[string]*Statement),
+		ballotMsgCount:    0,
+		maxRecursions:     10,
+		statementChan:     ctx.StmtChan,
+		externalizeChan:   ctx.ExternalizeChan,
 	}
 
 	return d
@@ -168,8 +165,7 @@ func (d *Decree) Nominate(prevHash, currHash string) error {
 
 	// Track whether we have updated any value.
 	updated := false
-	for l := range d.nominationLeaders.Iter() {
-		leader := l.(string)
+	for _, leader := range d.nominationLeaders {
 		if leader == d.nodeID {
 			if !d.votes.Contains(currHash) {
 				d.votes.Add(currHash)
@@ -189,35 +185,12 @@ func (d *Decree) Nominate(prevHash, currHash string) error {
 		}
 	}
 
-	// Re-nominate the current value.
-	d.renominate(prevHash, currHash)
-
 	if updated {
 		if err := d.sendNomination(); err != nil {
 			return fmt.Errorf("send nomination failed: %v", err)
 		}
 	}
 	return nil
-}
-
-func (d *Decree) renominate(prevHash, currHash string) {
-	if d.nominationStart == false {
-		return
-	}
-
-	timeout := d.nominationRound
-	if timeout > d.nominationMaxTimeout {
-		timeout = d.nominationMaxTimeout
-	}
-	timer := time.NewTimer(time.Duration(timeout) * time.Second)
-	go func() {
-		<-timer.C
-		log.Debugw("re-nominate consensus value", "index", d.index, "round", d.nominationRound+1)
-		err := d.Nominate(prevHash, currHash)
-		if err != nil {
-			log.Errorf("re-nominate consensus value failed: %v", err)
-		}
-	}()
 }
 
 // Recv receives the validated statement and redistributes it to
@@ -279,8 +252,8 @@ func (d *Decree) getConsensusValue(stmt *Statement) (string, error) {
 func (d *Decree) updateRoundLeaders() {
 	quorum := normalizeQuorum(d.quorum, d.nodeID)
 
-	leaders := mapset.NewSet()
-	leaders.Add(d.nodeID)
+	var leaders []string
+	leaders = append(leaders, d.nodeID)
 
 	topPriority := d.getNodePriority(quorum, d.nodeID)
 	quorumNodes := getQuorumNodes(quorum)
@@ -288,15 +261,15 @@ func (d *Decree) updateRoundLeaders() {
 		priority := d.getNodePriority(quorum, node)
 		if priority > topPriority {
 			topPriority = priority
-			leaders.Clear()
+			leaders = leaders[:0]
 		}
 		if priority > 0 && priority == topPriority {
-			leaders.Add(node)
+			leaders = append(leaders, node)
 		}
 	}
 
 	// Update the leaders of current round.
-	d.nominationLeaders = d.nominationLeaders.Union(leaders)
+	d.nominationLeaders = leaders
 
 	log.Debugw("round leaders updated", "index", d.index, "round", d.nominationRound, "leaders", d.nominationLeaders)
 }
@@ -309,7 +282,7 @@ func (d *Decree) getNodePriority(quorum *Quorum, nodeID string) uint64 {
 	} else {
 		weight = d.getNodeWeight(quorum, nodeID)
 	}
-	if weight > 0 && d.getNodeHash(nodeID, false) <= weight {
+	if weight > 0 { // && d.getNodeHash(nodeID, false) <= weight {
 		priority = d.getNodeHash(nodeID, true)
 		return priority
 	}

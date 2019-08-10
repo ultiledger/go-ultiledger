@@ -38,6 +38,8 @@ type EngineContext struct {
 	TM         *tx.Manager
 	// Initial quorum parsed from config file.
 	Quorum *ultpb.Quorum
+	// Interval of consensus proposition in seconds.
+	ProposeInterval int
 }
 
 func ValidateEngineContext(ec *EngineContext) error {
@@ -73,6 +75,9 @@ func ValidateEngineContext(ec *EngineContext) error {
 	}
 	if ec.Quorum == nil {
 		return errors.New("initial quorum is nil")
+	}
+	if ec.ProposeInterval <= 0 {
+		return errors.New("propose interval is invalid")
 	}
 	return nil
 }
@@ -119,6 +124,10 @@ type Engine struct {
 	// Channel for listening externalized consensus value.
 	externalizeChan chan *ExternalizeValue
 
+	// Channel for listening propose signal.
+	proposeChan   chan struct{}
+	proposeTicker *time.Ticker
+
 	// Channel for stopping goroutines.
 	stopChan chan struct{}
 }
@@ -154,6 +163,8 @@ func NewEngine(ctx *EngineContext) *Engine {
 		txsetDownloadChan:  make(chan string),
 		quorumDownloadChan: make(chan string),
 		externalizeChan:    make(chan *ExternalizeValue),
+		proposeChan:        make(chan struct{}),
+		proposeTicker:      time.NewTicker(time.Second * time.Duration(ctx.ProposeInterval)),
 		stopChan:           make(chan struct{}),
 	}
 
@@ -222,7 +233,7 @@ func (e *Engine) Start() {
 				log.Debugw("recv ready statement", "nodeID", stmt.NodeID, "index", stmt.Index, "type", stmt.StatementType)
 				seq := e.lm.NextLedgerHeaderSeq()
 				// Skip old statement.
-				if stmt.Index < seq-e.maxDecrees {
+				if stmt.Index+e.maxDecrees < seq {
 					log.Warnw("received an old statement", "index", stmt.Index, "ledgerSeq", seq)
 					continue
 				}
@@ -234,6 +245,9 @@ func (e *Engine) Start() {
 					log.Errorf("received statement from validator failed: %v", err)
 					continue
 				}
+			case <-e.proposeTicker.C:
+				log.Debug("start to propose new value")
+				e.proposeChan <- struct{}{}
 			case <-e.stopChan:
 				log.Debug("stop internal events goroutine")
 				return
@@ -252,8 +266,8 @@ func (e *Engine) Start() {
 					log.Errorf("externalize value failed: %v", err, "index", ext.Index, "value", ext.Value)
 					continue
 				}
-				// Propose new consensus value after closing the previous ledger.
-				err = e.Propose()
+			case <-e.proposeChan:
+				err := e.Propose()
 				if err != nil {
 					log.Errorf("propose new consensus value failed: %v", err)
 					continue
@@ -515,8 +529,8 @@ func (e *Engine) Externalize(idx uint64, value string) error {
 	e.tm.DeleteTxList(txset.TxList)
 
 	// Remove decrees that are too old.
-	threshold := idx - e.maxDecrees
-	if threshold > 0 {
+	if idx > e.maxDecrees {
+		threshold := idx - e.maxDecrees
 		for i, _ := range e.decrees {
 			if i <= threshold {
 				delete(e.decrees, i)

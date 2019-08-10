@@ -271,33 +271,37 @@ func (v *Validator) monitor() {
 
 // Dispatch the statements with the next ledger sequence to the ready channel.
 func (v *Validator) dispatch() {
+	var nextSeqNum uint64
 	ticker := time.NewTicker(10 * time.Millisecond)
 	for {
 		select {
 		case <-ticker.C:
-			nextSeqNum := v.lm.NextLedgerHeaderSeq()
+			nextSeqNum = v.lm.NextLedgerHeaderSeq()
 			// First dispatch cached statments.
 			for _, stmt := range v.decreeStmts[nextSeqNum] {
 				v.readyChan <- stmt
 			}
 			// Clear dispatched statements
 			v.decreeStmts[nextSeqNum] = v.decreeStmts[nextSeqNum][:0]
-			for stmt := range v.dispatchChan {
-				if stmt.Index == nextSeqNum {
-					v.readyChan <- stmt
-				} else {
-					v.decreeStmts[stmt.Index] = append(v.decreeStmts[stmt.Index], stmt)
-				}
-			}
 			// Remove old statements.
 			for {
-				index := nextSeqNum - v.maxDecrees
-				if _, ok := v.decreeStmts[index]; ok {
-					delete(v.decreeStmts, index)
-					index -= 1
-				} else {
-					break
+				if nextSeqNum > v.maxDecrees {
+					index := nextSeqNum - v.maxDecrees
+					if _, ok := v.decreeStmts[index]; ok {
+						delete(v.decreeStmts, index)
+						index -= 1
+					} else {
+						break
+					}
 				}
+			}
+		case stmt := <-v.dispatchChan:
+			nextSeqNum = v.lm.NextLedgerHeaderSeq()
+			log.Debugw("recv stmt to dispatch", "index", stmt.Index, "nextSeqNum", nextSeqNum)
+			if stmt.Index == nextSeqNum {
+				v.readyChan <- stmt
+			} else {
+				v.decreeStmts[stmt.Index] = append(v.decreeStmts[stmt.Index], stmt)
 			}
 		case <-v.stopChan:
 			return
