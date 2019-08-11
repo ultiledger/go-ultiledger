@@ -144,7 +144,7 @@ func (pm *Manager) AddPeerAddr(addr string) {
 
 // Connects the remote peer with provided network address.
 func (pm *Manager) connectPeer(addr string) (*Peer, error) {
-	conn, err := grpc.Dial(addr, grpc.WithInsecure(), grpc.WithBlock(), grpc.WithTimeout(time.Second))
+	conn, err := grpc.Dial(addr, grpc.WithInsecure(), grpc.WithBlock(), grpc.WithTimeout(time.Second), grpc.WithBackoffMaxDelay(100*time.Millisecond))
 	if err != nil {
 		return nil, err
 	}

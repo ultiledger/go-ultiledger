@@ -114,6 +114,8 @@ type Engine struct {
 
 	// Channel for broadcasting statements.
 	statementChan chan *ultpb.Statement
+	// Ticker for rebroadcasting statements,
+	rebroadcastTicker *time.Ticker
 	// Channel for broadcasting transactions.
 	txChan chan *ultpb.Tx
 	// Channel for downloading txset.
@@ -159,6 +161,7 @@ func NewEngine(ctx *EngineContext) *Engine {
 		quorumHash:         quorumHash,
 		decrees:            make(map[uint64]*Decree),
 		statementChan:      make(chan *ultpb.Statement),
+		rebroadcastTicker:  time.NewTicker(time.Second),
 		txChan:             make(chan *ultpb.Tx),
 		txsetDownloadChan:  make(chan string),
 		quorumDownloadChan: make(chan string),
@@ -266,12 +269,21 @@ func (e *Engine) Start() {
 					log.Errorf("externalize value failed: %v", err, "index", ext.Index, "value", ext.Value)
 					continue
 				}
-			case <-e.proposeChan:
-				err := e.Propose()
+				err = e.Propose()
 				if err != nil {
 					log.Errorf("propose new consensus value failed: %v", err)
 					continue
 				}
+			case <-e.proposeChan:
+				/*
+					err := e.Propose()
+					if err != nil {
+						log.Errorf("propose new consensus value failed: %v", err)
+						continue
+					}
+				*/
+			case <-e.rebroadcastTicker.C:
+				e.rebroadcast()
 			case <-e.stopChan:
 				return
 			}
@@ -355,6 +367,28 @@ func (e *Engine) broadcastStatement(stmt *ultpb.Statement) error {
 	}
 
 	return nil
+}
+
+// Rebroadcast the statements of the current decree.
+func (e *Engine) rebroadcast() {
+	nextLedgerSeq := e.lm.NextLedgerHeaderSeq()
+	decree, ok := e.decrees[nextLedgerSeq]
+	if !ok {
+		return
+	}
+	stmts := decree.GetLatestStatements()
+	log.Debugf("get %d latest statements for rebroadcasting", len(stmts))
+
+	if len(stmts) == 0 {
+		return
+	}
+	var err error
+	for _, stmt := range stmts {
+		err = e.broadcastStatement(stmt)
+		if err != nil {
+			log.Errorw("rebroadcast statement failed", "index", stmt.Index, "type", stmt.StatementType, "err", err.Error())
+		}
+	}
 }
 
 // Query quorum infomation from peers.

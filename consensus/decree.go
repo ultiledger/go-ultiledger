@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"time"
 
 	"github.com/deckarep/golang-set"
 	pb "github.com/golang/protobuf/proto"
@@ -95,24 +96,24 @@ type Decree struct {
 	votes             mapset.Set
 	accepts           mapset.Set
 	candidates        mapset.Set
-	nominationLeaders []string
+	nominationLeaders mapset.Set
 	nominations       map[string]*Statement
 	nominationRound   int
 	nominationStart   bool
-	latestNomination  *Nominate
+	latestNomination  *Statement
 	latestComposite   string // latest composite candidate value
 
 	// States for the ballot protocol.
-	currentPhase     BallotPhase
-	currentBallot    *Ballot
-	pBallot          *Ballot // p
-	qBallot          *Ballot // p'
-	hBallot          *Ballot // h
-	cBallot          *Ballot // c
-	ballots          map[string]*Statement
-	latestBallotStmt *Statement
-	nextValue        string // z
-	ballotMsgCount   int
+	currentPhase   BallotPhase
+	currentBallot  *Ballot
+	pBallot        *Ballot // p
+	qBallot        *Ballot // p'
+	hBallot        *Ballot // h
+	cBallot        *Ballot // c
+	ballots        map[string]*Statement
+	latestBallot   *Statement
+	nextValue      string // z
+	ballotMsgCount int
 
 	// Maximum depths of recursion the step function can perform.
 	maxRecursions int
@@ -140,7 +141,7 @@ func NewDecree(ctx *DecreeContext) *Decree {
 		votes:             mapset.NewSet(),
 		accepts:           mapset.NewSet(),
 		candidates:        mapset.NewSet(),
-		nominationLeaders: make([]string, 0),
+		nominationLeaders: mapset.NewSet(),
 		nominations:       make(map[string]*Statement),
 		currentPhase:      BallotPhasePrepare,
 		ballots:           make(map[string]*Statement),
@@ -165,7 +166,8 @@ func (d *Decree) Nominate(prevHash, currHash string) error {
 
 	// Track whether we have updated any value.
 	updated := false
-	for _, leader := range d.nominationLeaders {
+	for l := range d.nominationLeaders.Iter() {
+		leader := l.(string)
 		if leader == d.nodeID {
 			if !d.votes.Contains(currHash) {
 				d.votes.Add(currHash)
@@ -185,12 +187,32 @@ func (d *Decree) Nominate(prevHash, currHash string) error {
 		}
 	}
 
+	// Re-nominate the current value.
+	d.renominate(prevHash, currHash)
+
 	if updated {
 		if err := d.sendNomination(); err != nil {
 			return fmt.Errorf("send nomination failed: %v", err)
 		}
 	}
 	return nil
+}
+
+// Renominate with the current consensus value.
+func (d *Decree) renominate(prevHash, currHash string) {
+	if d.nominationStart == false {
+		return
+	}
+
+	timer := time.NewTimer(time.Second)
+	go func() {
+		<-timer.C
+		log.Debugw("re-nominate consensus value", "index", d.index, "round", d.nominationRound+1)
+		err := d.Nominate(prevHash, currHash)
+		if err != nil {
+			log.Errorf("re-nominate consensus value failed: %v", err)
+		}
+	}()
 }
 
 // Recv receives the validated statement and redistributes it to
@@ -252,8 +274,8 @@ func (d *Decree) getConsensusValue(stmt *Statement) (string, error) {
 func (d *Decree) updateRoundLeaders() {
 	quorum := normalizeQuorum(d.quorum, d.nodeID)
 
-	var leaders []string
-	leaders = append(leaders, d.nodeID)
+	leaders := mapset.NewSet()
+	leaders.Add(d.nodeID)
 
 	topPriority := d.getNodePriority(quorum, d.nodeID)
 	quorumNodes := getQuorumNodes(quorum)
@@ -261,15 +283,15 @@ func (d *Decree) updateRoundLeaders() {
 		priority := d.getNodePriority(quorum, node)
 		if priority > topPriority {
 			topPriority = priority
-			leaders = leaders[:0]
+			leaders.Clear()
 		}
 		if priority > 0 && priority == topPriority {
-			leaders = append(leaders, node)
+			leaders.Add(node)
 		}
 	}
 
 	// Update the leaders of current round.
-	d.nominationLeaders = leaders
+	d.nominationLeaders = d.nominationLeaders.Union(leaders)
 
 	log.Debugw("round leaders updated", "index", d.index, "round", d.nominationRound, "leaders", d.nominationLeaders)
 }
@@ -459,6 +481,18 @@ func (d *Decree) getStatementQuorum(stmt *Statement) *Quorum {
 	return quorum
 }
 
+// Get the latest sent statements including nominations and ballots.
+func (d *Decree) GetLatestStatements() []*Statement {
+	var stmts []*Statement
+	if d.latestNomination != nil {
+		stmts = append(stmts, d.latestNomination)
+	}
+	if d.latestBallot != nil {
+		stmts = append(stmts, d.latestBallot)
+	}
+	return stmts
+}
+
 // ============  Nomination Protocol ============
 // Receive the nomination statement from peers or local node.
 func (d *Decree) recvNomination(stmt *Statement) error {
@@ -536,8 +570,8 @@ func (d *Decree) sendNomination() error {
 	}
 
 	// Broadcast the nomination if it is new.
-	if isNewerNomination(d.latestNomination, nom) {
-		d.latestNomination = nom
+	if isNewerNomination(d.latestNomination.GetNominate(), nom) {
+		d.latestNomination = stmt
 		d.statementChan <- stmt
 	}
 
@@ -754,8 +788,8 @@ func (d *Decree) sendBallot() error {
 			log.Errorf("recv local ballot failed: %v", err)
 			return fmt.Errorf("recv local ballot failed: %v", err)
 		}
-		if d.currentBallot != nil && (d.latestBallotStmt == nil || isNewerBallot(d.latestBallotStmt, stmt)) {
-			d.latestBallotStmt = stmt
+		if d.currentBallot != nil && (d.latestBallot == nil || isNewerBallot(d.latestBallot, stmt)) {
+			d.latestBallot = stmt
 			// Broadcast the ballot.
 			d.statementChan <- stmt
 		}
@@ -800,7 +834,7 @@ func (d *Decree) step(stmt *Statement) error {
 	log.Debugf("ballot msg count decrease to: %d", d.ballotMsgCount)
 
 	if updated {
-		d.statementChan <- d.latestBallotStmt
+		d.statementChan <- d.latestBallot
 	}
 
 	return nil
