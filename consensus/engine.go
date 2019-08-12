@@ -524,7 +524,7 @@ func (e *Engine) nominate(idx uint64, prevValue string, currValue string) error 
 	}
 
 	// Nominate a new value for the decree.
-	e.decrees[idx].Nominate(prevValue, currValue)
+	e.decrees[idx].Nominate(prevValue, currValue, false)
 
 	return nil
 }

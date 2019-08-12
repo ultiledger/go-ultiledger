@@ -155,7 +155,11 @@ func NewDecree(ctx *DecreeContext) *Decree {
 }
 
 // Nominate nominates a consensus value for the decree.
-func (d *Decree) Nominate(prevHash, currHash string) error {
+func (d *Decree) Nominate(prevHash, currHash string, isRenominate bool) error {
+	if isRenominate && !d.nominationStart {
+		return nil
+	}
+
 	d.nominationStart = true
 
 	d.nominationRound++
@@ -208,7 +212,7 @@ func (d *Decree) renominate(prevHash, currHash string) {
 	go func() {
 		<-timer.C
 		log.Debugw("re-nominate consensus value", "index", d.index, "round", d.nominationRound+1)
-		err := d.Nominate(prevHash, currHash)
+		err := d.Nominate(prevHash, currHash, true)
 		if err != nil {
 			log.Errorf("re-nominate consensus value failed: %v", err)
 		}
