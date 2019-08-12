@@ -8,8 +8,6 @@ message ConsensusValue {
   string TxSetHash = 1;
   // Propose time of the consensus value.
   int64 ProposeTime = 2;
-  // Close time of the consensus value.
-  int64 CloseTime = 3;
 }
 
 // Each ULTNode is associated with a quorum, every message

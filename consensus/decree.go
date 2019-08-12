@@ -1704,7 +1704,7 @@ func (d *Decree) validateConsensusValueFull(cv *ConsensusValue, isNomination boo
 		if err != nil {
 			return fmt.Errorf("decode ledger header consensus value failed: %v", err)
 		}
-		if headerCV.CloseTime > cv.ProposeTime {
+		if headerCV.ProposeTime > cv.ProposeTime {
 			return errors.New("consensus value is too old")
 		}
 	}

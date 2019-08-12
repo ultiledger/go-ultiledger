@@ -377,7 +377,7 @@ func (lm *Manager) RecvExtVal(index uint64, value string, txset *ultpb.TxSet) er
 			lm.largestConsensusIndex = index
 			lm.ledgerState = LedgerStateSynced
 		} else if index < lm.NextLedgerHeaderSeq() { // old case
-			log.Warnw("received consensus value is old", "nextSeq", lm.NextLedgerHeaderSeq())
+			log.Warnw("recv an old consensus value", "nextSeq", lm.NextLedgerHeaderSeq())
 		} else { // new case
 			lm.buffer.Append(&CloseInfo{Index: index, Value: value, TxSet: txset})
 			if index <= lm.largestConsensusIndex {
@@ -536,14 +536,6 @@ func (lm *Manager) closeLedger(index uint64, value string, txset *ultpb.TxSet) e
 	if err != nil {
 		return fmt.Errorf("apply tx list failed: %v", err)
 	}
-
-	// Update the close time of consensus value.
-	cv.CloseTime = time.Now().Unix()
-	b, err = ultpb.Encode(cv)
-	if err != nil {
-		return fmt.Errorf("encode consensus value failed: %v", err)
-	}
-	value = b58.Encode(b)
 
 	err = lm.advanceLedger(index, txset.PrevLedgerHash, txsetHash, value)
 	if err != nil {
