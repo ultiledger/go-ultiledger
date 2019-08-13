@@ -507,7 +507,7 @@ func (d *Decree) recvNomination(stmt *Statement) error {
 		return errors.New("vote and accept list is empty")
 	}
 
-	log.Infow("recv nomination", "nodeID", stmt.NodeID, "votes", len(nom.VoteList), "accepts", len(nom.AcceptList))
+	log.Debugw("recv nomination", "nodeID", stmt.NodeID, "votes", len(nom.VoteList), "accepts", len(nom.AcceptList))
 
 	// Check whether the existing nomination of the remote node
 	// is the proper subset of the new nomination and save the
@@ -591,7 +591,7 @@ func (d *Decree) promoteVotes(newNom *Nominate) (bool, bool, error) {
 		}
 		// Use federated accept to promote values from votes to accepts.
 		if !d.federatedAccept(voteFilter(vote), acceptFilter(vote), d.nominations) {
-			log.Errorw("nomination federated accept vote failed", "vote", vote)
+			log.Debugw("nomination federated accept vote failed", "vote", vote)
 			continue
 		}
 		// Validate the vote before updating votes and accepts.
@@ -611,7 +611,7 @@ func (d *Decree) promoteVotes(newNom *Nominate) (bool, bool, error) {
 		}
 		// Use federated ratify (confirmation) to promote values from accepts to condidates.
 		if !d.federatedRatify(acceptFilter(accept), d.nominations) {
-			log.Errorw("nomination federated ratify vote failed", "accept", accept)
+			log.Debugw("nomination federated ratify vote failed", "accept", accept)
 			continue
 		}
 		d.candidates.Add(accept)
@@ -708,7 +708,7 @@ func (d *Decree) recvBallot(stmt *Statement) error {
 		return errors.New("ballot indices are incompatible")
 	}
 
-	log.Infow("recv ballot", "nodeID", stmt.NodeID, "index", stmt.Index, "type", stmt.StatementType, "curr_phase", d.currentPhase)
+	log.Debugw("recv ballot", "nodeID", stmt.NodeID, "index", stmt.Index, "type", stmt.StatementType, "curr_phase", d.currentPhase)
 
 	// Skip the statement if it is old.
 	if s, ok := d.ballots[stmt.NodeID]; ok {

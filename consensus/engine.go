@@ -126,9 +126,11 @@ type Engine struct {
 	// Channel for listening externalized consensus value.
 	externalizeChan chan *ExternalizeValue
 
-	// Channel for listening propose signal.
-	proposeChan   chan struct{}
-	proposeTicker *time.Ticker
+	// Propose interval of the consensus value.
+	proposeInterval int
+
+	// Last time of externalization.
+	lastExtTime time.Time
 
 	// Channel for stopping goroutines.
 	stopChan chan struct{}
@@ -166,8 +168,8 @@ func NewEngine(ctx *EngineContext) *Engine {
 		txsetDownloadChan:  make(chan string),
 		quorumDownloadChan: make(chan string),
 		externalizeChan:    make(chan *ExternalizeValue),
-		proposeChan:        make(chan struct{}),
-		proposeTicker:      time.NewTicker(time.Second * time.Duration(ctx.ProposeInterval)),
+		lastExtTime:        time.Now(),
+		proposeInterval:    ctx.ProposeInterval,
 		stopChan:           make(chan struct{}),
 	}
 
@@ -248,9 +250,6 @@ func (e *Engine) Start() {
 					log.Errorf("received statement from validator failed: %v", err)
 					continue
 				}
-			case <-e.proposeTicker.C:
-				log.Debug("start to propose new value")
-				e.proposeChan <- struct{}{}
 			case <-e.stopChan:
 				log.Debug("stop internal events goroutine")
 				return
@@ -269,19 +268,27 @@ func (e *Engine) Start() {
 					log.Errorf("externalize value failed: %v", err, "index", ext.Index, "value", ext.Value)
 					continue
 				}
-				err = e.Propose()
-				if err != nil {
-					log.Errorf("propose new consensus value failed: %v", err)
-					continue
-				}
-			case <-e.proposeChan:
-				/*
+				now := time.Now()
+				duration := int(now.Sub(e.lastExtTime).Seconds())
+				e.lastExtTime = now
+				if duration < e.proposeInterval {
+					// Set a timer for the next propose.
+					go func() {
+						ticker := time.NewTicker(time.Duration(e.proposeInterval-duration) * time.Second)
+						defer ticker.Stop()
+						<-ticker.C
+						err := e.Propose()
+						if err != nil {
+							log.Errorf("propose consensus value failed: %v", err)
+							return
+						}
+					}()
+				} else {
 					err := e.Propose()
 					if err != nil {
-						log.Errorf("propose new consensus value failed: %v", err)
-						continue
+						log.Errorf("propose consensus value failed: %v", err)
 					}
-				*/
+				}
 			case <-e.rebroadcastTicker.C:
 				e.rebroadcast()
 			case <-e.stopChan:
@@ -342,6 +349,10 @@ func (e *Engine) RecvStatement(stmt *ultpb.Statement) error {
 
 // Broadcast the consensus statement.
 func (e *Engine) broadcastStatement(stmt *ultpb.Statement) error {
+	if stmt == nil {
+		return errors.New("broadcast statement is nil")
+	}
+
 	clients := e.pm.GetLiveClients()
 	metadata := e.pm.GetMetadata()
 
