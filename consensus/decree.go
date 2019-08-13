@@ -308,7 +308,7 @@ func (d *Decree) getNodePriority(quorum *Quorum, nodeID string) uint64 {
 	} else {
 		weight = d.getNodeWeight(quorum, nodeID)
 	}
-	if weight > 0 { // && d.getNodeHash(nodeID, false) <= weight {
+	if weight > 0 && d.getNodeHash(nodeID, false) <= weight {
 		priority = d.getNodeHash(nodeID, true)
 		return priority
 	}
@@ -783,6 +783,11 @@ func (d *Decree) sendBallot() error {
 		stmt.Stmt = &ultpb.Statement_Externalize{Externalize: ext}
 	default:
 		log.Fatal(ErrUnknownStmtType)
+	}
+
+	if d.currentBallot == nil {
+		log.Warnw("current ballot is nil", "index", d.index, "phase", d.currentPhase)
+		return nil
 	}
 
 	// Check whether the statement has been processed.
