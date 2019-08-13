@@ -206,7 +206,7 @@ func (e *Engine) Start() {
 			case txsetHash := <-e.txsetDownloadChan:
 				txset, err := e.queryTxSet(txsetHash)
 				if err != nil {
-					log.Errorf("query txset failed: %v", err)
+					log.Errorw("query txset failed", "txsetHash", txsetHash, "err", err)
 					continue
 				}
 				err = e.validator.RecvTxSet(txsetHash, txset)
@@ -217,7 +217,7 @@ func (e *Engine) Start() {
 			case quorumHash := <-e.quorumDownloadChan:
 				quorum, err := e.queryQuorum(quorumHash)
 				if err != nil {
-					log.Errorf("query quorum failed: %v", err)
+					log.Errorf("query quorum failed", "quorumHash", quorumHash, "err", err)
 					continue
 				}
 				err = e.validator.RecvQuorum(quorumHash, quorum)

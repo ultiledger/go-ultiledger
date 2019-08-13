@@ -10,8 +10,8 @@ var config zap.Config
 
 func init() {
 	config = zap.NewProductionConfig()
-	// change stacktrace output level to DPanic so that
-	// we will not get cluttered log in Error level
+	// Change stacktrace output level to DPanic for having
+	// a cleaner error message in Error level.
 	stacktraceOption := zap.AddStacktrace(zapcore.DPanicLevel)
 	callerOption := zap.AddCallerSkip(1)
 	logger, err := config.Build(stacktraceOption, callerOption)

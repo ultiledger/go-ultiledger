@@ -9,7 +9,6 @@ import (
 
 	pb "github.com/golang/protobuf/proto"
 	"google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/status"
 
 	"github.com/ultiledger/go-ultiledger/log"
 	"github.com/ultiledger/go-ultiledger/rpc/rpcpb"
@@ -163,10 +162,6 @@ func queryPeer(client rpcpb.NodeClient, md metadata.MD, req *rpcpb.QueryRequest)
 
 	resp, err := client.Query(ctx, req)
 	if err != nil {
-		st, ok := status.FromError(err)
-		if ok {
-			log.Errorf("query peer failed: %v", st.Message())
-		}
 		return nil, err
 	}
 
