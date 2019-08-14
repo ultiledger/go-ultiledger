@@ -383,21 +383,26 @@ func (e *Engine) broadcastStatement(stmt *ultpb.Statement) error {
 // Rebroadcast the statements of the current decree.
 func (e *Engine) rebroadcast() {
 	nextLedgerSeq := e.lm.NextLedgerHeaderSeq()
-	decree, ok := e.decrees[nextLedgerSeq]
-	if !ok {
-		return
+	lowerLedgerSeq := uint64(0)
+	if nextLedgerSeq > e.maxDecrees {
+		lowerLedgerSeq = nextLedgerSeq - e.maxDecrees
 	}
-	stmts := decree.GetLatestStatements()
-	log.Debugf("get %d latest statements for rebroadcasting", len(stmts))
-
-	if len(stmts) == 0 {
-		return
-	}
-	var err error
-	for _, stmt := range stmts {
-		err = e.broadcastStatement(stmt)
-		if err != nil {
-			log.Errorw("rebroadcast statement failed", "index", stmt.Index, "type", stmt.StatementType, "err", err.Error())
+	// Rebroadcast all the statements which is not too old.
+	for seq := nextLedgerSeq; seq >= lowerLedgerSeq; seq-- {
+		decree, ok := e.decrees[seq]
+		if !ok {
+			return
+		}
+		stmts := decree.GetLatestStatements()
+		if len(stmts) == 0 {
+			return
+		}
+		var err error
+		for _, stmt := range stmts {
+			err = e.broadcastStatement(stmt)
+			if err != nil {
+				log.Errorw("rebroadcast statement failed", "index", stmt.Index, "type", stmt.StatementType, "err", err.Error())
+			}
 		}
 	}
 }
