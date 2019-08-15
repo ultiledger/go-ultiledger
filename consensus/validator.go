@@ -277,12 +277,20 @@ func (v *Validator) dispatch() {
 		select {
 		case <-ticker.C:
 			nextSeqNum = v.lm.NextLedgerHeaderSeq()
-			// First dispatch cached statments.
-			for _, stmt := range v.decreeStmts[nextSeqNum] {
-				v.readyChan <- stmt
+			// Future statements are tried to dispatched in case that
+			// the local node did not receive necessary statements with
+			// the next sequence number.
+			for i := nextSeqNum; i < nextSeqNum+v.maxDecrees; i++ {
+				if len(v.decreeStmts) == 0 {
+					continue
+				}
+				// First dispatch cached statments.
+				for _, stmt := range v.decreeStmts[nextSeqNum] {
+					v.readyChan <- stmt
+				}
+				// Clear dispatched statements
+				v.decreeStmts[nextSeqNum] = v.decreeStmts[nextSeqNum][:0]
 			}
-			// Clear dispatched statements
-			v.decreeStmts[nextSeqNum] = v.decreeStmts[nextSeqNum][:0]
 			// Remove old statements.
 			for {
 				if nextSeqNum <= v.maxDecrees {
@@ -298,7 +306,6 @@ func (v *Validator) dispatch() {
 			}
 		case stmt := <-v.dispatchChan:
 			nextSeqNum = v.lm.NextLedgerHeaderSeq()
-			log.Debugw("recv stmt to dispatch", "index", stmt.Index, "nextSeqNum", nextSeqNum)
 			if stmt.Index == nextSeqNum {
 				v.readyChan <- stmt
 			} else {
