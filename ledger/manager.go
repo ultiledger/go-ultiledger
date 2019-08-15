@@ -379,6 +379,7 @@ func (lm *Manager) RecvExtVal(index uint64, value string, txset *ultpb.TxSet) er
 		} else if index < lm.NextLedgerHeaderSeq() { // old case
 			log.Warnw("recv an old consensus value", "nextSeq", lm.NextLedgerHeaderSeq())
 		} else { // new case
+			log.Warnw("ledger out of sync", "nextSeq", lm.NextLedgerHeaderSeq(), "extSeq", index)
 			lm.buffer.Append(&CloseInfo{Index: index, Value: value, TxSet: txset})
 			if index <= lm.largestConsensusIndex {
 				// We came across an older unprocessed consensus value
