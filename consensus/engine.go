@@ -237,15 +237,17 @@ func (e *Engine) Start() {
 			case stmt := <-e.validator.Ready():
 				log.Debugw("recv ready statement", "nodeID", stmt.NodeID, "index", stmt.Index, "type", stmt.StatementType)
 				seq := e.lm.NextLedgerHeaderSeq()
-				// Skip old statement.
+				// Skip statements that are too old.
 				if stmt.Index+e.maxDecrees < seq {
 					log.Warnw("received an old statement", "index", stmt.Index, "ledgerSeq", seq)
 					continue
 				}
-				if _, ok := e.decrees[stmt.Index]; !ok {
+				decree, err := e.getDecree(stmt.Index, true)
+				if err != nil {
+					log.Errorf("get decree failed: %v", err)
 					continue
 				}
-				err := e.decrees[stmt.Index].Recv(stmt)
+				err = decree.Recv(stmt)
 				if err != nil {
 					log.Errorf("received statement from validator failed: %v", err)
 					continue
@@ -524,25 +526,38 @@ func (e *Engine) Propose() error {
 
 // Nominate a new consensus value for specified decree.
 func (e *Engine) nominate(idx uint64, prevValue string, currValue string) error {
-	// Create a new decree if there is no existing decree with the index.
-	if _, ok := e.decrees[idx]; !ok {
-		decreeCtx := &DecreeContext{
-			Index:           idx,
-			NodeID:          e.nodeID,
-			Quorum:          e.quorum,
-			QuorumHash:      e.quorumHash,
-			LM:              e.lm,
-			Validator:       e.validator,
-			StmtChan:        e.statementChan,
-			ExternalizeChan: e.externalizeChan,
-		}
-		e.decrees[idx] = NewDecree(decreeCtx)
+	decree, err := e.getDecree(idx, true)
+	if err != nil {
+		return fmt.Errorf("get decree failed: %v", err)
 	}
 
 	// Nominate a new value for the decree.
-	e.decrees[idx].Nominate(prevValue, currValue, false)
+	decree.Nominate(prevValue, currValue, false)
 
 	return nil
+}
+
+// Get a decree to participate the consensus process.
+func (e *Engine) getDecree(idx uint64, create bool) (*Decree, error) {
+	if decree, ok := e.decrees[idx]; ok {
+		return decree, nil
+	}
+	if !create {
+		return nil, errors.New("decree not exist")
+	}
+	// Create a new decree if there is no existing decree with the index.
+	decreeCtx := &DecreeContext{
+		Index:           idx,
+		NodeID:          e.nodeID,
+		Quorum:          e.quorum,
+		QuorumHash:      e.quorumHash,
+		LM:              e.lm,
+		Validator:       e.validator,
+		StmtChan:        e.statementChan,
+		ExternalizeChan: e.externalizeChan,
+	}
+	e.decrees[idx] = NewDecree(decreeCtx)
+	return e.decrees[idx], nil
 }
 
 // Externalize a consensus value with decree index.
@@ -574,6 +589,12 @@ func (e *Engine) Externalize(idx uint64, value string) error {
 	if err != nil {
 		return fmt.Errorf("externalize value in ledger manager failed: %v", err)
 	}
+
+	decree, err := e.getDecree(idx, false)
+	if err != nil {
+		return fmt.Errorf("get decree failed: %v", err)
+	}
+	decree.StopNomination()
 
 	// Delete transactions that have been processed.
 	e.tm.DeleteTxList(txset.TxList)
