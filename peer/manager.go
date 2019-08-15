@@ -72,22 +72,6 @@ func (pm *Manager) Start() {
 	go pm.connect()
 
 	go func() {
-		for {
-			select {
-			case p := <-pm.deleteChan: // Only delete connected peers.
-				pm.peerLock.Lock()
-				if _, ok := pm.livePeers[p.Addr]; ok {
-					delete(pm.livePeers, p.Addr)
-					pm.nodeIDs.Remove(p.NodeID)
-				}
-				pm.peerLock.Unlock()
-			case <-pm.stopChan:
-				break
-			}
-		}
-	}()
-
-	go func() {
 		// Connect to inital peers.
 		for _, addr := range pm.initPeers {
 			p, err := pm.connectPeer(addr)
@@ -106,12 +90,10 @@ func (pm *Manager) Start() {
 func (pm *Manager) Stop() {
 	close(pm.stopChan)
 	pm.pendingPeers = nil
-	pm.peerLock.Lock()
 	for _, p := range pm.livePeers {
 		p.Close()
 	}
 	pm.livePeers = nil
-	pm.peerLock.Unlock()
 }
 
 // Get a list of rpc clients from live peers.
@@ -169,10 +151,22 @@ func (pm *Manager) connectPeer(addr string) (*Peer, error) {
 
 // Connect to new peers periodically.
 func (pm *Manager) connect() {
-	ticker := time.NewTicker(100 * time.Millisecond)
+	heartbeatTicker := time.NewTicker(time.Second)
+	reconnectTicker := time.NewTicker(100 * time.Millisecond)
 	for {
 		select {
-		case <-ticker.C:
+		case <-heartbeatTicker.C:
+			// Say hello to connected peers for maintaining the
+			// node identity when the peer is down.
+			for _, p := range pm.livePeers {
+				remoteAddr, nodeID, err := rpc.Hello(p.client, p.metadata, pm.networkID)
+				if err != nil {
+					continue
+				}
+				p.Addr = remoteAddr
+				p.NodeID = nodeID
+			}
+		case <-reconnectTicker.C:
 			if len(pm.pendingPeers) == 0 {
 				continue
 			}
@@ -202,6 +196,11 @@ func (pm *Manager) connect() {
 			}
 			for _, addr := range connected {
 				delete(pm.pendingPeers, addr)
+			}
+		case p := <-pm.deleteChan:
+			if _, ok := pm.livePeers[p.Addr]; ok {
+				delete(pm.livePeers, p.Addr)
+				pm.nodeIDs.Remove(p.NodeID)
 			}
 		case <-pm.stopChan:
 			return
