@@ -118,6 +118,11 @@ type Decree struct {
 	// Maximum depths of recursion the step function can perform.
 	maxRecursions int
 
+	// Maximum number of times of renominations.
+	maxRenomCount int
+	// The current count of renominations
+	renomCount int
+
 	// Channel for broadcasting statements.
 	statementChan chan<- *Statement
 	// Channel for notifying externalized value.
@@ -147,6 +152,8 @@ func NewDecree(ctx *DecreeContext) *Decree {
 		ballots:           make(map[string]*Statement),
 		ballotMsgCount:    0,
 		maxRecursions:     10,
+		maxRenomCount:     100,
+		renomCount:        0,
 		statementChan:     ctx.StmtChan,
 		externalizeChan:   ctx.ExternalizeChan,
 	}
@@ -207,6 +214,10 @@ func (d *Decree) renominate(prevHash, currHash string) {
 	if d.nominationStart == false {
 		return
 	}
+	if d.renomCount > d.maxRenomCount {
+		return
+	}
+	d.renomCount++
 
 	timer := time.NewTimer(time.Second)
 	go func() {
@@ -217,6 +228,11 @@ func (d *Decree) renominate(prevHash, currHash string) {
 			log.Errorf("re-nominate consensus value failed: %v", err)
 		}
 	}()
+}
+
+// Stop the nomination.
+func (d *Decree) StopNomination() {
+	d.nominationStart = false
 }
 
 // Recv receives the validated statement and redistributes it to
