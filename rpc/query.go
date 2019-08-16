@@ -92,6 +92,7 @@ func QueryLedger(clients []rpcpb.NodeClient, md metadata.MD, payload []byte, sig
 	}
 
 	req := &rpcpb.QueryRequest{
+		NetworkID: networkID,
 		MsgType:   rpcpb.QueryMsgType_LEDGER,
 		Data:      payload,
 		Signature: signature,
@@ -126,13 +127,12 @@ func query(clients []rpcpb.NodeClient, md metadata.MD, req *rpcpb.QueryRequest) 
 		c := clients[i]
 		b, err = queryPeer(c, md, req)
 		if err != nil {
+			log.Errorf("query peer failed: %v", err)
 			continue
 		}
-
 		if len(b) == 0 {
 			continue
 		}
-
 		switch req.MsgType {
 		case rpcpb.QueryMsgType_QUORUM:
 			message, err = ultpb.DecodeQuorum(b)
@@ -143,12 +143,10 @@ func query(clients []rpcpb.NodeClient, md metadata.MD, req *rpcpb.QueryRequest) 
 		default:
 			return nil, errors.New("unknown query msg type")
 		}
-
 		if err != nil {
 			log.Errorf("decode msg failed: %v", err)
 			continue
 		}
-
 		return message, nil
 	}
 
