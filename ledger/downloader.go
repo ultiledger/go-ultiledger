@@ -53,16 +53,17 @@ type Downloader struct {
 // Create a new instance of downloader.
 func NewDownloader(networkID string, seed string, db db.Database, pm *peer.Manager) *Downloader {
 	dlr := &Downloader{
-		networkID: networkID,
-		seed:      seed,
-		database:  db,
-		bucket:    "DOWNLOADER",
-		pm:        pm,
-		nextIndex: uint64(0),
-		infoMap:   make(map[uint64]*CloseInfo),
-		rangeChan: make(chan *DownloadRange, 100),
-		readyChan: make(chan *CloseInfo),
-		stopChan:  make(chan struct{}),
+		networkID:   networkID,
+		seed:        seed,
+		database:    db,
+		bucket:      "DOWNLOADER",
+		pm:          pm,
+		nextIndex:   uint64(0),
+		infoMap:     make(map[uint64]*CloseInfo),
+		rangeChan:   make(chan *DownloadRange, 100),
+		reorderChan: make(chan *CloseInfo),
+		readyChan:   make(chan *CloseInfo),
+		stopChan:    make(chan struct{}),
 	}
 
 	return dlr
@@ -119,7 +120,6 @@ func (d *Downloader) reorder() {
 	for {
 		select {
 		case info := <-d.reorderChan:
-			log.Infow("ledger has been downloaded", "seqNum", info.Index)
 			d.infoMap[info.Index] = info
 			for {
 				ci, ok := d.infoMap[d.nextIndex]
@@ -234,9 +234,9 @@ func (d *Downloader) runTask(done <-chan bool, taskChan <-chan uint64) <-chan *C
 	go func() {
 		for t := range taskChan {
 			select {
+			case infoChan <- query(t):
 			case <-done:
 				return
-			case infoChan <- query(t):
 			}
 		}
 		close(infoChan)
@@ -258,9 +258,9 @@ func (d *Downloader) mergeInfo(done <-chan bool, infoChans ...<-chan *CloseInfo)
 				continue
 			}
 			select {
+			case result <- info:
 			case <-done:
 				return
-			case result <- info:
 			}
 		}
 	}

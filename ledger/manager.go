@@ -393,7 +393,7 @@ func (lm *Manager) RecvExtVal(index uint64, value string, txset *ultpb.TxSet) er
 			if err != nil {
 				return fmt.Errorf("add task to downloader failed: %v", err)
 			}
-			lm.largestConsensusIndex = index
+			lm.largestConsensusIndex = index - 1
 			lm.ledgerState = LedgerStateSyncing
 		}
 	case LedgerStateSyncing:
@@ -467,12 +467,11 @@ func (lm *Manager) RecoverFromCheckpoint() error {
 	// Recover the states of the ledger.
 	lm.lastCloseTime = checkpoint.LastCloseTime
 	lm.ledgerHeaderCount = checkpoint.LedgerHeaderCount
-	lm.largestConsensusIndex = checkpoint.LargestConsensusIndex
 	lm.prevLedgerHeader = checkpoint.PrevLedgerHeader
 	lm.prevLedgerHeaderHash = checkpoint.PrevLedgerHeaderHash
 	lm.currLedgerHeader = checkpoint.CurrLedgerHeader
 	lm.currLedgerHeaderHash = checkpoint.CurrLedgerHeaderHash
-
+	lm.largestConsensusIndex = lm.currLedgerHeader.SeqNum
 	log.Infow("recover from checkpoint successfully", "nextSeqNum", lm.NextLedgerHeaderSeq())
 
 	return nil
@@ -481,13 +480,12 @@ func (lm *Manager) RecoverFromCheckpoint() error {
 // Save the checkpoint of the current states of the ledger.
 func (lm *Manager) saveCheckpoint() error {
 	ckpt := &ultpb.LedgerCheckpoint{
-		LastCloseTime:         lm.lastCloseTime,
-		LedgerHeaderCount:     lm.ledgerHeaderCount,
-		LargestConsensusIndex: lm.largestConsensusIndex,
-		PrevLedgerHeader:      lm.prevLedgerHeader,
-		PrevLedgerHeaderHash:  lm.prevLedgerHeaderHash,
-		CurrLedgerHeader:      lm.currLedgerHeader,
-		CurrLedgerHeaderHash:  lm.currLedgerHeaderHash,
+		LastCloseTime:        lm.lastCloseTime,
+		LedgerHeaderCount:    lm.ledgerHeaderCount,
+		PrevLedgerHeader:     lm.prevLedgerHeader,
+		PrevLedgerHeaderHash: lm.prevLedgerHeaderHash,
+		CurrLedgerHeader:     lm.currLedgerHeader,
+		CurrLedgerHeaderHash: lm.currLedgerHeaderHash,
 	}
 
 	b, err := ultpb.Encode(ckpt)
@@ -506,7 +504,7 @@ func (lm *Manager) saveCheckpoint() error {
 // CloseLedger closes current ledger with new consensus value.
 func (lm *Manager) closeLedger(index uint64, value string, txset *ultpb.TxSet) error {
 	if lm.ledgerState != LedgerStateSynced {
-		return errors.New("ledger is not synced")
+		log.Warnw("ledger is not synced", "nextSeqNum", index)
 	}
 
 	// Check whether the sequence number is valid.
