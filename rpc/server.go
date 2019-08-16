@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -30,7 +31,7 @@ type NodeServer struct {
 	seed      string // Private key of this node.
 
 	// Peer network address to nodeID map.
-	nodeKey map[string]*crypto.ULTKey
+	nodeKey sync.Map
 
 	// Future for adding peer addr.
 	peerFuture chan<- *future.Peer
@@ -119,7 +120,6 @@ func NewNodeServer(ctx *ServerContext) *NodeServer {
 		networkID:     ctx.NetworkID,
 		addr:          ctx.Addr,
 		nodeID:        ctx.NodeID,
-		nodeKey:       make(map[string]*crypto.ULTKey),
 		seed:          ctx.Seed,
 		peerFuture:    ctx.PeerFuture,
 		txFuture:      ctx.TxFuture,
@@ -151,10 +151,11 @@ func (s *NodeServer) validate(ctx context.Context, data []byte, signature string
 
 	// Check whether we know this addr.
 	addr := md.Get("Addr")[0]
-	if _, ok := s.nodeKey[addr]; !ok {
+	k, ok := s.nodeKey.Load(addr)
+	if !ok {
 		return fmt.Errorf("unknown network address %s, forgot to say hello?", addr)
 	}
-	key := s.nodeKey[addr]
+	key := k.(*crypto.ULTKey)
 
 	// Check signature.
 	if !crypto.VerifyByKey(key, signature, data) {
@@ -189,7 +190,7 @@ func (s *NodeServer) Hello(ctx context.Context, req *rpcpb.HelloRequest) (*rpcpb
 	if k.Code != crypto.KeyTypeNodeID {
 		return resp, status.Error(codes.InvalidArgument, "invalid nodeid key type")
 	}
-	s.nodeKey[md.Get("addr")[0]] = k
+	s.nodeKey.Store(md.Get("addr")[0], k)
 
 	// Add the peer address.
 	f := &future.Peer{Addr: md.Get("addr")[0]}
