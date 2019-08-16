@@ -60,7 +60,7 @@ func NewDownloader(networkID string, seed string, db db.Database, pm *peer.Manag
 		pm:        pm,
 		nextIndex: uint64(0),
 		infoMap:   make(map[uint64]*CloseInfo),
-		rangeChan: make(chan *DownloadRange, 1),
+		rangeChan: make(chan *DownloadRange, 100),
 		readyChan: make(chan *CloseInfo),
 		stopChan:  make(chan struct{}),
 	}
@@ -68,7 +68,7 @@ func NewDownloader(networkID string, seed string, db db.Database, pm *peer.Manag
 	return dlr
 }
 
-// Add download task with start index and end index.
+// Add a download task with start index and end index.
 func (d *Downloader) AddTask(start uint64, end uint64) error {
 	if start > end {
 		return errors.New("invalid ledger index range")
@@ -119,6 +119,7 @@ func (d *Downloader) reorder() {
 	for {
 		select {
 		case info := <-d.reorderChan:
+			log.Infow("ledger has been downloaded", "seqNum", info.Index)
 			d.infoMap[info.Index] = info
 			for {
 				ci, ok := d.infoMap[d.nextIndex]
@@ -135,14 +136,14 @@ func (d *Downloader) reorder() {
 }
 
 // Download ledgers concurrently by asking each peer one by one
-// about the ledger index.
+// about the ledger with the specified index.
 func (d *Downloader) download(tr *DownloadRange) error {
 	done := make(chan bool)
 
 	tasks := d.prepareTask(done, tr)
 
-	workers := make([]<-chan *CloseInfo, 10) // hard code for now
-	for i := 0; i < 10; i++ {
+	workers := make([]<-chan *CloseInfo, 8) // hard code for now
+	for i := 0; i < 8; i++ {
 		workers[i] = d.runTask(done, tasks)
 	}
 
@@ -177,40 +178,38 @@ func (d *Downloader) runTask(done <-chan bool, taskChan <-chan uint64) <-chan *C
 		clients := d.pm.GetLiveClients()
 		metadata := d.pm.GetMetadata()
 
-		// encode the ledger index
+		// Encode the ledger index.
 		seq := strconv.FormatUint(i, 10)
 		payload := []byte(seq)
 
-		// sign the data
+		// Sign the data.
 		sign, err := crypto.Sign(d.seed, payload)
 		if err != nil {
 			log.Errorf("sign payload for ledger %d query failed: %v", i, err)
 			return nil
 		}
 
-		// query ledger from peers
+		// Query the ledger from peers.
 		ledger, err := rpc.QueryLedger(clients, metadata, payload, sign, d.networkID)
 		if err != nil {
 			log.Errorf("rpc query ledger %d failed: %v", i, err)
 			return nil
 		}
 
-		// validate received ledger
+		// Validate the received ledger.
 		header := ledger.LedgerHeader
 		txset := ledger.TxSet
-
-		txsetHash, err := ultpb.SHA256Hash(txset)
+		txsetHash, err := ultpb.GetTxSetKey(txset)
 		if err != nil {
 			log.Errorf("compute txset hash failed: %v", err)
 			return nil
 		}
-
 		if header.TxSetHash != txsetHash {
 			log.Errorw("header txset hash incompatible with txsetHash", "headerTxSetHash", header.TxSetHash, "txsetHash", txsetHash)
 			return nil
 		}
 
-		// check consensus value
+		// Check the consensus value.
 		cvb, err := b58.Decode(header.ConsensusValue)
 		if err != nil {
 			log.Errorf("hex decode consensus value failed: %v", err)
@@ -246,7 +245,7 @@ func (d *Downloader) runTask(done <-chan bool, taskChan <-chan uint64) <-chan *C
 	return infoChan
 }
 
-// Merge info from multiple workers to return a merged response channel
+// Merge info from multiple workers to return a merged response channel.
 func (d *Downloader) mergeInfo(done <-chan bool, infoChans ...<-chan *CloseInfo) <-chan *CloseInfo {
 	var wg sync.WaitGroup
 	wg.Add(len(infoChans))

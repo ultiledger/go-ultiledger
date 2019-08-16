@@ -537,7 +537,8 @@ func (d *Decree) recvNomination(stmt *Statement) error {
 	}
 
 	if d.nominationStart == false {
-		return errors.New("nomination has stopped")
+		log.Debugw("nomination has stopped")
+		return nil
 	}
 
 	acceptUpdated, candidateUpdated, err := d.promoteVotes(nom)

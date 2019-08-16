@@ -9,11 +9,11 @@ import (
 // CloseInfo contains the information that the
 // manager needs to close the current ledger.
 type CloseInfo struct {
-	// decree index
+	// Decree index.
 	Index uint64
-	// encoded consensus value
+	// Encoded consensus value.
 	Value string
-	// transaction set
+	// Transaction set.
 	TxSet *ultpb.TxSet
 }
 
