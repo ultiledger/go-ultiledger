@@ -1711,7 +1711,7 @@ func (d *Decree) validateConsensusValue(val string) error {
 // Validate consensus value with full checks.
 func (d *Decree) validateConsensusValueFull(cv *ConsensusValue, isNomination bool) error {
 	// Check whether the decree index is up to date.
-	if !d.lm.LedgerSynced() || d.lm.NextLedgerHeaderSeq() != d.index {
+	if d.lm.LedgerSynced() && d.lm.NextLedgerHeaderSeq() != d.index {
 		return errors.New("consensus value is not compatible with ledger state")
 	}
 	// The propose time should be larger than the propose time in closed ledger.

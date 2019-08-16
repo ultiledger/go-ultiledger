@@ -27,35 +27,34 @@ type Downloader struct {
 	database db.Database
 	bucket   string
 
-	// peer manager
 	pm *peer.Manager
 
-	// seed of local node
+	// Seed of the local node.
 	seed string
 
-	// next index waiting for processing by ledger manager
+	// Next index waiting for processing by the ledger manager.
 	nextIndex uint64
 
-	// ledger index to close info map
+	// Ledger sequence number to close info map.
 	infoMap map[uint64]*CloseInfo
 
-	// channel for dispatching download task
+	// Channel for dispatching the download task.
 	rangeChan chan *DownloadRange
 
-	// channel for notifying ready CloseInfo
+	// Channel for notifying the ready CloseInfo.
 	readyChan chan *CloseInfo
 
-	// channel for reorder received CloseInfo
+	// Channel for reorder the received CloseInfo.
 	reorderChan chan *CloseInfo
 
-	// channel for stopping goroutines
 	stopChan chan struct{}
 }
 
 // Create a new instance of downloader.
-func NewDownloader(networkID string, db db.Database, pm *peer.Manager) *Downloader {
+func NewDownloader(networkID string, seed string, db db.Database, pm *peer.Manager) *Downloader {
 	dlr := &Downloader{
 		networkID: networkID,
+		seed:      seed,
 		database:  db,
 		bucket:    "DOWNLOADER",
 		pm:        pm,

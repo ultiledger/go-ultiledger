@@ -87,6 +87,7 @@ func NewNode(conf *Config) *Node {
 	// Ledger manager depends on account and tx manager.
 	lmCtx := &ledger.ManagerContext{
 		NetworkID: networkID,
+		Seed:      seed,
 		Database:  database,
 		PM:        pm,
 		AM:        am,
