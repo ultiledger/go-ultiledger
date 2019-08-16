@@ -476,7 +476,7 @@ func (e *Engine) Propose() error {
 	}
 	// Only node with synced ledger could propose new values.
 	if !e.lm.LedgerSynced() {
-		return errors.New("the ledger is not synced")
+		return nil
 	}
 
 	txSet := &TxSet{
