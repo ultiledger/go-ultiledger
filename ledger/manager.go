@@ -408,6 +408,9 @@ func (lm *Manager) RecoverFromCheckpoint() error {
 	if err != nil {
 		return fmt.Errorf("get ledger checkpoint failed: %v", err)
 	}
+	if b == nil {
+		return errors.New("ledger checkpoint is nil")
+	}
 
 	// Set the ledger to the state of NotSynced as we do not
 	// know the current states of the consensus yet.
@@ -468,7 +471,7 @@ func (lm *Manager) RecoverFromCheckpoint() error {
 	lm.currLedgerHeader = checkpoint.CurrLedgerHeader
 	lm.currLedgerHeaderHash = checkpoint.CurrLedgerHeaderHash
 
-	log.Infow("recover from checkpoint successfully", "currSeqNum", lm.largestConsensusIndex)
+	log.Infow("recover from checkpoint successfully", "nextSeqNum", lm.NextLedgerHeaderSeq())
 
 	return nil
 }
