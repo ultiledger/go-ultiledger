@@ -803,7 +803,6 @@ func (d *Decree) sendBallot() error {
 	}
 
 	if d.currentBallot == nil {
-		log.Warnw("current ballot is nil", "index", d.index, "phase", d.currentPhase)
 		return nil
 	}
 
