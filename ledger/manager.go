@@ -468,6 +468,8 @@ func (lm *Manager) RecoverFromCheckpoint() error {
 	lm.currLedgerHeader = checkpoint.CurrLedgerHeader
 	lm.currLedgerHeaderHash = checkpoint.CurrLedgerHeaderHash
 
+	log.Infow("recover from checkpoint successfully", "currSeqNum", lm.largestConsensusIndex)
+
 	return nil
 }
 
