@@ -66,8 +66,8 @@ type Validator struct {
 	// Statements of each decree index.
 	decreeStmts map[uint64][]*Statement
 
-	// Expected next sequence number of the ledger.
-	nextSeqNum uint64
+	// Max sequence number reiceived.
+	maxSeqNum uint64
 
 	// Set of received statements.
 	statements mapset.Set
@@ -102,6 +102,7 @@ func NewValidator(ctx *ValidatorContext) *Validator {
 		maxDecrees:         ctx.MaxDecrees,
 		downloads:          make(map[string]*Statement),
 		decreeStmts:        make(map[uint64][]*Statement),
+		maxSeqNum:          uint64(0),
 		statements:         mapset.NewSet(),
 		quorumDownloadChan: ctx.QuorumDownloadChan,
 		txsetDownloadChan:  ctx.TxSetDownloadChan,
@@ -257,7 +258,6 @@ func (v *Validator) monitor() {
 			for h, stmt := range v.downloads {
 				valid, _ := v.validate(stmt)
 				if valid {
-					log.Debugf("statement %s is ready with full info", h)
 					v.dispatchChan <- stmt
 					delete(v.downloads, h)
 				}
@@ -280,16 +280,16 @@ func (v *Validator) dispatch() {
 			// Future statements are tried to dispatched in case that
 			// the local node did not receive necessary statements with
 			// the next sequence number.
-			for i := nextSeqNum; i < nextSeqNum+v.maxDecrees; i++ {
-				if len(v.decreeStmts) == 0 {
+			for i := nextSeqNum; i <= v.maxSeqNum; i++ {
+				if len(v.decreeStmts[i]) == 0 {
 					continue
 				}
 				// First dispatch cached statments.
-				for _, stmt := range v.decreeStmts[nextSeqNum] {
+				for _, stmt := range v.decreeStmts[i] {
 					v.readyChan <- stmt
 				}
 				// Clear dispatched statements
-				v.decreeStmts[nextSeqNum] = v.decreeStmts[nextSeqNum][:0]
+				v.decreeStmts[i] = v.decreeStmts[i][:0]
 			}
 			// Remove old statements.
 			for {
@@ -310,6 +310,9 @@ func (v *Validator) dispatch() {
 				v.readyChan <- stmt
 			} else {
 				v.decreeStmts[stmt.Index] = append(v.decreeStmts[stmt.Index], stmt)
+				if stmt.Index > v.maxSeqNum {
+					v.maxSeqNum = stmt.Index
+				}
 			}
 		case <-v.stopChan:
 			return
