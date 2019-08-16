@@ -1714,7 +1714,7 @@ func (d *Decree) validateConsensusValueFull(cv *ConsensusValue, isNomination boo
 	if !d.lm.LedgerSynced() || d.lm.NextLedgerHeaderSeq() != d.index {
 		return errors.New("consensus value is not compatible with ledger state")
 	}
-	// The propose time should be larger than the close time in closed ledger.
+	// The propose time should be larger than the propose time in closed ledger.
 	header := d.lm.CurrLedgerHeader()
 	if header.ConsensusValue != "" {
 		vb, err := b58.Decode(header.ConsensusValue)
