@@ -142,6 +142,12 @@
 			"revisionTime": "2018-04-04T17:41:02Z"
 		},
 		{
+			"checksumSHA1": "40vJyUB4ezQSn/NSadsKEOrudMc=",
+			"path": "github.com/inconshreveable/mousetrap",
+			"revision": "76626ae9c91c4f2a10f34cad8ce83ea42c93bb75",
+			"revisionTime": "2014-10-17T20:07:13Z"
+		},
+		{
 			"checksumSHA1": "wGqcDfEuwxbZney6VYWbpE7uNaE=",
 			"path": "github.com/json-iterator/go",
 			"revision": "2ddf6d758266fcb080a4f9e054b9f292c85e6798",
@@ -341,10 +347,10 @@
 			"revisionTime": "2018-01-04T22:23:21Z"
 		},
 		{
-			"checksumSHA1": "gcAbdDsQhr/7HRKu9oiRwDgn6bc=",
+			"checksumSHA1": "63O72qRpVdJtCJLvICFXPDRhCqk=",
 			"path": "golang.org/x/sys/unix",
-			"revision": "b8f5ef32195cae6470b728e8ca677f0dbed1a004",
-			"revisionTime": "2017-12-08T14:03:20Z"
+			"revision": "fde4db37ae7ad8191b03d30d27f258b5291ae4e3",
+			"revisionTime": "2019-08-12T08:24:04Z"
 		},
 		{
 			"checksumSHA1": "tltivJ/uj/lqLk05IqGfCv2F/E8=",
