@@ -390,6 +390,7 @@ func (s *NodeServer) CreateTestAccount(ctx context.Context, req *rpcpb.CreateTes
 	if err := txf.Error(); err != nil {
 		return resp, status.Errorf(codes.Internal, "submit tx failed: %v", err)
 	}
+	resp.TxKey = txKey
 
 	return resp, nil
 }
