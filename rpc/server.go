@@ -26,6 +26,7 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
+	"github.com/ultiledger/go-ultiledger/account"
 	"github.com/ultiledger/go-ultiledger/crypto"
 	"github.com/ultiledger/go-ultiledger/future"
 	"github.com/ultiledger/go-ultiledger/log"
@@ -43,6 +44,8 @@ type NodeServer struct {
 	addr      string // Network address of this node.
 	nodeID    string // ID of this node (public key).
 	seed      string // Private key of this node.
+
+	am *account.Manager
 
 	// Peer network address to nodeID map.
 	nodeKey sync.Map
@@ -64,25 +67,23 @@ type NodeServer struct {
 	txsFuture chan<- *future.TxStatus
 	// Future for querying accounts.
 	accountFuture chan<- *future.Account
-	// Future for querying the master account.
-	masterAccountFuture chan<- *future.Account
 }
 
 // ServerContext represents contextual information for running server.
 type ServerContext struct {
-	NetworkID           string
-	Addr                string
-	NodeID              string
-	Seed                string
-	PeerFuture          chan *future.Peer
-	TxFuture            chan *future.Tx
-	StmtFuture          chan *future.Statement
-	LedgerFuture        chan *future.Ledger
-	QuorumFuture        chan *future.Quorum
-	TxSetFuture         chan *future.TxSet
-	TxStatusFuture      chan *future.TxStatus
-	AccountFuture       chan *future.Account
-	MasterAccountFuture chan *future.Account
+	NetworkID      string
+	Addr           string
+	NodeID         string
+	Seed           string
+	AM             *account.Manager
+	PeerFuture     chan *future.Peer
+	TxFuture       chan *future.Tx
+	StmtFuture     chan *future.Statement
+	LedgerFuture   chan *future.Ledger
+	QuorumFuture   chan *future.Quorum
+	TxSetFuture    chan *future.TxSet
+	TxStatusFuture chan *future.TxStatus
+	AccountFuture  chan *future.Account
 }
 
 func ValidateServerContext(sc *ServerContext) error {
@@ -100,6 +101,9 @@ func ValidateServerContext(sc *ServerContext) error {
 	}
 	if sc.Seed == "" {
 		return errors.New("empty local node seed")
+	}
+	if sc.AM == nil {
+		return errors.New("account manager is nil")
 	}
 	if sc.PeerFuture == nil {
 		return errors.New("peer future channel is nil")
@@ -125,9 +129,6 @@ func ValidateServerContext(sc *ServerContext) error {
 	if sc.AccountFuture == nil {
 		return errors.New("account future channel is nil")
 	}
-	if sc.MasterAccountFuture == nil {
-		return errors.New("master account future channel is nil")
-	}
 	return nil
 }
 
@@ -137,19 +138,19 @@ func NewNodeServer(ctx *ServerContext) *NodeServer {
 		log.Fatalf("validate server context failed: %v", err)
 	}
 	server := &NodeServer{
-		networkID:           ctx.NetworkID,
-		addr:                ctx.Addr,
-		nodeID:              ctx.NodeID,
-		seed:                ctx.Seed,
-		peerFuture:          ctx.PeerFuture,
-		txFuture:            ctx.TxFuture,
-		stmtFuture:          ctx.StmtFuture,
-		ledgerFuture:        ctx.LedgerFuture,
-		quorumFuture:        ctx.QuorumFuture,
-		txsetFuture:         ctx.TxSetFuture,
-		txsFuture:           ctx.TxStatusFuture,
-		accountFuture:       ctx.AccountFuture,
-		masterAccountFuture: ctx.MasterAccountFuture,
+		networkID:     ctx.NetworkID,
+		addr:          ctx.Addr,
+		nodeID:        ctx.NodeID,
+		seed:          ctx.Seed,
+		am:            ctx.AM,
+		peerFuture:    ctx.PeerFuture,
+		txFuture:      ctx.TxFuture,
+		stmtFuture:    ctx.StmtFuture,
+		ledgerFuture:  ctx.LedgerFuture,
+		quorumFuture:  ctx.QuorumFuture,
+		txsetFuture:   ctx.TxSetFuture,
+		txsFuture:     ctx.TxStatusFuture,
+		accountFuture: ctx.AccountFuture,
 	}
 	return server
 }
@@ -333,26 +334,62 @@ func (s *NodeServer) GetAccount(ctx context.Context, req *rpcpb.GetAccountReques
 	return resp, nil
 }
 
-// GetMasterAccount queries the master account of the network.
-func (s *NodeServer) GetMasterAccount(ctx context.Context, req *rpcpb.GetMasterAccountRequest) (*rpcpb.GetMasterAccountResponse, error) {
-	resp := &rpcpb.GetMasterAccountResponse{}
+// CreateTestAccount creates a test account.
+func (s *NodeServer) CreateTestAccount(ctx context.Context, req *rpcpb.CreateTestAccountRequest) (*rpcpb.CreateTestAccountResponse, error) {
+	resp := &rpcpb.CreateTestAccountResponse{}
 
 	if s.networkID != req.NetworkID {
 		return resp, status.Error(codes.InvalidArgument, "incompatible network id.")
 	}
 
-	f := &future.Account{}
-	f.Init()
-	s.masterAccountFuture <- f
-	if err := f.Error(); err != nil {
-		return resp, status.Errorf(codes.Internal, "get master account failed: %v", err)
+	// Check the validity of the account key.
+	if !crypto.IsValidAccountKey(req.AccountID) {
+		return resp, status.Errorf(codes.InvalidArgument, "invalid account id")
 	}
 
-	b, err := ultpb.Encode(f.Account)
-	if err != nil {
-		return resp, status.Error(codes.Internal, "encode master account failed")
+	// Check whether the account exists.
+	f := &future.Account{AccountID: req.AccountID}
+	f.Init()
+	s.accountFuture <- f
+	if err := f.Error(); err != nil {
+		return resp, status.Errorf(codes.Internal, "get account failed: %v", err)
 	}
-	resp.Data = b
+	if f.Account != nil {
+		return resp, status.Errorf(codes.Internal, "test account already exist")
+	}
+
+	tx := &ultpb.Tx{
+		AccountID: s.am.Master.AccountID,
+		Fee:       int64(1000),
+		SeqNum:    s.am.Master.SeqNum,
+	}
+	tx.OpList = append(tx.OpList, &ultpb.Op{
+		OpType: ultpb.OpType_CREATE_ACCOUNT,
+		Op: &ultpb.Op_CreateAccount{
+			&ultpb.CreateAccountOp{
+				AccountID: req.AccountID,
+				Balance:   int64(100000000000), // 10 ULT
+			},
+		},
+	})
+
+	// Get the tx key.
+	b, err := ultpb.Encode(tx)
+	if err != nil {
+		return resp, status.Errorf(codes.Internal, "encode tx failed: %v", err)
+	}
+	tk := &crypto.ULTKey{
+		Code: crypto.KeyTypeTx,
+		Hash: crypto.SHA256HashBytes(b),
+	}
+	txKey := crypto.EncodeKey(tk)
+
+	txf := &future.Tx{Tx: tx, TxKey: txKey}
+	txf.Init()
+	s.txFuture <- txf
+	if err := txf.Error(); err != nil {
+		return resp, status.Errorf(codes.Internal, "submit tx failed: %v", err)
+	}
 
 	return resp, nil
 }
