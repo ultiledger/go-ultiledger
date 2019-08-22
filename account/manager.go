@@ -40,6 +40,8 @@ type Manager struct {
 	bucket   string
 
 	baseReserve int64
+
+	master *ultpb.Account
 }
 
 func NewManager(d db.Database, baseReserve int64) *Manager {
@@ -63,12 +65,18 @@ func (am *Manager) CreateMasterAccount(networkID []byte, balance int64, seqNum u
 	if err != nil {
 		return err
 	}
-	log.Infof("master private key (seed) is %s", privKey)
+	log.Infow("master account created", "seed", privKey, "accountID", pubKey)
 
 	err = am.CreateAccount(am.database, pubKey, balance, pubKey, seqNum)
 	if err != nil {
 		return fmt.Errorf("create master account failed: %v", err)
 	}
+
+	acc, err := am.GetAccount(am.database, pubKey)
+	if err != nil {
+		return fmt.Errorf("get master account failed: %v", err)
+	}
+	am.master = acc
 
 	return nil
 }
@@ -97,7 +105,7 @@ func (am *Manager) CreateAccount(putter db.Putter, accountID string, balance int
 		return fmt.Errorf("encode account failed: %v", err)
 	}
 
-	// save the account in db
+	// Save the account in db.
 	err = putter.Put(am.bucket, []byte(acc.AccountID), accb)
 	if err != nil {
 		return fmt.Errorf("save account in db failed: %v", err)
