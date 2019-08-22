@@ -16,6 +16,7 @@ package client
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -138,4 +139,57 @@ func (c *GrpcClient) GetAccount(accountID string) (*ultpb.Account, error) {
 	}
 
 	return acc, nil
+}
+
+// CreateTestAccount creates a test account for the
+// purpose of testing in testnet.
+func (c *GrpcClient) CreateTestAccount(accountID string) (*ultpb.Account, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(time.Second))
+	defer cancel()
+
+	req := &rpcpb.CreateTestAccountRequest{
+		NetworkID: c.networkID,
+		AccountID: accountID,
+	}
+	resp, err := c.client.CreateTestAccount(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	// Wait until the tx be confirmed.
+	ticker := time.NewTicker(2 * time.Second)
+	timer := time.NewTimer(30 * time.Second)
+	for {
+		select {
+		case <-ticker.C:
+			// Check the tx.
+			status, err := c.QueryTx(resp.TxKey)
+			if err != nil {
+				return nil, fmt.Errorf("query tx failed: %v", err)
+			}
+			switch status.StatusCode {
+			case types.NotExist:
+				return nil, errors.New("tx not found")
+			case types.Rejected:
+				return nil, fmt.Errorf("tx rejected: %v", status.ErrorMessage)
+			case types.Accepted:
+				continue
+			case types.Confirmed:
+				// Get the account
+				account, err := c.GetAccount(accountID)
+				if err != nil {
+					return nil, fmt.Errorf("get account failed: %v", err)
+				}
+				return account, nil
+			case types.Failed:
+				return nil, fmt.Errorf("tx failed: %v", status.ErrorMessage)
+			default:
+				return nil, errors.New("tx status unknown")
+			}
+		case <-timer.C:
+			return nil, errors.New("query result takes too long")
+		}
+	}
+
+	return nil, nil
 }
