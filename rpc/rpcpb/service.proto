@@ -71,7 +71,7 @@ message CreateTestAccountRequest {
 }
 
 message CreateTestAccountResponse {
-  bytes Data = 1;
+  string TxKey = 1;
 }
 
 message GetAccountRequest {
