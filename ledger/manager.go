@@ -63,8 +63,8 @@ var (
 	GenesisTotalTokens = int64(4500000000000000000)
 	// The base fee for a transaction is 1000 ULU.
 	GenesisBaseFee = int64(1000)
-	// The base reserve for an account (1 ULT).
-	GenesisBaseReserve = int64(1000000000)
+	// The base reserve for an account (0.1 ULT).
+	GenesisBaseReserve = int64(100000000)
 )
 
 // ManagerContext contains contextural information the ledger manager needs.
