@@ -62,24 +62,27 @@ type NodeServer struct {
 	txsetFuture chan<- *future.TxSet
 	// Future for querying tx status.
 	txsFuture chan<- *future.TxStatus
-	// Future for querying account.
+	// Future for querying accounts.
 	accountFuture chan<- *future.Account
+	// Future for querying the master account.
+	masterAccountFuture chan<- *future.Account
 }
 
 // ServerContext represents contextual information for running server.
 type ServerContext struct {
-	NetworkID      string
-	Addr           string
-	NodeID         string
-	Seed           string
-	PeerFuture     chan *future.Peer
-	TxFuture       chan *future.Tx
-	StmtFuture     chan *future.Statement
-	LedgerFuture   chan *future.Ledger
-	QuorumFuture   chan *future.Quorum
-	TxSetFuture    chan *future.TxSet
-	TxStatusFuture chan *future.TxStatus
-	AccountFuture  chan *future.Account
+	NetworkID           string
+	Addr                string
+	NodeID              string
+	Seed                string
+	PeerFuture          chan *future.Peer
+	TxFuture            chan *future.Tx
+	StmtFuture          chan *future.Statement
+	LedgerFuture        chan *future.Ledger
+	QuorumFuture        chan *future.Quorum
+	TxSetFuture         chan *future.TxSet
+	TxStatusFuture      chan *future.TxStatus
+	AccountFuture       chan *future.Account
+	MasterAccountFuture chan *future.Account
 }
 
 func ValidateServerContext(sc *ServerContext) error {
@@ -122,6 +125,9 @@ func ValidateServerContext(sc *ServerContext) error {
 	if sc.AccountFuture == nil {
 		return errors.New("account future channel is nil")
 	}
+	if sc.MasterAccountFuture == nil {
+		return errors.New("master account future channel is nil")
+	}
 	return nil
 }
 
@@ -131,18 +137,19 @@ func NewNodeServer(ctx *ServerContext) *NodeServer {
 		log.Fatalf("validate server context failed: %v", err)
 	}
 	server := &NodeServer{
-		networkID:     ctx.NetworkID,
-		addr:          ctx.Addr,
-		nodeID:        ctx.NodeID,
-		seed:          ctx.Seed,
-		peerFuture:    ctx.PeerFuture,
-		txFuture:      ctx.TxFuture,
-		stmtFuture:    ctx.StmtFuture,
-		ledgerFuture:  ctx.LedgerFuture,
-		quorumFuture:  ctx.QuorumFuture,
-		txsetFuture:   ctx.TxSetFuture,
-		txsFuture:     ctx.TxStatusFuture,
-		accountFuture: ctx.AccountFuture,
+		networkID:           ctx.NetworkID,
+		addr:                ctx.Addr,
+		nodeID:              ctx.NodeID,
+		seed:                ctx.Seed,
+		peerFuture:          ctx.PeerFuture,
+		txFuture:            ctx.TxFuture,
+		stmtFuture:          ctx.StmtFuture,
+		ledgerFuture:        ctx.LedgerFuture,
+		quorumFuture:        ctx.QuorumFuture,
+		txsetFuture:         ctx.TxSetFuture,
+		txsFuture:           ctx.TxStatusFuture,
+		accountFuture:       ctx.AccountFuture,
+		masterAccountFuture: ctx.MasterAccountFuture,
 	}
 	return server
 }
@@ -320,6 +327,30 @@ func (s *NodeServer) GetAccount(ctx context.Context, req *rpcpb.GetAccountReques
 	b, err := ultpb.Encode(f.Account)
 	if err != nil {
 		return resp, status.Error(codes.Internal, "encode account failed")
+	}
+	resp.Data = b
+
+	return resp, nil
+}
+
+// GetMasterAccount queries the master account of the network.
+func (s *NodeServer) GetMasterAccount(ctx context.Context, req *rpcpb.GetMasterAccountRequest) (*rpcpb.GetMasterAccountResponse, error) {
+	resp := &rpcpb.GetMasterAccountResponse{}
+
+	if s.networkID != req.NetworkID {
+		return resp, status.Error(codes.InvalidArgument, "incompatible network id.")
+	}
+
+	f := &future.Account{}
+	f.Init()
+	s.masterAccountFuture <- f
+	if err := f.Error(); err != nil {
+		return resp, status.Errorf(codes.Internal, "get master account failed: %v", err)
+	}
+
+	b, err := ultpb.Encode(f.Account)
+	if err != nil {
+		return resp, status.Error(codes.Internal, "encode master account failed")
 	}
 	resp.Data = b
 
