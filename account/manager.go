@@ -41,7 +41,8 @@ type Manager struct {
 
 	baseReserve int64
 
-	master *ultpb.Account
+	Master     *ultpb.Account
+	MasterSeed string
 }
 
 func NewManager(d db.Database, baseReserve int64) *Manager {
@@ -76,17 +77,10 @@ func (am *Manager) CreateMasterAccount(networkID []byte, balance int64, seqNum u
 	if err != nil {
 		return fmt.Errorf("get master account failed: %v", err)
 	}
-	am.master = acc
+	am.Master = acc
+	am.MasterSeed = privKey
 
 	return nil
-}
-
-// Get the master account.
-func (am *Manager) GetMasterAccount() (*ultpb.Account, error) {
-	if am.master == nil {
-		return nil, errors.New("Master account not exist")
-	}
-	return am.master, nil
 }
 
 // Create a new account with initial balance. Note that this method
