@@ -119,7 +119,7 @@ func (c *GrpcClient) QueryTx(txKey string) (*types.TxStatus, error) {
 }
 
 // GetAccount gets the account with the requested account id.
-func (c *GrpcClient) GetAccount(accountID string) (*types.Account, error) {
+func (c *GrpcClient) GetAccount(accountID string) (*ultpb.Account, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(time.Second))
 	defer cancel()
 
@@ -137,15 +137,5 @@ func (c *GrpcClient) GetAccount(accountID string) (*types.Account, error) {
 		return nil, fmt.Errorf("decode account failed: %v", err)
 	}
 
-	account := &types.Account{
-		AccountID:        acc.AccountID,
-		Balance:          acc.Balance,
-		Signer:           acc.Signer,
-		SeqNum:           acc.SeqNum,
-		EntryCount:       acc.EntryCount,
-		BuyingLiability:  acc.Liability.Buying,
-		SellingLiability: acc.Liability.Selling,
-	}
-
-	return account, nil
+	return acc, nil
 }
