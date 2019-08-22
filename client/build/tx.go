@@ -110,11 +110,11 @@ func (t *Tx) GetTxKey() (string, error) {
 		return "", fmt.Errorf("encode tx failed: %v", err)
 	}
 
-	accKey := &crypto.ULTKey{
+	txKey := &crypto.ULTKey{
 		Code: crypto.KeyTypeTx,
 		Hash: crypto.SHA256HashBytes(b),
 	}
-	keyStr := crypto.EncodeKey(accKey)
+	keyStr := crypto.EncodeKey(txKey)
 
 	return keyStr, nil
 }
