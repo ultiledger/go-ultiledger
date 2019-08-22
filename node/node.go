@@ -60,15 +60,14 @@ type Node struct {
 	stopChan chan struct{}
 
 	// Futures for communicating among components.
-	txFuture            chan *future.Tx
-	peerFuture          chan *future.Peer
-	stmtFuture          chan *future.Statement
-	ledgerFuture        chan *future.Ledger
-	quorumFuture        chan *future.Quorum
-	txsetFuture         chan *future.TxSet
-	txsFuture           chan *future.TxStatus
-	accountFuture       chan *future.Account
-	masterAccountFuture chan *future.Account
+	txFuture      chan *future.Tx
+	peerFuture    chan *future.Peer
+	stmtFuture    chan *future.Statement
+	ledgerFuture  chan *future.Ledger
+	quorumFuture  chan *future.Quorum
+	txsetFuture   chan *future.TxSet
+	txsFuture     chan *future.TxStatus
+	accountFuture chan *future.Account
 }
 
 // NewNode creates a Node which controls all the sub components.
@@ -137,23 +136,21 @@ func NewNode(conf *Config) *Node {
 	quorumFuture := make(chan *future.Quorum)
 	txsetFuture := make(chan *future.TxSet)
 	accountFuture := make(chan *future.Account)
-	masterAccountFuture := make(chan *future.Account)
 
 	// Construct node server context and create node server.
 	serverCtx := &rpc.ServerContext{
-		NetworkID:           networkID,
-		Addr:                addr,
-		NodeID:              nodeID,
-		Seed:                seed,
-		PeerFuture:          peerFuture,
-		TxFuture:            txFuture,
-		StmtFuture:          stmtFuture,
-		TxStatusFuture:      txsFuture,
-		LedgerFuture:        ledgerFuture,
-		QuorumFuture:        quorumFuture,
-		TxSetFuture:         txsetFuture,
-		AccountFuture:       accountFuture,
-		MasterAccountFuture: masterAccountFuture,
+		NetworkID:      networkID,
+		Addr:           addr,
+		NodeID:         nodeID,
+		Seed:           seed,
+		PeerFuture:     peerFuture,
+		TxFuture:       txFuture,
+		StmtFuture:     stmtFuture,
+		TxStatusFuture: txsFuture,
+		LedgerFuture:   ledgerFuture,
+		QuorumFuture:   quorumFuture,
+		TxSetFuture:    txsetFuture,
+		AccountFuture:  accountFuture,
 	}
 	nodeServer := rpc.NewNodeServer(serverCtx)
 
@@ -320,13 +317,6 @@ func (n *Node) serveNode() {
 			account, err := n.am.GetAccount(n.database, acc.AccountID)
 			if err != nil {
 				log.Errorw("get account failed: %v", err, "accountID", acc.AccountID)
-			}
-			acc.Account = account
-			acc.Respond(err)
-		case acc := <-n.masterAccountFuture:
-			account, err := n.am.GetMasterAccount()
-			if err != nil {
-				log.Errorf("get master account failed: %v", err)
 			}
 			acc.Account = account
 			acc.Respond(err)
