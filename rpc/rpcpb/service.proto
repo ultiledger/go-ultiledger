@@ -3,6 +3,9 @@ syntax = "proto3";
 package rpcpb;
 
 service Node {
+  // GetMasterAccount allows the client to get the master account of the network,
+  // the main purpose of the method is for creating test accounts for testnet.
+  rpc GetMasterAccount(GetMasterAccountRequest) returns (GetMasterAccountResponse) {}
   // GetAccount allows the client to get the account information of an account.
   rpc GetAccount(GetAccountRequest) returns (GetAccountResponse) {}
   // SubmitTx is the main way for the client to submit a transaction.
@@ -61,6 +64,14 @@ message QueryTxRequest {
 
 message QueryTxResponse {
   TxStatus TxStatus = 1;
+}
+
+message GetMasterAccountRequest {
+  string NetworkID = 1;
+}
+
+message GetMasterAccountResponse {
+  bytes Data = 1;
 }
 
 message GetAccountRequest {
