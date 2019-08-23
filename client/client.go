@@ -20,9 +20,11 @@ import (
 	"fmt"
 	"time"
 
+	b58 "github.com/mr-tron/base58/base58"
 	"google.golang.org/grpc"
 
 	"github.com/ultiledger/go-ultiledger/client/types"
+	"github.com/ultiledger/go-ultiledger/crypto"
 	"github.com/ultiledger/go-ultiledger/rpc/rpcpb"
 	"github.com/ultiledger/go-ultiledger/ultpb"
 )
@@ -44,9 +46,14 @@ func New(networkID, coreEndpoints string) (*GrpcClient, error) {
 	if err != nil {
 		return nil, fmt.Errorf("connect to core servers failed: %v", err)
 	}
+
+	// Compute the hash of network id.
+	netID := crypto.SHA256HashBytes([]byte(networkID))
+	netIDStr := b58.Encode(netID[:])
+
 	client := rpcpb.NewNodeClient(conn)
 	gc := &GrpcClient{
-		networkID:     networkID,
+		networkID:     netIDStr,
 		coreEndpoints: coreEndpoints,
 		client:        client,
 	}
