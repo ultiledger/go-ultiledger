@@ -31,24 +31,22 @@ import (
 // works as a load balancer to the backend ult servers.
 type GrpcClient struct {
 	networkID     string
-	accountID     string
 	coreEndpoints string
 	client        rpcpb.NodeClient
 }
 
 // New creates a GrpcClient to the given target servers.
-func New(networkID, accountID, coreEndpoints string) (*GrpcClient, error) {
+func New(networkID, coreEndpoints string) (*GrpcClient, error) {
 	// Connect to node servers.
 	r := NewResolver()
 	b := grpc.RoundRobin(r)
-	conn, err := grpc.Dial(coreEndpoints, grpc.WithInsecure(), grpc.WithBalancer(b), grpc.WithBlock(), grpc.WithTimeout(time.Second))
+	conn, err := grpc.Dial(coreEndpoints, grpc.WithInsecure(), grpc.WithBalancer(b), grpc.WithBlock(), grpc.WithTimeout(3*time.Second))
 	if err != nil {
 		return nil, fmt.Errorf("connect to core servers failed: %v", err)
 	}
 	client := rpcpb.NewNodeClient(conn)
 	gc := &GrpcClient{
 		networkID:     networkID,
-		accountID:     accountID,
 		coreEndpoints: coreEndpoints,
 		client:        client,
 	}
