@@ -3,5 +3,6 @@ ultiledger
 *.yaml
 ult
 ultcli
+ulttest
 ulthub
 *.db
