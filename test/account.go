@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package testcase
+package test
 
 import (
 	"errors"
@@ -28,6 +28,10 @@ func init() {
 
 // CreateTestAccount tests the correctness of creating a test account.
 type CreateTestAccount struct{}
+
+func (cta *CreateTestAccount) Desc() string {
+	return "testcase: create test account"
+}
 
 func (cta *CreateTestAccount) Run(c *client.GrpcClient) error {
 	// Generate a key pair.

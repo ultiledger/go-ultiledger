@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package testcase
+package test
 
 import (
 	"github.com/ultiledger/go-ultiledger/client"
@@ -30,4 +30,9 @@ func Register(tc TestCase) {
 // implemented.
 type TestCase interface {
 	Run(c *client.GrpcClient) error
+	Desc() string
+}
+
+func GetAll() []TestCase {
+	return cases
 }
