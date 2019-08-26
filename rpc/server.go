@@ -282,7 +282,7 @@ func (s *NodeServer) SubmitTx(ctx context.Context, req *rpcpb.SubmitTxRequest) (
 func (s *NodeServer) QueryTx(ctx context.Context, req *rpcpb.QueryTxRequest) (*rpcpb.QueryTxResponse, error) {
 	resp := &rpcpb.QueryTxResponse{}
 
-	log.Infow("received new tx query", "req", req)
+	log.Infow("received new tx query", "txKey", req.TxKey)
 
 	if s.networkID != req.NetworkID {
 		return resp, status.Error(codes.InvalidArgument, "incompatible network id.")
