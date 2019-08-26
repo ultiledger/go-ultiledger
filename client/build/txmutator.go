@@ -217,12 +217,13 @@ func (p *Payment) validate() error {
 		return errors.New("asset is nil")
 	}
 
-	if len(p.Asset.AssetName) > 4 {
-		return errors.New("asset name is too long")
-	}
-
-	if !crypto.IsValidAccountKey(p.Asset.Issuer) {
-		return errors.New("invalid asset issuer account key")
+	if p.Asset.AssetType != CUSTOM {
+		if len(p.Asset.AssetName) > 4 {
+			return errors.New("asset name is too long")
+		}
+		if !crypto.IsValidAccountKey(p.Asset.Issuer) {
+			return errors.New("invalid asset issuer account key")
+		}
 	}
 
 	switch p.Asset.AssetType {
