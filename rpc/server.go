@@ -372,13 +372,11 @@ func (s *NodeServer) CreateTestAccount(ctx context.Context, req *rpcpb.CreateTes
 			},
 		},
 	})
-
 	// Get the tx key.
 	txKey, err := ultpb.GetTxKey(tx)
 	if err != nil {
 		return resp, status.Errorf(codes.Internal, "get tx key failed: %v", err)
 	}
-
 	txf := &future.Tx{Tx: tx, TxKey: txKey}
 	txf.Init()
 	s.txFuture <- txf
@@ -465,6 +463,7 @@ func (s *NodeServer) Notify(ctx context.Context, req *rpcpb.NotifyRequest) (*rpc
 		if err != nil {
 			return resp, status.Error(codes.InvalidArgument, "decode tx failed")
 		}
+		// Get the txKey.
 		txKey, err := ultpb.GetTxKey(tx)
 		if err != nil {
 			return resp, status.Errorf(codes.Internal, "get tx key failed: %v", err)
