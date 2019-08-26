@@ -384,6 +384,7 @@ func (tm *Manager) getTxOpList(opList []*ultpb.Op, accountID string, ledgerSeqNu
 		case ultpb.OpType_CREATE_ACCOUNT:
 			ca := o.GetCreateAccount()
 			ops = append(ops, &op.CreateAccount{
+				AM:           tm.am,
 				SrcAccountID: accountID,
 				DstAccountID: ca.AccountID,
 				Balance:      ca.Balance,
