@@ -24,6 +24,7 @@ import (
 	"github.com/ultiledger/go-ultiledger/client/types"
 	"github.com/ultiledger/go-ultiledger/crypto"
 	"github.com/ultiledger/go-ultiledger/ledger"
+	"github.com/ultiledger/go-ultiledger/log"
 	"github.com/ultiledger/go-ultiledger/ultpb"
 )
 
@@ -125,6 +126,7 @@ func (cta *OneToOnePayment) Run(c *client.GrpcClient) error {
 			case types.Accepted:
 				continue
 			case types.Confirmed:
+				log.Infow("the tx is confirmed", "txKey", txKey)
 				// Get the account
 				acc1, err = c.GetAccount(account1.AccountID)
 				if err != nil {
@@ -134,7 +136,14 @@ func (cta *OneToOnePayment) Run(c *client.GrpcClient) error {
 				if err != nil {
 					return fmt.Errorf("get account failed: %v", err)
 				}
-				break
+				// Check the balance of the accounts.
+				if acc1.Balance != int64(100000000000)-int64(10000000000)-baseFee {
+					return fmt.Errorf("src account with unexpected balance: %d", acc1.Balance)
+				}
+				if acc2.Balance != int64(100000000000)+int64(10000000000) {
+					return fmt.Errorf("dst account with unexpected balance: %d", acc2.Balance)
+				}
+				return nil
 			case types.Failed:
 				return fmt.Errorf("tx failed: %v", status.ErrorMessage)
 			default:
@@ -143,14 +152,6 @@ func (cta *OneToOnePayment) Run(c *client.GrpcClient) error {
 		case <-timer.C:
 			return errors.New("query result takes too long")
 		}
-	}
-
-	// Check the balance of the accounts.
-	if acc1.Balance != int64(100000000000)-int64(10000000000)-baseFee {
-		return fmt.Errorf("src account with unexpected balance: %d", acc1.Balance)
-	}
-	if acc2.Balance != int64(100000000000)+int64(10000000000) {
-		return fmt.Errorf("dst account with unexpected balance: %d", acc2.Balance)
 	}
 
 	return nil
