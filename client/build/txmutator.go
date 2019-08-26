@@ -121,6 +121,9 @@ func (s *SeqNum) Mutate(tx *ultpb.Tx) error {
 	if err := s.validate(); err != nil {
 		return err
 	}
+
+	tx.SeqNum = s.SeqNum
+
 	return nil
 }
 
