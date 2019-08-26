@@ -374,15 +374,10 @@ func (s *NodeServer) CreateTestAccount(ctx context.Context, req *rpcpb.CreateTes
 	})
 
 	// Get the tx key.
-	b, err := ultpb.Encode(tx)
+	txKey, err := ultpb.GetTxKey(tx)
 	if err != nil {
-		return resp, status.Errorf(codes.Internal, "encode tx failed: %v", err)
+		return resp, status.Errorf(codes.Internal, "get tx key failed: %v", err)
 	}
-	tk := &crypto.ULTKey{
-		Code: crypto.KeyTypeTx,
-		Hash: crypto.SHA256HashBytes(b),
-	}
-	txKey := crypto.EncodeKey(tk)
 
 	txf := &future.Tx{Tx: tx, TxKey: txKey}
 	txf.Init()
@@ -470,7 +465,11 @@ func (s *NodeServer) Notify(ctx context.Context, req *rpcpb.NotifyRequest) (*rpc
 		if err != nil {
 			return resp, status.Error(codes.InvalidArgument, "decode tx failed")
 		}
-		txf := &future.Tx{Tx: tx}
+		txKey, err := ultpb.GetTxKey(tx)
+		if err != nil {
+			return resp, status.Errorf(codes.Internal, "get tx key failed: %v", err)
+		}
+		txf := &future.Tx{Tx: tx, TxKey: txKey}
 		txf.Init()
 		s.txFuture <- txf
 		if err := txf.Error(); err != nil {
