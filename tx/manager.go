@@ -370,6 +370,14 @@ func (tm *Manager) ApplyTxList(txList []*ultpb.Tx, ledgerSeqNum uint64) error {
 			if err := dt.Commit(); err != nil {
 				return fmt.Errorf("commit changes to db failed: %v", err)
 			}
+			// Update the status of the tx.
+			status := &rpcpb.TxStatus{
+				StatusCode: rpcpb.TxStatusCode_CONFIRMED,
+			}
+			err = tm.UpdateTxStatus(txk, status)
+			if err != nil {
+				return fmt.Errorf("update tx status failed: %v", err)
+			}
 		}
 	}
 
