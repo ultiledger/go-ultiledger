@@ -146,6 +146,9 @@ type Engine struct {
 	// Last time of externalization.
 	lastExtTime time.Time
 
+	// Last time of proposition.
+	lastProposeTime time.Time
+
 	// Channel for stopping goroutines.
 	stopChan chan struct{}
 }
@@ -284,9 +287,8 @@ func (e *Engine) Start() {
 					log.Errorf("externalize value failed: %v", err, "index", ext.Index, "value", ext.Value)
 					continue
 				}
-				now := time.Now()
-				duration := int(now.Sub(e.lastExtTime).Seconds())
-				e.lastExtTime = now
+				e.lastExtTime = time.Now()
+				duration := int(e.lastExtTime.Sub(e.lastProposeTime).Seconds())
 				if duration < e.proposeInterval {
 					// Set a timer for the next propose.
 					go func() {
@@ -483,6 +485,7 @@ func (e *Engine) queryTxSet(txsetHash string) (*TxSet, error) {
 
 // Try to propose current transaction set for consensus.
 func (e *Engine) Propose() error {
+	e.lastProposeTime = time.Now()
 	// Node without the role of "validator" cannot propose
 	// value for consensus.
 	if e.role != "validator" {
@@ -533,7 +536,10 @@ func (e *Engine) Propose() error {
 
 	log.Infow("nominate consensus value", "decreeIdx", decreeIdx, "txsetKey", hash, "currCV", currHeader.ConsensusValue, "newCV", cvStr)
 
-	e.nominate(decreeIdx, currHeader.ConsensusValue, cvStr)
+	err = e.nominate(decreeIdx, currHeader.ConsensusValue, cvStr)
+	if err != nil {
+		return fmt.Errorf("nominate value failed: %v", err)
+	}
 
 	return nil
 }

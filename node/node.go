@@ -141,6 +141,7 @@ func NewNode(conf *Config) *Node {
 	serverCtx := &rpc.ServerContext{
 		NetworkID:      networkID,
 		Addr:           addr,
+		AM:             am,
 		NodeID:         nodeID,
 		Seed:           seed,
 		PeerFuture:     peerFuture,
