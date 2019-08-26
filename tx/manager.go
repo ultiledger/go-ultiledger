@@ -108,7 +108,7 @@ type Manager struct {
 	// Set for filtering duplicated tx.
 	txSet mapset.Set
 
-	// accountID to tx history map
+	// accountID to tx history map.
 	rwm      sync.RWMutex
 	accTxMap map[string]*TxHistory
 
@@ -408,6 +408,14 @@ func (tm *Manager) getTxOpList(opList []*ultpb.Op, accountID string, ledgerSeqNu
 				DstAccountID: payment.AccountID,
 				Asset:        payment.Asset,
 				Amount:       payment.Amount,
+			})
+		case ultpb.OpType_TRUST:
+			trust := o.GetTrust()
+			ops = append(ops, &op.Trust{
+				AM:           tm.am,
+				SrcAccountID: accountID,
+				Asset:        trust.Asset,
+				Limit:        trust.Limit,
 			})
 		default:
 			return nil, fmt.Errorf("received invalid op type: %v", o.OpType)
