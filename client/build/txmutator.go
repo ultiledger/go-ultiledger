@@ -217,7 +217,7 @@ func (p *Payment) validate() error {
 		return errors.New("asset is nil")
 	}
 
-	if p.Asset.AssetType != CUSTOM {
+	if p.Asset.AssetType == CUSTOM {
 		if len(p.Asset.AssetName) > 4 {
 			return errors.New("asset name is too long")
 		}
