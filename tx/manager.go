@@ -203,7 +203,7 @@ func (tm *Manager) AddTx(txKey string, tx *ultpb.Tx) error {
 
 	// Check whether tx sequence number is larger than the existing one.
 	if maxSeq > tx.SeqNum {
-		return errors.New("invalid sequence number")
+		return ErrInvalidSeqNum
 	}
 
 	// Check whether the account has sufficient balance.
