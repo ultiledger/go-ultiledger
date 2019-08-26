@@ -133,6 +133,7 @@ func NewManager(ctx *ManagerContext) *Manager {
 		am:          ctx.AM,
 		pm:          ctx.PM,
 		em:          ctx.EM,
+		txSet:       mapset.NewSet(),
 		accTxMap:    make(map[string]*TxHistory),
 		txChan:      make(chan *ultpb.Tx),
 		stopChan:    make(chan struct{}),
