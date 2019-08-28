@@ -93,7 +93,7 @@ quorum:
     - "2jeyThunzi1eyEcJsnHDHkLfvXjp9kdzcDAXTUUVzoinE"
 ```
 
-The node decides that there are 3 validators in its quorum and the threshold for the node to agree on any decision is 0.51. We take the ceiling of `0.51 * 3`, which is 2,  as the integer threshold to decide whether the node should accept any consensus decision from the quorum.
+The nodes in the quorum should have the role of `validator` as a `watcher` node will not participate any voting processes. The validators are identified with their `node_id`s. The node decides that there are 3 validators in its quorum and the threshold for the node to agree on any decision is 0.51. We take the ceiling of `0.51 * 3`, which is 2,  as the integer threshold to decide whether the node should accept any consensus decision from the quorum.
 
 # Client
 
