@@ -25,8 +25,8 @@ import (
 
 var gennodeidCmd = &cobra.Command{
 	Use:   "gennodeid",
-	Short: "Generate a keypair for a node",
-	Long: `Generate a keypair for a node, the keypair contains the crypto 
+	Short: "Generate a random keypair for a node",
+	Long: `Generate a random keypair for a node, the keypair contains the crypto 
 seed and the public key. The public key is the ID for the node.
 The seed is used for signing messages coming out of the node.`,
 	Run: func(cmd *cobra.Command, args []string) {
@@ -38,6 +38,22 @@ The seed is used for signing messages coming out of the node.`,
 	},
 }
 
+var genaccountidCmd = &cobra.Command{
+	Use:   "genaccountid",
+	Short: "Generate a random keypair for an account",
+	Long: `Generate a random keypair for an account, the keypair contains the crypto 
+seed and the public key. The public key is the ID for the account.
+The seed is used for signing messages from the account.`,
+	Run: func(cmd *cobra.Command, args []string) {
+		pub, seed, err := crypto.GetAccountKeypair()
+		if err != nil {
+			log.Fatalf("generate random account ID failed: %v", err)
+		}
+		fmt.Printf("AccountID: %s, Seed: %s\n", pub, seed)
+	},
+}
+
 func init() {
 	rootCmd.AddCommand(gennodeidCmd)
+	rootCmd.AddCommand(genaccountidCmd)
 }
