@@ -79,7 +79,7 @@ NodeID: 2kPPBJuKvwSpBfLgSAxs3Rd5FSmRMonMPT2cT2eRLDv7f, Seed: oWCA5t5dazfWjtfLP25
 # Config
 
 The `ult` command binary relies on a config file to work. The full configuration parameters can be found in `config.example`.
-The most import parameter to set is in the `quorum` section. Ultiledger allows the node to choose their quorum in a decentualized way.
+The most import parameter to set is in the `quorum` section. Ultiledger allows the node to choose their quorum in a decentralized way.
 That is the node has to decide their quorum by itself instead of being provided by the network. 
 
 For example:
