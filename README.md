@@ -154,3 +154,5 @@ The following snippet shows the core operations needed to submit a point-to-poin
   // can use the computed `txKey` to query the status of the
   // transaction later on.
 ```
+
+See the [test](test) folder for the full code and other examples.
