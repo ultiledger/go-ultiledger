@@ -1,9 +1,9 @@
-# Go Ultiledger
+## Go Ultiledger
 Official Go implementation of the Ultiledger network.
 
-# How to build
+## How to build
 
-## Building from source
+### Building from source
 The primary command binary of Ultiledger is `ult`. You need to have Go (version 1.12 or later) installed for building `ult`. Then run
 
 ```shell
@@ -12,7 +12,7 @@ cd cmd/ult && go build
 
 That's it! Now you can use the binary `ult` to start creating your own Ultiledger nodes.
 
-## Using Docker
+### Using Docker
 If you have Docker properly installed, you can just run
 
 ```shell
@@ -21,7 +21,7 @@ docker run ult:latest help
 
 to get start.
 
-# Executables
+## Executables
 
 There are other helpful command binaries alongwith the main `ult`.
 
@@ -31,7 +31,7 @@ There are other helpful command binaries alongwith the main `ult`.
 |   `ultcli`  | The utility command binary for generating IDs for nodes and accounts. |
 |   `ulttest` | It is used for running defined test cases in test network. |
 
-## Running `ult`
+### Running `ult`
 
 For bootstrapping a new node, we shall run the following command:
 
@@ -52,7 +52,7 @@ If the node is crashed for some reasons and we want to recover the node, we shou
 
 The command will load the lastest checkpoint of the ledger and try to move forward with the current states.
 
-## Running `ultcli`
+### Running `ultcli`
 
 The `ultcli` can be used to generate a random node id or a random account id.
 
@@ -76,7 +76,7 @@ AccountID: XGXokiYjAQ52ud4ZzefLMnPHjLhdCFt5Z5ceHoaBpZcm, Seed: d9pxE1ugN21tVheB3
 NodeID: 2kPPBJuKvwSpBfLgSAxs3Rd5FSmRMonMPT2cT2eRLDv7f, Seed: oWCA5t5dazfWjtfLP254gLznV8mS54wa514F337VQhNK
 ```
 
-# Config
+## Config
 
 The `ult` command binary relies on a config file to work. The full configuration parameters can be found in `config.example`.
 The most import parameter to set is in the `quorum` section. Ultiledger allows the node to choose their quorum in a decentralized way.
@@ -95,6 +95,62 @@ quorum:
 
 The nodes in the quorum should have the role of `validator` as a `watcher` node will not participate any voting processes. The validators are identified with their `node_id`s. The node decides that there are 3 validators in its quorum and the threshold for the node to agree on any decision is 0.51. We take the ceiling of `0.51 * 3`, which is 2,  as the integer threshold to decide whether the node should accept any consensus decision from the quorum.
 
-# Client
+## Client
 
-The `client` package contains the necessary libraries to interact with the Ultiledger network. 
+Clients interact with the Ultiledger network by submitting well-formed transactions. Only after being confirmed by the network through consensus, transactions could be regarded as valid.
+
+### Payment
+
+The following snippet shows the core operations needed to submit a point-to-point payment transaction to the network.
+
+```go
+  // The account id and seed of the source account.
+  srcAccountID, srcSeed := ......
+  // The destination account to receive the payment.
+  dstAccountID := ......
+  
+  // Query the source account to find out the current sequence number.
+  srcAccount, err := clt.GetAccount(srcAccountID)
+  if err != nil {
+     return err
+  }
+
+	// Mutators are operators to maniputate the transaction.
+  var mutators []build.TxMutator
+	mutators = append(mutators, &build.AccountID{AccountID: account1.AccountID})
+	mutators = append(mutators, &build.Payment{
+		AccountID: account2.AccountID,
+		Amount:    int64(10000000000), // Pay 1 ULT
+		Asset:     &build.Asset{AssetType: build.NATIVE},
+	})
+	mutators = append(mutators, &build.SeqNum{SeqNum: account1.SeqNum + 1})
+
+  // Apply the mutators to the transaction.
+	tx := build.NewTx()
+	err = tx.Add(mutators...)
+	if err != nil {
+		return fmt.Errorf("build tx failed: %v", err)
+	}
+
+  // Sign the transaction with the source account seed.
+	payload, signature, err := tx.Sign(srcSeed)
+	if err != nil {
+		return fmt.Errorf("sign payment tx failed: %v", err)
+	}
+
+  // Compute the hash key of the transaction.
+	txKey, err := tx.GetTxKey()
+	if err != nil {
+		return fmt.Errorf("get tx key failed: %v", err)
+	}
+
+	// Submit the tx.
+	err = cli.SubmitTx(txKey, signature, payload)
+	if err != nil {
+		return fmt.Errorf("submit tx failed: %v", err)
+	}
+  // If we arrive in here, it means the transaction has passed
+  // necessary admission control checks but not applied yet. We
+  // can use the computed `txKey` to query the status of the
+  // transaction later on. 
+``` 
