@@ -112,45 +112,45 @@ The following snippet shows the core operations needed to submit a point-to-poin
   // Query the source account to find out the current sequence number.
   srcAccount, err := clt.GetAccount(srcAccountID)
   if err != nil {
-     return err
+    return err
   }
 
-	// Mutators are operators to maniputate the transaction.
+  // Mutators are operators to maniputate the transaction.
   var mutators []build.TxMutator
-	mutators = append(mutators, &build.AccountID{AccountID: account1.AccountID})
-	mutators = append(mutators, &build.Payment{
-		AccountID: account2.AccountID,
-		Amount:    int64(10000000000), // Pay 1 ULT
-		Asset:     &build.Asset{AssetType: build.NATIVE},
-	})
-	mutators = append(mutators, &build.SeqNum{SeqNum: account1.SeqNum + 1})
+  mutators = append(mutators, &build.AccountID{AccountID: account1.AccountID})
+  mutators = append(mutators, &build.Payment{
+    AccountID: account2.AccountID,
+    Amount:    int64(10000000000), // Pay 1 ULT
+    Asset:     &build.Asset{AssetType: build.NATIVE},
+  })
+  mutators = append(mutators, &build.SeqNum{SeqNum: account1.SeqNum + 1})
 
   // Apply the mutators to the transaction.
-	tx := build.NewTx()
-	err = tx.Add(mutators...)
-	if err != nil {
-		return fmt.Errorf("build tx failed: %v", err)
-	}
+  tx := build.NewTx()
+  err = tx.Add(mutators...)
+  if err != nil {
+    return fmt.Errorf("build tx failed: %v", err)
+  }
 
   // Sign the transaction with the source account seed.
-	payload, signature, err := tx.Sign(srcSeed)
-	if err != nil {
-		return fmt.Errorf("sign payment tx failed: %v", err)
-	}
+  payload, signature, err := tx.Sign(srcSeed)
+  if err != nil {
+    return fmt.Errorf("sign payment tx failed: %v", err)
+  }
 
   // Compute the hash key of the transaction.
-	txKey, err := tx.GetTxKey()
-	if err != nil {
-		return fmt.Errorf("get tx key failed: %v", err)
-	}
+  txKey, err := tx.GetTxKey()
+  if err != nil {
+    return fmt.Errorf("get tx key failed: %v", err)
+  }
 
-	// Submit the tx.
-	err = cli.SubmitTx(txKey, signature, payload)
-	if err != nil {
-		return fmt.Errorf("submit tx failed: %v", err)
-	}
+  // Submit the tx.
+  err = cli.SubmitTx(txKey, signature, payload)
+  if err != nil {
+    return fmt.Errorf("submit tx failed: %v", err)
+  }
   // If we arrive in here, it means the transaction has passed
   // necessary admission control checks but not applied yet. We
   // can use the computed `txKey` to query the status of the
-  // transaction later on. 
-``` 
+  // transaction later on.
+```
