@@ -117,13 +117,13 @@ The following snippet shows the core operations needed to submit a point-to-poin
 
   // Mutators are operators to maniputate the transaction.
   var mutators []build.TxMutator
-  mutators = append(mutators, &build.AccountID{AccountID: account1.AccountID})
+  mutators = append(mutators, &build.AccountID{AccountID: srcAccountID})
   mutators = append(mutators, &build.Payment{
-    AccountID: account2.AccountID,
+    AccountID: dstAccountID,
     Amount:    int64(10000000000), // Pay 1 ULT
     Asset:     &build.Asset{AssetType: build.NATIVE},
   })
-  mutators = append(mutators, &build.SeqNum{SeqNum: account1.SeqNum + 1})
+  mutators = append(mutators, &build.SeqNum{SeqNum: srcAccount.SeqNum + 1})
 
   // Apply the mutators to the transaction.
   tx := build.NewTx()
