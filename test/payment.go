@@ -25,7 +25,6 @@ import (
 	"github.com/ultiledger/go-ultiledger/crypto"
 	"github.com/ultiledger/go-ultiledger/ledger"
 	"github.com/ultiledger/go-ultiledger/log"
-	"github.com/ultiledger/go-ultiledger/ultpb"
 )
 
 func init() {
@@ -42,55 +41,58 @@ func (p *OneToOnePayment) Desc() string {
 }
 
 func (cta *OneToOnePayment) Run(c *client.GrpcClient) error {
-	// Generate a key pair for the first account.
-	pk1, seed1, err := crypto.GetAccountKeypair()
+	// Generate a key pair for the destination account.
+	srcAccountID, srcSeed, err := crypto.GetAccountKeypair()
 	if err != nil {
-		return fmt.Errorf("get account keypair failed: %v", err)
+		return fmt.Errorf("get source account keypair failed: %v", err)
 	}
 	// Create the first test account.
-	account1, err := c.CreateTestAccount(pk1)
+	srcAccount, err := c.CreateTestAccount(srcAccountID)
 	if err != nil {
-		return fmt.Errorf("create test account failed: %v", err)
+		return fmt.Errorf("create test source account failed: %v", err)
 	}
-	if account1.AccountID != pk1 {
-		return errors.New("test account with mismatch account id")
+	if srcAccount.AccountID != srcAccountID {
+		return errors.New("test source account with mismatch account id")
 	}
-	if account1.Balance != int64(100000000000) {
-		return fmt.Errorf("test account with unexpected balance: %d", account1.Balance)
+	if srcAccount.Balance != int64(100000000000) {
+		return fmt.Errorf("test source account with unexpected balance: %d", srcAccount.Balance)
 	}
 
-	// Generate a key pair for the second account.
-	pk2, _, err := crypto.GetAccountKeypair()
+	// Generate a key pair for the destination account.
+	dstAccountID, _, err := crypto.GetAccountKeypair()
 	if err != nil {
-		return fmt.Errorf("get account keypair failed: %v", err)
+		return fmt.Errorf("get destination account keypair failed: %v", err)
 	}
 	// Create the second test account.
-	account2, err := c.CreateTestAccount(pk2)
+	dstAccount, err := c.CreateTestAccount(dstAccountID)
 	if err != nil {
-		return fmt.Errorf("create test account failed: %v", err)
+		return fmt.Errorf("create test destination account failed: %v", err)
 	}
-	if account2.AccountID != pk2 {
-		return errors.New("test account with mismatch account id")
+	if dstAccount.AccountID != dstAccountID {
+		return errors.New("test destination account with mismatch account id")
 	}
-	if account2.Balance != int64(100000000000) {
-		return fmt.Errorf("test account with unexpected balance: %d", account2.Balance)
+	if dstAccount.Balance != int64(100000000000) {
+		return fmt.Errorf("test account with unexpected balance: %d", dstAccount.Balance)
 	}
 
-	// Create the payment transaction.
-	tx := build.NewTx()
-	accID := &build.AccountID{AccountID: account1.AccountID}
-	paymentMut := &build.Payment{
-		AccountID: account2.AccountID,
+	// Mutators are operators to maniputate the transaction.
+	var mutators []build.TxMutator
+	mutators = append(mutators, &build.AccountID{AccountID: srcAccountID})
+	mutators = append(mutators, &build.Payment{
+		AccountID: dstAccountID,
 		Amount:    int64(10000000000), // Pay 1 ULT
 		Asset:     &build.Asset{AssetType: build.NATIVE},
-	}
-	seqNumMut := &build.SeqNum{SeqNum: account1.SeqNum + 1}
+	})
+	mutators = append(mutators, &build.SeqNum{SeqNum: srcAccount.SeqNum + 1})
 
-	err = tx.Add(accID, paymentMut, seqNumMut)
+	// Apply the mutators to the transaction.
+	tx := build.NewTx()
+	err = tx.Add(mutators...)
 	if err != nil {
 		return fmt.Errorf("build tx failed: %v", err)
 	}
-	payload, signature, err := tx.Sign(seed1)
+
+	payload, signature, err := tx.Sign(srcSeed)
 	if err != nil {
 		return fmt.Errorf("sign payment tx failed: %v", err)
 	}
@@ -104,8 +106,6 @@ func (cta *OneToOnePayment) Run(c *client.GrpcClient) error {
 	if err != nil {
 		return fmt.Errorf("submit tx failed: %v", err)
 	}
-
-	var acc1, acc2 *ultpb.Account
 
 	// Wait until the tx be confirmed.
 	ticker := time.NewTicker(2 * time.Second)
@@ -127,21 +127,20 @@ func (cta *OneToOnePayment) Run(c *client.GrpcClient) error {
 				continue
 			case types.Confirmed:
 				log.Infow("the tx is confirmed", "txKey", txKey)
-				// Get the account
-				acc1, err = c.GetAccount(account1.AccountID)
+				srcAcc, err := c.GetAccount(srcAccount.AccountID)
 				if err != nil {
 					return fmt.Errorf("get account failed: %v", err)
 				}
-				acc2, err = c.GetAccount(account2.AccountID)
+				dstAcc, err := c.GetAccount(dstAccount.AccountID)
 				if err != nil {
 					return fmt.Errorf("get account failed: %v", err)
 				}
 				// Check the balance of the accounts.
-				if acc1.Balance != int64(100000000000)-int64(10000000000)-baseFee {
-					return fmt.Errorf("src account with unexpected balance: %d", acc1.Balance)
+				if srcAcc.Balance != int64(100000000000)-int64(10000000000)-baseFee {
+					return fmt.Errorf("src account with unexpected balance: %d", srcAcc.Balance)
 				}
-				if acc2.Balance != int64(100000000000)+int64(10000000000) {
-					return fmt.Errorf("dst account with unexpected balance: %d", acc2.Balance)
+				if dstAcc.Balance != int64(100000000000)+int64(10000000000) {
+					return fmt.Errorf("dst account with unexpected balance: %d", dstAcc.Balance)
 				}
 				return nil
 			case types.Failed:
