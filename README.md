@@ -23,7 +23,7 @@ to get start.
 
 ## Executables
 
-There are other helpful command binaries alongwith the main `ult`.
+There are other helpful command binaries besides the main `ult`:
 
 |    Command    | Description |
 | :-----------: | ----------- |
@@ -156,3 +156,12 @@ The following snippet shows the core operations needed to submit a point-to-poin
 ```
 
 See the [test](test) folder for the full code and other examples.
+
+## Contribution
+
+Everyone are welcomed to contribute to this project, even tiny corrections for typos will be benefitial to the project. As this project is very fresh and under active developments, we wish to provide some guidelines for the protential contributors so as to minimize undesired codes:
+
+ * Use [gofmt](https://golang.org/cmd/gofmt/)) to format your codes.
+ * Follow the official Go [commentary](https://golang.org/doc/effective_go.html#commentary) guidelines.
+ * Pull requests need to be based on and opened against the `master` branch.
+ * Commit messages should be capitalized in the first word and be ended with a period.
