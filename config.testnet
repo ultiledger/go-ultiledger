@@ -1,0 +1,49 @@
+# The node will only watch for consensus messages if the role
+# of the node is "watcher". To participate consensus, you need
+# to set the role to "validator".
+role: "validator"
+
+# The network_id is used for distinguishing between other Ultiledger networks.
+network_id: "ultiledger-testnet-20190901"
+
+# The listening network address of the node.
+network_addr: "YOUR_IP_ADDRESS"
+
+# Testnet peer addresses.
+peers:
+  - "120.78.128.36:9019"
+  - "120.78.184.87:9019"
+  - "39.108.117.72:9019"
+
+# Maximum number of peers to which the node can connect.
+max_peers: 10
+
+# The node_id is the corresponding public key derived from
+# the seed. The pair should be generated with the `ultcli`.
+node_id: "YOUR_NODE_ID"
+seed: "YOUR_NODE_SEED"
+
+# The backend implemention of the database and the path
+# of the database file.
+db_backend: "boltdb"
+db_path: "ult.db"
+
+# Example quorum with nested quorums:
+#
+# quorum:
+#   threshold: 1.0
+#   validators:
+#     - "2SZncHcDM9R3SUZQQpriVBTiYSRryZFZ1AEPNaUcVZBGM"
+#   nest_quorums:
+#     threshold: 1.0
+#     validators: 
+#       - "2SZncHcDM9R3SUZQQpriVBTiYSRryZFZ1AEPNaUcVZBGM"
+quorum:
+  threshold: 0.6
+  validators:
+    - "2Yjt3PLFj3b2vMKL8s3eszXM4TdzAvsiEaX6nr6M29sZe"
+    - "2byc4QLGYRqXZ9tdqwze5Hk5mm9ytmEKHzTv8tiDuacPP"
+    - "2bEreuk2idSnu4ZaXo4nmdf8bucTwetZnG9EuJACcWP5b"
+
+# Interval for proposing new consensus values. 
+propose_interval: 5
