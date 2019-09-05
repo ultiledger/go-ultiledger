@@ -28,6 +28,7 @@ func init() {
 	// a cleaner error message in Error level.
 	stacktraceOption := zap.AddStacktrace(zapcore.DPanicLevel)
 	callerOption := zap.AddCallerSkip(1)
+	config.OutputPaths = []string{"stdout", "ult.log"}
 	logger, err := config.Build(stacktraceOption, callerOption)
 	if err != nil {
 		panic(err)
