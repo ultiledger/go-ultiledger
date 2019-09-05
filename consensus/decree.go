@@ -1555,7 +1555,8 @@ func (d *Decree) updateBallot(b *Ballot) {
 	}
 
 	if d.currentBallot != nil && compareBallots(d.currentBallot, b) > 0 {
-		log.Fatal("cannot update current ballot with smaller one")
+		log.Warn("cannot update current ballot with smaller one")
+		return
 	}
 
 	// Deep copy the ballot.
