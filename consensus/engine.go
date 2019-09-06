@@ -266,7 +266,7 @@ func (e *Engine) Start() {
 				}
 				err = decree.Recv(stmt)
 				if err != nil {
-					log.Errorf("received statement from validator failed: %v", err)
+					log.errorf("received statement from validator failed: %v", err)
 					continue
 				}
 			case <-e.stopChan:

@@ -22,7 +22,9 @@ import (
 	"time"
 
 	pb "github.com/golang/protobuf/proto"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 
 	"github.com/ultiledger/go-ultiledger/log"
 	"github.com/ultiledger/go-ultiledger/rpc/rpcpb"
@@ -141,7 +143,10 @@ func query(clients []rpcpb.NodeClient, md metadata.MD, req *rpcpb.QueryRequest) 
 		c := clients[i]
 		b, err = queryPeer(c, md, req)
 		if err != nil {
-			log.Errorf("query peer failed: %v", err)
+			st := status.Convert(err)
+			if st.Code() != codes.NotFound {
+				log.Errorf("query peer failed: %v", err)
+			}
 			continue
 		}
 		if len(b) == 0 {
