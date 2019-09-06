@@ -122,8 +122,7 @@ type Engine struct {
 	quorumHash string
 
 	// Decrees of each round.
-	decrees    map[uint64]*Decree
-	decreeLock sync.Mutex
+	decrees sync.Map
 	// Max number of historical decrees to remember. Decree which has maxDecrees of
 	// difference with the current decree will be skipped for subsequent processing.
 	maxDecrees uint64
@@ -180,7 +179,6 @@ func NewEngine(ctx *EngineContext) *Engine {
 		maxDecrees:         ctx.MaxDecrees,
 		quorum:             ctx.Quorum,
 		quorumHash:         quorumHash,
-		decrees:            make(map[uint64]*Decree),
 		statementChan:      make(chan *ultpb.Statement),
 		rebroadcastTicker:  time.NewTicker(time.Second),
 		txChan:             make(chan *ultpb.Tx),
@@ -409,10 +407,12 @@ func (e *Engine) rebroadcast() {
 	}
 	// Rebroadcast all the statements which is not too old.
 	for seq := nextLedgerSeq; seq >= lowerLedgerSeq; seq-- {
-		decree, ok := e.decrees[seq]
+		v, ok := e.decrees.Load(seq)
 		if !ok {
 			return
 		}
+		decree := v.(*Decree)
+
 		stmts := decree.GetLatestStatements()
 		if len(stmts) == 0 {
 			return
@@ -561,12 +561,14 @@ func (e *Engine) nominate(idx uint64, prevValue string, currValue string) error 
 
 // Get a decree to participate the consensus process.
 func (e *Engine) getDecree(idx uint64, create bool) (*Decree, error) {
-	if decree, ok := e.decrees[idx]; ok {
-		return decree, nil
+	if v, ok := e.decrees.Load(idx); ok {
+		return v.(*Decree), nil
 	}
+
 	if !create {
 		return nil, errors.New("decree not exist")
 	}
+
 	// Create a new decree if there is no existing decree with the index.
 	decreeCtx := &DecreeContext{
 		Index:           idx,
@@ -578,10 +580,11 @@ func (e *Engine) getDecree(idx uint64, create bool) (*Decree, error) {
 		StmtChan:        e.statementChan,
 		ExternalizeChan: e.externalizeChan,
 	}
-	e.decreeLock.Lock()
-	e.decrees[idx] = NewDecree(decreeCtx)
-	e.decreeLock.Unlock()
-	return e.decrees[idx], nil
+
+	decree := NewDecree(decreeCtx)
+	e.decrees.Store(idx, decree)
+
+	return decree, nil
 }
 
 // Externalize a consensus value with decree index.
@@ -626,11 +629,13 @@ func (e *Engine) Externalize(idx uint64, value string) error {
 	// Remove decrees that are too old.
 	if idx > e.maxDecrees {
 		threshold := idx - e.maxDecrees
-		for i, _ := range e.decrees {
-			if i <= threshold {
-				delete(e.decrees, i)
+		rangeFunc := func(key, value interface{}) bool {
+			if key.(uint64) <= threshold {
+				e.decrees.Delete(key)
 			}
+			return true
 		}
+		e.decrees.Range(rangeFunc)
 	}
 
 	return nil

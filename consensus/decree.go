@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"sync"
 	"time"
 
 	"github.com/deckarep/golang-set"
@@ -111,7 +112,7 @@ type Decree struct {
 	accepts           mapset.Set
 	candidates        mapset.Set
 	nominationLeaders mapset.Set
-	nominations       map[string]*Statement
+	nominations       sync.Map
 	nominationRound   int
 	nominationStart   bool
 	latestNomination  *Statement
@@ -124,7 +125,7 @@ type Decree struct {
 	qBallot        *Ballot // p'
 	hBallot        *Ballot // h
 	cBallot        *Ballot // c
-	ballots        map[string]*Statement
+	ballots        sync.Map
 	latestBallot   *Statement
 	nextValue      string // z
 	ballotMsgCount int
@@ -161,9 +162,7 @@ func NewDecree(ctx *DecreeContext) *Decree {
 		accepts:           mapset.NewSet(),
 		candidates:        mapset.NewSet(),
 		nominationLeaders: mapset.NewSet(),
-		nominations:       make(map[string]*Statement),
 		currentPhase:      BallotPhasePrepare,
-		ballots:           make(map[string]*Statement),
 		ballotMsgCount:    0,
 		maxRecursions:     10,
 		maxRenomCount:     100,
@@ -199,7 +198,8 @@ func (d *Decree) Nominate(prevHash, currHash string, isRenominate bool) error {
 				updated = true
 			}
 		} else {
-			if stmt, ok := d.nominations[leader]; ok {
+			if v, ok := d.nominations.Load(leader); ok {
+				stmt := v.(*Statement)
 				nomination, err := d.getConsensusValue(stmt)
 				if err != nil {
 					return fmt.Errorf("get new consensus value from statement failed: %v", err)
@@ -399,14 +399,17 @@ func (d *Decree) getConsensusValueHash(vote string) uint64 {
 // Accept statement by checking the following two conditions:
 // 1. Voted nodes of the statment form V-blocking for local node.
 // 2. All the nodes in the quorum have voted the statement.
-func (d *Decree) federatedAccept(voteFilter func(*Statement) bool, acceptFilter func(*Statement) bool, stmts map[string]*Statement) bool {
+func (d *Decree) federatedAccept(voteFilter func(*Statement) bool, acceptFilter func(*Statement) bool, stmts sync.Map) bool {
 	// Filter the nodes with voteFilter.
 	nodes := mapset.NewSet()
-	for n, s := range stmts {
+	rangeFunc := func(key, value interface{}) bool {
+		s := value.(*Statement)
 		if voteFilter(s) {
-			nodes.Add(n)
+			nodes.Add(key)
 		}
+		return true
 	}
+	stmts.Range(rangeFunc)
 
 	// Check the v-blocking condition.
 	if isVblocking(d.quorum, nodes) {
@@ -414,11 +417,14 @@ func (d *Decree) federatedAccept(voteFilter func(*Statement) bool, acceptFilter 
 	}
 
 	// Filter nodes with acceptFilter.
-	for n, s := range stmts {
+	rangeFunc = func(key, value interface{}) bool {
+		s := value.(*Statement)
 		if acceptFilter(s) {
-			nodes.Add(n)
+			nodes.Add(key)
 		}
+		return true
 	}
+	stmts.Range(rangeFunc)
 
 	// Check the quorum condition.
 	subnodes := mapset.NewSet()
@@ -429,7 +435,9 @@ func (d *Decree) federatedAccept(voteFilter func(*Statement) bool, acceptFilter 
 		subnodes.Clear()
 		for n := range nodes.Iter() {
 			nodeID := n.(string)
-			q := d.getStatementQuorum(stmts[nodeID])
+			v, _ := stmts.Load(nodeID)
+			stmt := v.(*Statement)
+			q := d.getStatementQuorum(stmt)
 			if q != nil && isQuorumSlice(q, nodes) {
 				subnodes.Add(nodeID)
 			}
@@ -448,14 +456,17 @@ func (d *Decree) federatedAccept(voteFilter func(*Statement) bool, acceptFilter 
 // the type of filter supplied. The function will behave like ratification
 // when the filter generates voted nodes for a statement and will work as
 // confirmation when the filter generates accepted nodes for a statement.
-func (d *Decree) federatedRatify(filter func(*Statement) bool, stmts map[string]*Statement) bool {
+func (d *Decree) federatedRatify(filter func(*Statement) bool, stmts sync.Map) bool {
 	// Filter nodes with voteFilter.
 	nodes := mapset.NewSet()
-	for n, s := range stmts {
+	rangeFunc := func(key, value interface{}) bool {
+		s := value.(*Statement)
 		if filter(s) {
-			nodes.Add(n)
+			nodes.Add(key)
 		}
+		return true
 	}
+	stmts.Range(rangeFunc)
 
 	// Check the quorum condition.
 	subnodes := mapset.NewSet()
@@ -466,7 +477,9 @@ func (d *Decree) federatedRatify(filter func(*Statement) bool, stmts map[string]
 		subnodes.Clear()
 		for n := range nodes.Iter() {
 			nodeID := n.(string)
-			q := d.getStatementQuorum(stmts[nodeID])
+			v, _ := stmts.Load(nodeID)
+			stmt := v.(*Statement)
+			q := d.getStatementQuorum(stmt)
 			if q != nil && isQuorumSlice(q, nodes) {
 				subnodes.Add(nodeID)
 			}
@@ -542,12 +555,13 @@ func (d *Decree) recvNomination(stmt *Statement) error {
 	// Check whether the existing nomination of the remote node
 	// is the proper subset of the new nomination and save the
 	// new nomination statement.
-	if s, ok := d.nominations[stmt.NodeID]; ok {
+	if v, ok := d.nominations.Load(stmt.NodeID); ok {
+		s := v.(*Statement)
 		if isNewerNomination(s.GetNominate(), nom) {
-			d.nominations[stmt.NodeID] = stmt
+			d.nominations.Store(stmt.NodeID, stmt)
 		}
 	} else {
-		d.nominations[stmt.NodeID] = stmt
+		d.nominations.Store(stmt.NodeID, stmt)
 	}
 
 	if d.nominationStart == false {
@@ -742,7 +756,8 @@ func (d *Decree) recvBallot(stmt *Statement) error {
 	log.Debugw("recv ballot", "nodeID", stmt.NodeID, "index", stmt.Index, "type", stmt.StatementType, "curr_phase", d.currentPhase)
 
 	// Skip the statement if it is old.
-	if s, ok := d.ballots[stmt.NodeID]; ok {
+	if v, ok := d.ballots.Load(stmt.NodeID); ok {
+		s := v.(*Statement)
 		if !isNewerBallot(s, stmt) {
 			return nil
 		}
@@ -754,7 +769,7 @@ func (d *Decree) recvBallot(stmt *Statement) error {
 	}
 
 	if d.currentPhase != BallotPhaseExternalize {
-		d.ballots[stmt.NodeID] = stmt
+		d.ballots.Store(stmt.NodeID, stmt)
 		// Try to advance the current ballot state.
 		if err := d.step(stmt); err != nil {
 			return fmt.Errorf("step forward ballot state failed: %v", err)
@@ -764,7 +779,7 @@ func (d *Decree) recvBallot(stmt *Statement) error {
 		if d.cBallot.Value != wb.Value {
 			return errors.New("incompatible working ballot value")
 		}
-		d.ballots[stmt.NodeID] = stmt
+		d.ballots.Store(stmt.NodeID, stmt)
 	}
 
 	return nil
@@ -821,8 +836,8 @@ func (d *Decree) sendBallot() error {
 	}
 
 	// Check whether the statement has been processed.
-	s, ok := d.ballots[stmt.NodeID]
-	if !ok || !pb.Equal(s, stmt) {
+	v, ok := d.ballots.Load(stmt.NodeID)
+	if !ok || !pb.Equal(v.(*Statement), stmt) {
 		if err := d.recvBallot(stmt); err != nil {
 			log.Errorf("recv local ballot failed: %v", err)
 			return fmt.Errorf("recv local ballot failed: %v", err)
@@ -886,7 +901,8 @@ func (d *Decree) update() bool {
 	}
 
 	counters := mapset.NewSet()
-	for _, s := range d.ballots {
+	rangeFunc := func(key, value interface{}) bool {
+		s := value.(*Statement)
 		switch s.StatementType {
 		case ultpb.StatementType_PREPARE:
 			prepare := s.GetPrepare()
@@ -899,7 +915,9 @@ func (d *Decree) update() bool {
 		default:
 			log.Fatal(ErrUnknownStmtType)
 		}
+		return true
 	}
+	d.ballots.Range(rangeFunc)
 
 	target := uint32(0)
 	if d.currentBallot != nil {
@@ -943,11 +961,14 @@ func (d *Decree) update() bool {
 		}
 
 		filter := stmtFilter(c)
-		for _, stmt := range d.ballots {
+		rangeFunc := func(key, value interface{}) bool {
+			stmt := value.(*Statement)
 			if filter(stmt) {
 				nodes.Add(stmt.NodeID)
 			}
+			return true
 		}
+		d.ballots.Range(rangeFunc)
 
 		// Check whether the nodes form v-blocking.
 		vb := isVblocking(d.quorum, nodes)
@@ -1105,7 +1126,8 @@ func (d *Decree) getPreparedCandidates(stmt *Statement) []*Ballot {
 	candSet := mapset.NewSet()
 	for ballot := range ballots.Iter() {
 		b := ballot.(Ballot)
-		for _, stmt := range d.ballots {
+		rangeFunc := func(key, value interface{}) bool {
+			stmt := value.(*Statement)
 			switch stmt.StatementType {
 			case ultpb.StatementType_PREPARE:
 				prepare := stmt.GetPrepare()
@@ -1135,7 +1157,9 @@ func (d *Decree) getPreparedCandidates(stmt *Statement) []*Ballot {
 			default:
 				log.Fatal(ErrUnknownStmtType)
 			}
+			return true
 		}
+		d.ballots.Range(rangeFunc)
 	}
 
 	for v := range candSet.Iter() {
@@ -1360,7 +1384,8 @@ func (d *Decree) findCommitInterval(counters []uint32, filter func(l, r uint32) 
 func (d *Decree) getCommitCounters(b *Ballot) []uint32 {
 	counters := mapset.NewSet()
 
-	for _, s := range d.ballots {
+	rangeFunc := func(key, value interface{}) bool {
+		s := value.(*Statement)
 		switch s.StatementType {
 		case ultpb.StatementType_PREPARE:
 			prepare := s.GetPrepare()
@@ -1386,7 +1411,9 @@ func (d *Decree) getCommitCounters(b *Ballot) []uint32 {
 		default:
 			log.Fatal(ErrUnknownStmtType)
 		}
+		return true
 	}
+	d.ballots.Range(rangeFunc)
 
 	var ctrs []uint32
 	for c := range counters.Iter() {
