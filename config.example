@@ -25,7 +25,10 @@ seed: "kVpxtCsdWZffFsGxwksoFtt8FZAJPmogEcyFXWRDhQbU"
 # The backend implemention of the database and the path
 # of the database file.
 db_backend: "boltdb"
-db_path: "ult1.db"
+db_path: "ult.db"
+
+# The path of the log file.
+log_file: "/log/ult.log"
 
 # Example quorum with nested quorums:
 #

@@ -13,7 +13,7 @@ network_addr: "YOUR_IP_ADDRESS"
 peers:
   - "120.78.128.36:9019"
   - "120.78.184.87:9019"
-  - "39.108.117.72:9019"
+  - "39.108.6.41:9019"
 
 # Maximum number of peers to which the node can connect.
 max_peers: 10
@@ -26,7 +26,10 @@ seed: "YOUR_NODE_SEED"
 # The backend implemention of the database and the path
 # of the database file.
 db_backend: "boltdb"
-db_path: "ult.db"
+db_path: "/db/ult.db"
+
+# The path of the log file.
+log_file: "/log/ult.log"
 
 # Example quorum with nested quorums:
 #
