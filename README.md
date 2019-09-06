@@ -16,7 +16,7 @@ That's it! Now you can use the binary `ult` to start creating your own Ultiledge
 If you have Docker properly installed, you can just run
 
 ```shell
-docker run ult:latest help
+docker run -it ultiledger/ult:latest-test start help
 ```
 
 to get start.
@@ -36,7 +36,7 @@ There are other helpful command binaries besides the main `ult`:
 For bootstrapping a new node, we shall run the following command:
 
 ```shell
-./ult start --newnode --config /path/to/your/config.yaml
+./ult start  --config /path/to/your/config.yaml --newnode
 ```
 
 The command will:
@@ -156,6 +156,26 @@ The following snippet shows the core operations needed to submit a point-to-poin
 ```
 
 See the [test](test) folder for the full code and other examples.
+
+## Testnet
+
+In Ultiledger network, there are two different roles of a node: `watcher` and `validator`. As a `watcher` node, it can only listen for consensus messages from peers without the ability to participate the voting process of the consensus protocol. If you want the node to participate the consensus process, you need to set the role of the node to `validator`. See [config.example](config.example) for details.
+
+We provide a config template for the testnet which contains the trusted existing validators of the testnet. Users need to generate a pair of keys (node id and node seed) for the node using `ultcli`, then substitude the keys in the corresponding fields of [config.testnet](config.testnet).
+
+As an example of bootstrapping a new node, we run:
+
+```shell
+docker run -it --network host \
+  -v /root/ultiledger:/config \
+  -v /root/ultiledger:/db \
+  -v /root/ultiledger:/log \
+ultiledger/ult:latest-testnet start --config /config/config.testnet.yaml --newnode
+```
+
+where the `/db` and `/log` are file paths defined in `config.testnet`.
+
+For recovering an existing node, the `--newnode` flag is not needed.
 
 ## Contribution
 
