@@ -1274,6 +1274,9 @@ func (d *Decree) acceptCommit(stmt *Statement) bool {
 
 	// Collect all the candidate counters.
 	counters := d.getCommitCounters(ballot)
+	if len(counters) == 0 {
+		return false
+	}
 
 	filter := func(l, r uint32) bool {
 		return d.federatedAccept(commitVoteFilter(ballot, l, r), commitAcceptFilter(ballot, l, r), d.ballots)
@@ -1311,7 +1314,7 @@ func (d *Decree) setAcceptCommit(cb *Ballot, hb *Ballot) bool {
 	if d.currentPhase == BallotPhasePrepare {
 		d.currentPhase = BallotPhaseConfirm
 		if d.currentBallot != nil && !lessAndCompatibleBallots(hb, d.currentBallot) {
-			d.updateBallot(hb)
+			d.updateBallot(hb, false)
 		}
 		if d.qBallot != nil {
 			d.qBallot.Reset()
@@ -1334,8 +1337,11 @@ func (d *Decree) findCommitInterval(counters []uint32, filter func(l, r uint32) 
 
 	for _, c := range counters {
 		l, r := uint32(0), uint32(0)
+
 		if lb == 0 {
 			l, r = c, c
+		} else if c > rb {
+			continue
 		} else {
 			l, r = c, rb
 		}
@@ -1425,6 +1431,9 @@ func (d *Decree) confirmCommit(stmt *Statement) bool {
 	}
 
 	counters := d.getCommitCounters(ballot)
+	if len(counters) == 0 {
+		return false
+	}
 
 	filter := func(l, r uint32) bool {
 		return d.federatedRatify(commitAcceptFilter(ballot, l, r), d.ballots)
@@ -1476,7 +1485,7 @@ func (d *Decree) setConfirmCommit(cb *Ballot, hb *Ballot) bool {
 func (d *Decree) updateBallotIfNeeded(b *Ballot) bool {
 	updated := false
 	if d.currentBallot == nil || compareBallots(d.currentBallot, b) < 0 {
-		d.updateBallot(b)
+		d.updateBallot(b, true)
 		updated = true
 	}
 	return updated
@@ -1527,7 +1536,7 @@ func (d *Decree) updateBallotValue(b *Ballot) bool {
 	updated := false
 
 	if d.currentBallot == nil {
-		d.updateBallot(b)
+		d.updateBallot(b, true)
 		updated = true
 	} else {
 		if d.cBallot != nil && !compatibleBallots(d.cBallot, b) {
@@ -1535,7 +1544,7 @@ func (d *Decree) updateBallotValue(b *Ballot) bool {
 		}
 
 		if compareBallots(d.currentBallot, b) <= 0 {
-			d.updateBallot(b)
+			d.updateBallot(b, true)
 			updated = true
 		}
 	}
@@ -1546,7 +1555,7 @@ func (d *Decree) updateBallotValue(b *Ballot) bool {
 }
 
 // Update the current ballot.
-func (d *Decree) updateBallot(b *Ballot) {
+func (d *Decree) updateBallot(b *Ballot, check bool) {
 	if b == nil {
 		log.Fatal("cannot update ballot with nil ballot")
 	}
@@ -1554,9 +1563,10 @@ func (d *Decree) updateBallot(b *Ballot) {
 		log.Fatal("should not update ballot in externalize phase")
 	}
 
-	if d.currentBallot != nil && compareBallots(d.currentBallot, b) > 0 {
-		log.Warn("cannot update current ballot with smaller one")
-		return
+	if check == true {
+		if d.currentBallot != nil && compareBallots(d.currentBallot, b) > 0 {
+			log.Fatal("cannot update current ballot with smaller one")
+		}
 	}
 
 	// Deep copy the ballot.
