@@ -17,6 +17,7 @@ package consensus
 import (
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	b58 "github.com/mr-tron/base58/base58"
@@ -121,7 +122,8 @@ type Engine struct {
 	quorumHash string
 
 	// Decrees of each round.
-	decrees map[uint64]*Decree
+	decrees    map[uint64]*Decree
+	decreeLock sync.Mutex
 	// Max number of historical decrees to remember. Decree which has maxDecrees of
 	// difference with the current decree will be skipped for subsequent processing.
 	maxDecrees uint64
@@ -576,7 +578,9 @@ func (e *Engine) getDecree(idx uint64, create bool) (*Decree, error) {
 		StmtChan:        e.statementChan,
 		ExternalizeChan: e.externalizeChan,
 	}
+	e.decreeLock.Lock()
 	e.decrees[idx] = NewDecree(decreeCtx)
+	e.decreeLock.Unlock()
 	return e.decrees[idx], nil
 }
 
