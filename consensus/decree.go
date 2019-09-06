@@ -715,7 +715,7 @@ func (d *Decree) combineCandidates() (string, error) {
 	}
 
 	if txset == nil {
-		log.Fatal("txset is nil after candidate combination.")
+		return "", errors.New("txset is nil after candidate combination.")
 	}
 
 	// TODO(bobonovski) trim invalid tx
