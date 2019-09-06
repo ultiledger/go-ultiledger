@@ -173,7 +173,7 @@ docker run -it --network host \
 ultiledger/ult:latest-testnet start --config /config/config.testnet.yaml --newnode
 ```
 
-where the `/db` and `/log` are file paths defined in `config.testnet`.
+where we assume to use the local path `/root/ultiledger` to hold the mounted config file, the database file and the log file. See `config.testnet` for details.
 
 For recovering an existing node, the `--newnode` flag is not needed.
 
