@@ -99,7 +99,7 @@ The nodes in the quorum should have the role of `validator` as a `watcher` node 
 
 Clients interact with the Ultiledger network by submitting well-formed transactions. Only after being confirmed by the network through consensus, transactions could be regarded as valid.
 
-### Payment
+### Example
 
 The following snippet shows the core operations needed to submit a point-to-point payment transaction to the network.
 
@@ -173,7 +173,7 @@ docker run -it --network host \
 ultiledger/ult:latest-testnet start --config /config/config.testnet.yaml --newnode
 ```
 
-where we assume to use the local path `/root/ultiledger` to hold the mounted config file, the database file and the log file. See `config.testnet` for details.
+we assume the local path `/root/ultiledger` contains the mounted config file, the database file and the log file.
 
 For recovering an existing node, the `--newnode` flag is not needed.
 
