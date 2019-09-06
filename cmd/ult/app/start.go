@@ -38,14 +38,15 @@ is not specified or it will bootstrap a completely new node.`,
 		if err := v.ReadInConfig(); err != nil {
 			log.Fatalf("read in configuration failed: %v", err)
 		}
-		// Whether switch on the debug mode of the logger.
-		if viper.GetBool("debug") {
-			log.OpenDebug()
-		}
 		// Initialize node configuration.
 		config, err := node.NewConfig(v)
 		if err != nil {
 			log.Fatal(err)
+		}
+		log.Initialize(config.LogFile)
+		// Whether switch on the debug mode of the logger.
+		if viper.GetBool("debug") {
+			log.OpenDebug()
 		}
 		// Start the ULT node.
 		n := node.NewNode(config)

@@ -41,6 +41,8 @@ type Config struct {
 	NodeID string
 	// Seed of this node.
 	Seed string
+	// Path of the log file.
+	LogFile string
 	// Database backend.
 	DBBackend string
 	// Database file path.
@@ -66,6 +68,9 @@ func NewConfig(v *viper.Viper) (*Config, error) {
 	}
 	if v.GetString("seed") == "" {
 		return nil, errors.New("node seed is empty")
+	}
+	if v.GetString("log_file") == "" {
+		return nil, errors.New("log file path is empty")
 	}
 	if v.GetInt("max_peers") == 0 {
 		return nil, errors.New("max peers is zero")
@@ -102,6 +107,7 @@ func NewConfig(v *viper.Viper) (*Config, error) {
 		MaxPeers:        v.GetInt("max_peers"),
 		NodeID:          v.GetString("node_id"),
 		Seed:            v.GetString("seed"),
+		LogFile:         v.GetString("log_file"),
 		DBBackend:       v.GetString("db_backend"),
 		DBPath:          v.GetString("db_path"),
 		Quorum:          quorum,

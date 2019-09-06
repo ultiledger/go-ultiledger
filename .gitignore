@@ -6,3 +6,4 @@ ultcli
 ulttest
 ulthub
 *.db
+*.log

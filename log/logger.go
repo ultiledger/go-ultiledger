@@ -22,13 +22,14 @@ import (
 var rootLogger *zap.SugaredLogger
 var config zap.Config
 
-func init() {
+// Initialize initializes the internal global logger.
+func Initialize(logFile string) {
 	config = zap.NewProductionConfig()
 	// Change stacktrace output level to DPanic for having
 	// a cleaner error message in Error level.
 	stacktraceOption := zap.AddStacktrace(zapcore.DPanicLevel)
 	callerOption := zap.AddCallerSkip(1)
-	config.OutputPaths = []string{"stdout", "ult.log"}
+	config.OutputPaths = []string{"stdout", logFile}
 	logger, err := config.Build(stacktraceOption, callerOption)
 	if err != nil {
 		panic(err)
