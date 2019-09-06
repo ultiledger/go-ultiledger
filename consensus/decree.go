@@ -888,7 +888,9 @@ func (d *Decree) step(stmt *Statement) error {
 	log.Debugf("ballot msg count decrease to: %d", d.ballotMsgCount)
 
 	if updated {
-		d.statementChan <- d.latestBallot
+		if d.latestBallot != nil {
+			d.statementChan <- d.latestBallot
+		}
 	}
 
 	return nil
