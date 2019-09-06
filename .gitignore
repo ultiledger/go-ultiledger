@@ -1,9 +1,9 @@
 go-ultiledger
 ultiledger
 *.yaml
-ult
-ultcli
-ulttest
-ulthub
+cmd/ult/ult
+cmd/ultcli/ultcli
+cmd/ulttest/ulttest
+cmd/ulthub/ulthub
 *.db
 *.log
