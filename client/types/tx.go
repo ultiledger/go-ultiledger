@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Package types defines custom types to represent the response from the node server.
 package types
 
 import (

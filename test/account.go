@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Package test defines regression tests for testing the node.
 package test
 
 import (

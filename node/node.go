@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Package node provides the central tool to manage the node.
 package node
 
 import (

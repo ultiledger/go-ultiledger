@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package future defines some futures as messages
-// to communicate between rpc server and node.
+// Package future defines various futures as the delegates
+// to communicate between rpc server and the node.
 package future
 
 import (

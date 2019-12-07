@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Package rpc defines the rpc server and provides convenient methods for
+// the node to communicate with its peers.
 package rpc
 
 import (

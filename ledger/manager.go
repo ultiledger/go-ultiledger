@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Package ledger manages the states of the ledgers.
 package ledger
 
 import (

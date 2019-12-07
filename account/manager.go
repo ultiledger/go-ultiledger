@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Package account manages the accounts in the network.
 package account
 
 import (

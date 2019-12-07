@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Package build defines various convient methods to construct a transaction.
 package build
 
 import (

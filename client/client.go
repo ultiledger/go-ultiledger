@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Package client defines the APIs to communicate with the node.
 package client
 
 import (
